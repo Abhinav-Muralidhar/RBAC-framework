@@ -3,7 +3,7 @@
  * @returns { Promise<void> }
  */
 exports.up = async function(knex) {
-  await knex.schema.table('organization', (table) => {
+  await knex.schema.table('organizations', (table) => {
     table.bigIncrements('id').primary();
     table.varchar('company_name').notNullable();
     table.varchar('company_logo').notNullable();

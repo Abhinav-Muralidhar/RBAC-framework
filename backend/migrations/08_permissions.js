@@ -7,7 +7,7 @@ exports.up = async function (knex) {
     await knex.schema.createTable('permissions', (table) => {
         table.bigIncrements('id').primary();
         table.bigInteger('module_id').unsigned().notNullable().references('id').inTable('modules').onDelete('CASCADE');
-        table.straing('action').notNullable().checkIn(['create', 'read', 'update', 'delete', 'export']);
+        table.string('action').notNullable().checkIn(['create', 'read', 'update', 'delete', 'export']);
         table.text('description').nullable();
         table.boolean('is_active').notNullable().defaultTo(true);
         table.index(['module_id']);

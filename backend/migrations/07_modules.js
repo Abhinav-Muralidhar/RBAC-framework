@@ -9,7 +9,7 @@ exports.up = async function (knex) {
         table.string('code').notNullable().unique();
         table.text('description').nullable();
         table.boolean('is_active').notNullable().defaultTo(true);
-        table.integer('order').notNullable();
+        table.integer('sort_order').notNullable();
         table.index(['code']);
         table.index(['id']);
     })

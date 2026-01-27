@@ -5,10 +5,10 @@
 exports.up = async function(knex) {
     await knex.schema.createTable('audit_logs', (table) => {
         table.bigIncrements('id').primary();
-        table.bigInteger('user_id').notNullable().references('id').inTable('users').onDelete('SET NULL');
-        table.bigInteger('role_id').notNullable().references('id').inTable('roles').onDelete('SET NULL');
+        table.bigInteger('user_id').nullable().references('id').inTable('users').onDelete('SET NULL');
+        table.bigInteger('role_id').nullable().references('id').inTable('roles').onDelete('SET NULL');
         table.string('action').notNullable().checkIn(['create','update','delete','export']);
-        table.bigInteger('model_id').notNullable();
+        table.bigInteger('module_id').notNullable().references('id').inTable('modules');
 
         table.json('old_values').nullable();
         table.json('new_values').nullable();

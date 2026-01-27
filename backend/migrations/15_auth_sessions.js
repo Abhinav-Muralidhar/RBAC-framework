@@ -14,6 +14,7 @@ exports.up = async function(knex) {
         table.timestamp('logout_at').nullable();
         table.index('user_id');
         table.index('session_token');
+        table.index('login_at');
     })}
 exports.down = async function(knex) {
     await knex.schema.dropTableIfExists('auth_sessions');

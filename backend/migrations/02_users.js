@@ -2,11 +2,11 @@
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
  */
-exports.up =async function(knex) {
-  await knex.schema.table('users',(table)=>{
+exports.up = async function (knex) {
+  await knex.schema.table('users', (table) => {
     table.bigIncrements('id').primary();
     table.string('username').notNullable();
-    table.text('password_hash').notNullable();
+    table.text('password').notNullable();
     table
       .string('status')
       .notNullable()
@@ -16,11 +16,11 @@ exports.up =async function(knex) {
     table.string('last_name').notNullable();
     table.string('title');
     table.string('department');
-    table.bigInteger('reports_to_user_id').unsigned();
+    table.bigInteger('reports_to_user_id').unsigned().references('id').inTable('users').onDelete('SET NULL');
     table.string('primary_email').notNullable();
     table.string('secondary_email');
     table.string('other_email');
-    table.string('office_phone').notNullable();
+    table.string('office_phone');
     table.string('mobile_phone');
     table.string('home_phone');
     table.string('secondary_phone');
@@ -41,7 +41,8 @@ exports.up =async function(knex) {
     table
       .string('symbol_placement')
       .checkIn(['before', 'after']);
-
+    table.string('time_zone');
+    table.json('business_hours');
     table
       .string('trailing_zero_handling')
       .checkIn(['show', 'hide']);
@@ -49,21 +50,25 @@ exports.up =async function(knex) {
     table.string('aggregation_format');
     table.text('signature');
     table.timestamp('created_at').defaultTo(knex.fn.now());
-    table.bigInteger('created_by').unsigned();
+    table.bigInteger('created_by').unsigned().references('id').inTable('users').onDelete('SET NULL');
     table.timestamp('updated_at');
-    table.bigInteger('updated_by').unsigned();
     table.timestamp('last_login_at');
     table.timestamp('password_changed_at');
-
-
-
+    table.unique('username');
+    table.index('primary_email');
   })
+  await knex.raw(`
+    ALTER TABLE organizations
+    ADD CONSTRAINT fk_organizations_created_by
+    FOREIGN KEY (created_by)
+    REFERENCES users(id)
+    ON DELETE SET NULL;`);
 };
 
 /**
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
  */
-exports.down = async function(knex) {
-   await knex.schema.dropTableIfExists('users');
+exports.down = async function (knex) {
+  await knex.schema.dropTableIfExists('users');
 };
