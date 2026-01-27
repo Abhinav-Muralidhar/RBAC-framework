@@ -20,7 +20,7 @@ exports.up = async function(knex) {
         table.index(['user_id']);
         table.index(['role_id']);
         table.index(['action']);
-        table.index(['model_id']);
+        table.index(['module_id']);
         table.index(['status']);
         })}
 exports.down = async function(knex) {
