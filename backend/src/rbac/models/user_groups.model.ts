@@ -1,7 +1,7 @@
 export interface UserGroup {
-  user_id: bigint;
-  group_id: bigint;
+  user_id: string;
+  group_id: string;
 
   assigned_at: Date;
-  assigned_by?: bigint | null;
+  assigned_by?: string | null;
 }

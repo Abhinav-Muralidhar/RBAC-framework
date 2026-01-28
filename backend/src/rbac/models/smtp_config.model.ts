@@ -1,7 +1,7 @@
 export type SmtpEncryption = 'none' | 'ssl' | 'tls';
 
 export interface SmtpConfig {
-  id: bigint;
+  id: string;
 
   name: string;
 

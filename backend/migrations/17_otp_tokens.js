@@ -16,3 +16,7 @@ exports.up = async function(knex) {
         table.index(['otp_hash']);
         table.index(['sent_to']);
     })}
+
+exports.down = async function(knex) {
+    await knex.schema.dropTableIfExists('otp_tokens');
+}

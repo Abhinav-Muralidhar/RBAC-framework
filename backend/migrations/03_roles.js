@@ -3,7 +3,7 @@
  * @returns { Promise<void> }
  */
 exports.up = async function(knex){
- await knex.schema.table('roles',(table)=>{
+ await knex.schema.createTable('roles',(table)=>{
     table.bigIncrements('id').primary();
     table.string('name').notNullable();
     table.string('code').notNullable();

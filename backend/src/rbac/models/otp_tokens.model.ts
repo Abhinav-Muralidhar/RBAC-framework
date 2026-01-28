@@ -1,7 +1,7 @@
 export interface OtpToken {
-  id: bigint;
+  id: string;
 
-  user_id: bigint;
+  user_id: string;
 
   otp_hash: string;
 

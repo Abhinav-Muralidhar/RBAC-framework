@@ -1,5 +1,5 @@
 export interface Module {
-  id: bigint;
+  id: string;
 
   name: string;
   code: string;

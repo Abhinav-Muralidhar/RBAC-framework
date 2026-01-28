@@ -1,7 +1,7 @@
 export interface RoleProfile {
-  role_id: bigint;
-  profile_id: bigint;
+  role_id: string;
+  profile_id: string;
 
   assigned_at: Date;
-  assigned_by?: bigint | null;
+  assigned_by?: string | null;
 }

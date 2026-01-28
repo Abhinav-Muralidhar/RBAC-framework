@@ -1,5 +1,5 @@
 export interface Group {
-  id: bigint;
+  id: string;
 
   name: string;
   code: string;
@@ -8,5 +8,5 @@ export interface Group {
   is_active: boolean;
 
   created_at: Date;
-  created_by?: bigint | null;
+  created_by?: string | null;
 }

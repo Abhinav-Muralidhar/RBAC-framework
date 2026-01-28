@@ -1,5 +1,5 @@
 export interface Organizations {
-  id: bigint; // bigIncrements
+  id: string; // bigIncrements
 
   company_name: string;
   company_logo: string;
@@ -8,9 +8,9 @@ export interface Organizations {
   city: string;
   state: string;
 
-  postal_code: number; // integer, length = 6
+  postal_code: string; // integer, length = 6
   country: string;
-  country_code: number;
+  country_code: string;
 
   phone?: string; // nullable by default (no notNullable)
   fax?: string | null; // nullable + unique
@@ -26,7 +26,7 @@ export interface Organizations {
   is_active: boolean; // default true
 
   created_at: Date;
-  created_by?: bigint | null;
+  created_by?: string | null;
 
   updated_at?: Date | null;
 }

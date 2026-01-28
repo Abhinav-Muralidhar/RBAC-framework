@@ -6,9 +6,9 @@ export type PermissionAction =
   | 'export';
 
 export interface Permission {
-  id: bigint;
+  id: string;
 
-  module_id: bigint;
+  module_id: string;
   action: PermissionAction;
 
   description?: string | null;

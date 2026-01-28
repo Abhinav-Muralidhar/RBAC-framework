@@ -1,7 +1,7 @@
 export interface GroupRole {
-  group_id: bigint;
-  role_id: bigint;
+  group_id: string;
+  role_id: string;
 
   assigned_at: Date;
-  assigned_by?: bigint | null;
+  assigned_by?: string | null;
 }

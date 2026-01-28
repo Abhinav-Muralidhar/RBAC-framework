@@ -5,7 +5,7 @@
 exports.up = async function(knex) {
     await knex.schema.createTable('groups', (table) => {
         table.bigIncrements('id').primary();
-        table.varchar('name').notNullable();
+        table.string('name').notNullable();
         table.string('code').notNullable().unique();
         table.text('description').nullable();
         table.boolean('is_active').notNullable().defaultTo(true);

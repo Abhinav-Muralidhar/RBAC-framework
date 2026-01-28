@@ -14,7 +14,7 @@ exports.up = async function(knex) {
         table.json('new_values').nullable();
         table.string('ip_address').notNullable();
         table.string('user_agent').notNullable();
-        table.varchar('status').notNullable().checkIn(['success','failure']);
+        table.string('status').notNullable().checkIn(['success','failure']);
         table.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
         table.index(['created_at']);
         table.index(['user_id']);

@@ -3,7 +3,7 @@
  * @returns { Promise<void> }
  */
 exports.up = async function (knex) {
-  await knex.schema.table('users', (table) => {
+  await knex.schema.createTable('users', (table) => {
     table.bigIncrements('id').primary();
     table.string('username').notNullable();
     table.text('password').notNullable();
@@ -70,5 +70,8 @@ exports.up = async function (knex) {
  * @returns { Promise<void> }
  */
 exports.down = async function (knex) {
+  await knex.schema.alterTable('organizations', (table) => {
+    table.dropForeign('created_by', 'fk_organizations_created_by');
+  });
   await knex.schema.dropTableIfExists('users');
 };

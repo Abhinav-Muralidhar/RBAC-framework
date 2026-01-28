@@ -1,14 +1,14 @@
 export interface Roles {
-  id: bigint;
+  id: string;
 
   name: string;
   code: string;
   description?: string | null;
 
-  parent_role_id?: bigint | null;
+  parent_role_id?: string | null;
 
   is_active: boolean;
 
   created_at: Date;
-  created_by?: bigint | null;
+  created_by?: string | null;
 }

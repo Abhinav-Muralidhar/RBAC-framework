@@ -5,7 +5,7 @@
 exports.up = async function (knex) {
     await knex.schema.createTable('sharing_rules', (table) => {
         table.bigIncrements('id').primary();
-        table.varchar('rule_type').notNullable().checkIn(['public', 'private']);
+        table.string('rule_type').notNullable().checkIn(['public', 'private']);
         table.bigInteger('module_id').notNullable().references('id').inTable('modules').onDelete('CASCADE');
         table.boolean('is_active').defaultTo(true).notNullable();
         table.timestamp('created_at').defaultTo(knex.fn.now()).notNullable();

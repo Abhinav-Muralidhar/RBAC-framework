@@ -1,0 +1,106 @@
+import { Pool, QueryResultRow } from 'pg';
+import { AuditLog, AuditAction, AuditStatus } from '../models/audit_log.model';
+
+export interface IAuditLogRepository {
+  create(entry: Partial<AuditLog>): Promise<AuditLog>;
+  findById(id: string): Promise<AuditLog | null>;
+  findByUser(userId: string, limit?: number, offset?: number): Promise<AuditLog[]>;
+  findByEntity(entityType: string, entityId: string, limit?: number, offset?: number): Promise<AuditLog[]>;
+  findByAction(action: AuditAction, limit?: number, offset?: number): Promise<AuditLog[]>;
+  findByDateRange(startDate: Date, endDate: Date, limit?: number, offset?: number): Promise<AuditLog[]>;
+  findAll(limit?: number, offset?: number): Promise<AuditLog[]>;
+}
+
+export class AuditLogRepository implements IAuditLogRepository {
+  private tableName = 'audit_logs';
+
+  constructor(private pool: InstanceType<typeof Pool>) {}
+
+  protected async query<T extends QueryResultRow>(
+    text: string,
+    params?: unknown[]
+  ): Promise<{ rows: T[]; rowCount: number | null }> {
+    return this.pool.query<T>(text, params);
+  }
+
+  async findById(id: string): Promise<AuditLog | null> {
+    const res = await this.query<AuditLog>(
+      `SELECT * FROM ${this.tableName} WHERE id = $1`,
+      [id]
+    );
+    return res.rows[0] ?? null;
+  }
+
+  async findByUser(userId: string, limit: number = 50, offset: number = 0): Promise<AuditLog[]> {
+    const res = await this.query<AuditLog>(
+      `SELECT * FROM ${this.tableName}
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
+    );
+    return res.rows;
+  }
+
+  async findByEntity(entityType: string, entityId: string, limit: number = 50, offset: number = 0): Promise<AuditLog[]> {
+    const res = await this.query<AuditLog>(
+      `SELECT * FROM ${this.tableName}
+       WHERE entity_type = $1 AND entity_id = $2
+       ORDER BY created_at DESC
+       LIMIT $3 OFFSET $4`,
+      [entityType, entityId, limit, offset]
+    );
+    return res.rows;
+  }
+
+  async findByAction(action: AuditAction, limit: number = 50, offset: number = 0): Promise<AuditLog[]> {
+    const res = await this.query<AuditLog>(
+      `SELECT * FROM ${this.tableName}
+       WHERE action = $1
+       ORDER BY created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [action, limit, offset]
+    );
+    return res.rows;
+  }
+
+  async findByDateRange(startDate: Date, endDate: Date, limit: number = 50, offset: number = 0): Promise<AuditLog[]> {
+    const res = await this.query<AuditLog>(
+      `SELECT * FROM ${this.tableName}
+       WHERE created_at BETWEEN $1 AND $2
+       ORDER BY created_at DESC
+       LIMIT $3 OFFSET $4`,
+      [startDate, endDate, limit, offset]
+    );
+    return res.rows;
+  }
+
+  async findAll(limit: number = 50, offset: number = 0): Promise<AuditLog[]> {
+    const res = await this.query<AuditLog>(
+      `SELECT * FROM ${this.tableName}
+       ORDER BY created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    return res.rows;
+  }
+
+  async create(entry: Partial<AuditLog>): Promise<AuditLog> {
+    const keys = Object.keys(entry);
+    const values = Object.values(entry);
+
+    if (keys.length === 0) throw new Error('Cannot create audit log with empty data');
+
+    const columns = keys.join(', ');
+    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+
+    const res = await this.query<AuditLog>(
+      `INSERT INTO ${this.tableName} (${columns})
+       VALUES (${placeholders})
+       RETURNING *`,
+      values
+    );
+
+    return res.rows[0]!;
+  }
+}

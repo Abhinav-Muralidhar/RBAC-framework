@@ -2,14 +2,14 @@ export type AuditAction = 'create' | 'update' | 'delete' | 'export';
 export type AuditStatus = 'success' | 'failure';
 
 export interface AuditLog {
-  id: bigint;
+  id: string;
 
-  user_id?: bigint;
-  role_id?: bigint;
+  user_id?: string;
+  role_id?: string;
 
   action: AuditAction;
 
-  module_id: bigint;
+  module_id: string;
 
   old_values?: Record<string, unknown> | null;
   new_values?: Record<string, unknown> | null;

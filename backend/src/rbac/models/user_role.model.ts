@@ -1,7 +1,7 @@
 export interface User_Role {
-  user_id: bigint;
-  role_id: bigint;
+  user_id: string;
+  role_id: string;
 
   assigned_at: Date;
-  assigned_by?: bigint | null;
+  assigned_by?: string | null;
 }

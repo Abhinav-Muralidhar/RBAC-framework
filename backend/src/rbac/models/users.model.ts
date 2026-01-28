@@ -3,7 +3,7 @@ export type SymbolPlacement = 'before' | 'after';
 export type TrailingZeroHandling = 'show' | 'hide';
 
 export interface User {
-  id: bigint;
+  id: string;
 
   username: string;
   password: string;
@@ -15,7 +15,7 @@ export interface User {
   title?: string | null;
   department?: string | null;
 
-  reports_to_user_id?: bigint | null;
+  reports_to_user_id?: string | null;
 
   primary_email: string;
   secondary_email?: string | null;
@@ -53,7 +53,7 @@ export interface User {
   signature?: string | null;
 
   created_at: Date;
-  created_by?: bigint | null;
+  created_by?: string | null;
 
   updated_at?: Date | null;
   last_login_at?: Date | null;

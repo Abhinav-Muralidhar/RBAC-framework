@@ -6,7 +6,7 @@ exports.up = async function (knex) {
     await knex.schema.createTable('profile_permissions',  (table) => {
         table.bigInteger('profile_id').notNullable().references('id').inTable('profiles').onDelete('CASCADE');
         table.bigInteger('permission_id').notNullable().references('id').inTable('permissions').onDelete('CASCADE');
-        table.varchar('effect').checkIn(['allow', 'deny']).notNullable().defaultTo('deny');
+        table.string('effect').checkIn(['allow', 'deny']).notNullable().defaultTo('deny');
         table.primary(['profile_id', 'permission_id']);
     })}
 

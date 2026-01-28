@@ -1,7 +1,7 @@
 export interface AuthSession {
-  id: bigint;
+  id: string;
 
-  user_id: bigint;
+  user_id: string;
 
   session_token: string;
 
