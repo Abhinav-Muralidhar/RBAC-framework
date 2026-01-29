@@ -1,17 +1,17 @@
 import { Pool, QueryResultRow } from 'pg';
-import { UserGroup } from '../models/user_groups.model';
+import { UserGroups } from '../models/user_groups.model';
 
-export interface IUserGroupRepository {
+export interface IUserGroupsRepository {
   addMember(userId: string, groupId: string, assignedBy?: string): Promise<void>;
   removeMember(userId: string, groupId: string): Promise<void>;
-  findUsersByGroup(groupId: string): Promise<UserGroup[]>;
-  findGroupsByUser(userId: string): Promise<UserGroup[]>;
+  findUsersByGroup(groupId: string): Promise<UserGroups[]>;
+  findGroupsByUser(userId: string): Promise<UserGroups[]>;
 }
 
-export class UserGroupRepository implements IUserGroupRepository {
+export class UserGroupsRepository implements IUserGroupsRepository {
   private tableName = 'user_groups';
 
-  constructor(private pool: InstanceType<typeof Pool>) {}
+  constructor(private pool: InstanceType<typeof Pool>) { }
 
   protected async query<T extends QueryResultRow>(
     text: string,
@@ -45,8 +45,8 @@ export class UserGroupRepository implements IUserGroupRepository {
     );
   }
 
-  async findUsersByGroup(groupId: string): Promise<UserGroup[]> {
-    const res = await this.query<UserGroup>(
+  async findUsersByGroup(groupId: string): Promise<UserGroups[]> {
+    const res = await this.query<UserGroups>(
       `
       SELECT * FROM ${this.tableName}
       WHERE group_id = $1
@@ -56,8 +56,8 @@ export class UserGroupRepository implements IUserGroupRepository {
     return res.rows;
   }
 
-  async findGroupsByUser(userId: string): Promise<UserGroup[]> {
-    const res = await this.query<UserGroup>(
+  async findGroupsByUser(userId: string): Promise<UserGroups[]> {
+    const res = await this.query<UserGroups>(
       `
       SELECT * FROM ${this.tableName}
       WHERE user_id = $1

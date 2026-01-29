@@ -7,13 +7,14 @@ export interface IOrganizationRepository {
 
     /** Update the organization details */
     update(data: Partial<Organizations>): Promise<Organizations>;
+    delete(id: string): Promise<void>;
 }
 
 export class OrganizationRepository implements IOrganizationRepository {
     private tableName = 'organizations';
     private orgId = '1'; // fixed ID for single org
 
-    constructor(private pool: InstanceType<typeof Pool>) {}
+    constructor(private pool: InstanceType<typeof Pool>) { }
 
     protected async query<T extends QueryResultRow>(
         text: string,
@@ -48,5 +49,11 @@ export class OrganizationRepository implements IOrganizationRepository {
         if (!res.rows.length) throw new Error('Organization not found for update');
 
         return res.rows[0]!;
+    }
+    async delete(id: string): Promise<void> {
+        await this.query(
+            `UPDATE ${this.tableName} SET is_active = false, updated_at = NOW() WHERE id = $1`,
+            [id]
+        );
     }
 }

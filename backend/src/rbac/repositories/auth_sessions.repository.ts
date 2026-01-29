@@ -1,21 +1,21 @@
 import { Pool, QueryResultRow } from 'pg';
-import { AuthSession } from '../models/auth_session.model';
+import { AuthSessions } from '../models/auth_sessions.model';
 
-export interface IAuthSessionRepository {
-  create(data: Partial<AuthSession>): Promise<AuthSession>;
-  findById(sessionId: string): Promise<AuthSession | null>;
-  update(sessionId: string, data: Partial<AuthSession>): Promise<AuthSession>;
+export interface IAuthSessionsRepository {
+  create(data: Partial<AuthSessions>): Promise<AuthSessions>;
+  findById(sessionId: string): Promise<AuthSessions | null>;
+  update(sessionId: string, data: Partial<AuthSessions>): Promise<AuthSessions>;
   delete(sessionId: string, actingUserId: string): Promise<void>;
-  findAllByUser(userId: string): Promise<AuthSession[]>;
-  findActiveByUser(userId: string): Promise<AuthSession[]>;
+  findAllByUser(userId: string): Promise<AuthSessions[]>;
+  findActiveByUser(userId: string): Promise<AuthSessions[]>;
   deleteAllByUser(userId: string): Promise<void>;
-  findBySessionIdGlobal(sessionId: string): Promise<AuthSession | null>;
+  findBySessionIdGlobal(sessionId: string): Promise<AuthSessions | null>;
 }
 
-export class AuthSessionRepository implements IAuthSessionRepository {
+export class AuthSessionsRepository implements IAuthSessionsRepository {
   private tableName = 'auth_sessions';
 
-  constructor(private pool: InstanceType<typeof Pool>) {}
+  constructor(private pool: InstanceType<typeof Pool>) { }
 
   protected async query<T extends QueryResultRow>(
     text: string,
@@ -24,24 +24,24 @@ export class AuthSessionRepository implements IAuthSessionRepository {
     return this.pool.query<T>(text, params);
   }
 
-  async findById(sessionId: string): Promise<AuthSession | null> {
-    const res = await this.query<AuthSession>(
+  async findById(sessionId: string): Promise<AuthSessions | null> {
+    const res = await this.query<AuthSessions>(
       `SELECT * FROM ${this.tableName} WHERE id = $1`,
       [sessionId]
     );
     return res.rows[0] ?? null;
   }
 
-  async findAllByUser(userId: string): Promise<AuthSession[]> {
-    const res = await this.query<AuthSession>(
+  async findAllByUser(userId: string): Promise<AuthSessions[]> {
+    const res = await this.query<AuthSessions>(
       `SELECT * FROM ${this.tableName} WHERE user_id = $1`,
       [userId]
     );
     return res.rows;
   }
 
-  async findActiveByUser(userId: string): Promise<AuthSession[]> {
-    const res = await this.query<AuthSession>(
+  async findActiveByUser(userId: string): Promise<AuthSessions[]> {
+    const res = await this.query<AuthSessions>(
       `SELECT * FROM ${this.tableName} WHERE user_id = $1 AND logout_at IS NULL`,
       [userId]
     );
@@ -55,15 +55,15 @@ export class AuthSessionRepository implements IAuthSessionRepository {
     );
   }
 
-  async findBySessionIdGlobal(sessionId: string): Promise<AuthSession | null> {
-    const res = await this.query<AuthSession>(
+  async findBySessionIdGlobal(sessionId: string): Promise<AuthSessions | null> {
+    const res = await this.query<AuthSessions>(
       `SELECT * FROM ${this.tableName} WHERE id = $1`,
       [sessionId]
     );
     return res.rows[0] ?? null;
   }
 
-  async create(data: Partial<AuthSession>): Promise<AuthSession> {
+  async create(data: Partial<AuthSessions>): Promise<AuthSessions> {
     const keys = Object.keys(data);
     const values = Object.values(data);
 
@@ -72,7 +72,7 @@ export class AuthSessionRepository implements IAuthSessionRepository {
     const columns = keys.join(', ');
     const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
 
-    const res = await this.query<AuthSession>(
+    const res = await this.query<AuthSessions>(
       `INSERT INTO ${this.tableName} (${columns})
        VALUES (${placeholders})
        RETURNING *`,
@@ -82,7 +82,7 @@ export class AuthSessionRepository implements IAuthSessionRepository {
     return res.rows[0]!;
   }
 
-  async update(sessionId: string, data: Partial<AuthSession>): Promise<AuthSession> {
+  async update(sessionId: string, data: Partial<AuthSessions>): Promise<AuthSessions> {
     const keys = Object.keys(data);
     if (keys.length === 0) {
       const existing = await this.findById(sessionId);
@@ -93,7 +93,7 @@ export class AuthSessionRepository implements IAuthSessionRepository {
     const values = Object.values(data);
     const setClause = keys.map((key, i) => `${key} = $${i + 2}`).join(', ');
 
-    const res = await this.query<AuthSession>(
+    const res = await this.query<AuthSessions>(
       `UPDATE ${this.tableName}
        SET ${setClause}
        WHERE id = $1

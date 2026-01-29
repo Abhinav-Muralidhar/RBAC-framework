@@ -1,18 +1,18 @@
 import { Pool, QueryResultRow } from 'pg';
-import { Module } from '../models/module.model';
+import { Modules } from '../models/modules.model';
 
 export interface IModuleRepository {
-  findAll(filters?: Record<string, unknown>): Promise<Module[]>;
-  findByCode(code: string): Promise<Module | null>;
-  findById(id: string): Promise<Module | null>;
-  create(data: Partial<Module>): Promise<Module>;
-  update(id: string, data: Partial<Module>): Promise<Module>;
+  findAll(filters?: Record<string, unknown>): Promise<Modules[]>;
+  findByCode(code: string): Promise<Modules | null>;
+  findById(id: string): Promise<Modules | null>;
+  create(data: Partial<Modules>): Promise<Modules>;
+  update(id: string, data: Partial<Modules>): Promise<Modules>;
 }
 
 export class ModuleRepository implements IModuleRepository {
   private tableName = 'modules';
 
-  constructor(private pool: InstanceType<typeof Pool>) {}
+  constructor(private pool: InstanceType<typeof Pool>) { }
 
   protected async query<T extends QueryResultRow>(
     text: string,
@@ -21,23 +21,23 @@ export class ModuleRepository implements IModuleRepository {
     return this.pool.query<T>(text, params);
   }
 
-  async findById(id: string): Promise<Module | null> {
-    const res = await this.query<Module>(
+  async findById(id: string): Promise<Modules | null> {
+    const res = await this.query<Modules>(
       `SELECT * FROM ${this.tableName} WHERE id = $1`,
       [id]
     );
     return res.rows[0] ?? null;
   }
 
-  async findByCode(code: string): Promise<Module | null> {
-    const res = await this.query<Module>(
+  async findByCode(code: string): Promise<Modules | null> {
+    const res = await this.query<Modules>(
       `SELECT * FROM ${this.tableName} WHERE code = $1`,
       [code]
     );
     return res.rows[0] ?? null;
   }
 
-  async findAll(filters?: Record<string, unknown>): Promise<Module[]> {
+  async findAll(filters?: Record<string, unknown>): Promise<Modules[]> {
     let query = `SELECT * FROM ${this.tableName}`;
     const params: unknown[] = [];
 
@@ -49,11 +49,11 @@ export class ModuleRepository implements IModuleRepository {
       query += ` WHERE ${clauses.join(' AND ')}`;
     }
 
-    const res = await this.query<Module>(query, params);
+    const res = await this.query<Modules>(query, params);
     return res.rows;
   }
 
-  async create(data: Partial<Module>): Promise<Module> {
+  async create(data: Partial<Modules>): Promise<Modules> {
     const keys = Object.keys(data);
     const values = Object.values(data);
 
@@ -62,7 +62,7 @@ export class ModuleRepository implements IModuleRepository {
     const columns = keys.join(', ');
     const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
 
-    const res = await this.query<Module>(
+    const res = await this.query<Modules>(
       `INSERT INTO ${this.tableName} (${columns})
        VALUES (${placeholders})
        RETURNING *`,
@@ -71,30 +71,30 @@ export class ModuleRepository implements IModuleRepository {
 
     return res.rows[0]!;
   }
-  async update(id: string, data: Partial<Module>): Promise<Module> {
+  async update(id: string, data: Partial<Modules>): Promise<Modules> {
     const keys = Object.keys(data);
     if (!keys.length) throw new Error('No fields provided for update');
 
     const values = Object.values(data);
     const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
 
-    const res = await this.query<Module>(
-        `UPDATE ${this.tableName}
+    const res = await this.query<Modules>(
+      `UPDATE ${this.tableName}
         SET ${setClause}, updated_at = NOW()
         WHERE id = $${keys.length + 1}
         RETURNING *`,
-        [...values, id]
+      [...values, id]
     );
 
     if (!res.rows[0]) throw new Error('Module not found for update');
     return res.rows[0];
-    }
+  }
 
   async delete(id: string): Promise<void> {
     await this.query(
-        `UPDATE ${this.tableName} SET is_active = false, updated_at = NOW() WHERE id = $1`,
-        [id]
+      `UPDATE ${this.tableName} SET is_active = false, updated_at = NOW() WHERE id = $1`,
+      [id]
     );
-    }
+  }
 
 }

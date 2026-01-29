@@ -10,12 +10,13 @@ export interface IRoleRepository {
   findAll(): Promise<Roles[]>;
   findAncestors(roleId: string): Promise<Roles[]>;
   findChildRoles(roleId: string): Promise<Roles[]>;
+  findRoleTree(): Promise<Roles[]>;
 }
 
 export class RoleRepository implements IRoleRepository {
   private tableName = 'roles';
 
-  constructor(private pool: InstanceType<typeof Pool>) {}
+  constructor(private pool: InstanceType<typeof Pool>) { }
 
   protected async query<T extends QueryResultRow>(
     text: string,
@@ -57,7 +58,7 @@ export class RoleRepository implements IRoleRepository {
     const query = `
       WITH RECURSIVE ancestors AS (
         SELECT * FROM ${this.tableName} WHERE id = $1
-        UNION
+        UNION ALL
         SELECT r.* FROM ${this.tableName} r
         INNER JOIN ancestors a ON a.parent_role_id = r.id
       )
@@ -106,4 +107,43 @@ export class RoleRepository implements IRoleRepository {
       [id]
     );
   }
+
+  async findRoleTree(): Promise<Roles[]> {
+    const query = `
+    WITH RECURSIVE role_tree AS (
+      SELECT
+        id,
+        name,
+        code,
+        description,
+        parent_role_id,
+        is_active,
+        created_at,
+        created_by
+      FROM ${this.tableName}
+      WHERE parent_role_id IS NULL
+        AND is_active = true
+
+      UNION ALL
+
+      SELECT
+        r.id,
+        r.name,
+        r.code,
+        r.description,
+        r.parent_role_id,
+        r.is_active,
+        r.created_at,
+        r.created_by
+      FROM ${this.tableName} r
+      INNER JOIN role_tree rt ON r.parent_role_id = rt.id
+      WHERE r.is_active = true
+    )
+    SELECT * FROM role_tree;
+  `;
+
+    const res = await this.query<Roles>(query);
+    return res.rows;
+  }
+
 }

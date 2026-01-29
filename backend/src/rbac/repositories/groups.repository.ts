@@ -1,21 +1,21 @@
 import { Pool, QueryResultRow } from 'pg';
-import { Group } from '../models/groups.model';
+import { Groups } from '../models/groups.model';
 
 export interface IGroupRepository {
-  create(data: Partial<Group>): Promise<Group>;
-  update(id: string, data: Partial<Group>): Promise<Group>;
+  create(data: Partial<Groups>): Promise<Groups>;
+  update(id: string, data: Partial<Groups>): Promise<Groups>;
   delete(id: string): Promise<void>;
-  findById(id: string): Promise<Group | null>;
-  findAll(): Promise<Group[]>;
-  findActive(): Promise<Group[]>;
-  findInactive(): Promise<Group[]>;
-  findByName(name: string): Promise<Group | null>;
+  findById(id: string): Promise<Groups | null>;
+  findAll(): Promise<Groups[]>;
+  findActive(): Promise<Groups[]>;
+  findInactive(): Promise<Groups[]>;
+  findByName(name: string): Promise<Groups | null>;
 }
 
 export class GroupRepository implements IGroupRepository {
   private tableName = 'groups';
 
-  constructor(private pool: InstanceType<typeof Pool>) {}
+  constructor(private pool: InstanceType<typeof Pool>) { }
 
   protected async query<T extends QueryResultRow>(
     text: string,
@@ -24,42 +24,42 @@ export class GroupRepository implements IGroupRepository {
     return this.pool.query<T>(text, params);
   }
 
-  async findById(id: string): Promise<Group | null> {
-    const res = await this.query<Group>(
+  async findById(id: string): Promise<Groups | null> {
+    const res = await this.query<Groups>(
       `SELECT * FROM ${this.tableName} WHERE id = $1`,
       [id]
     );
     return res.rows[0] ?? null;
   }
 
-  async findAll(): Promise<Group[]> {
-    const res = await this.query<Group>(`SELECT * FROM ${this.tableName}`);
+  async findAll(): Promise<Groups[]> {
+    const res = await this.query<Groups>(`SELECT * FROM ${this.tableName}`);
     return res.rows;
   }
 
-  async findActive(): Promise<Group[]> {
-    const res = await this.query<Group>(
+  async findActive(): Promise<Groups[]> {
+    const res = await this.query<Groups>(
       `SELECT * FROM ${this.tableName} WHERE is_active = true`
     );
     return res.rows;
   }
 
-  async findInactive(): Promise<Group[]> {
-    const res = await this.query<Group>(
+  async findInactive(): Promise<Groups[]> {
+    const res = await this.query<Groups>(
       `SELECT * FROM ${this.tableName} WHERE is_active = false`
     );
     return res.rows;
   }
 
-  async findByName(name: string): Promise<Group | null> {
-    const res = await this.query<Group>(
+  async findByName(name: string): Promise<Groups | null> {
+    const res = await this.query<Groups>(
       `SELECT * FROM ${this.tableName} WHERE name = $1`,
       [name]
     );
     return res.rows[0] ?? null;
   }
 
-  async create(data: Partial<Group>): Promise<Group> {
+  async create(data: Partial<Groups>): Promise<Groups> {
     const keys = Object.keys(data);
     const values = Object.values(data);
 
@@ -68,7 +68,7 @@ export class GroupRepository implements IGroupRepository {
     const columns = keys.join(', ');
     const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
 
-    const res = await this.query<Group>(
+    const res = await this.query<Groups>(
       `INSERT INTO ${this.tableName} (${columns})
        VALUES (${placeholders})
        RETURNING *`,
@@ -78,7 +78,7 @@ export class GroupRepository implements IGroupRepository {
     return res.rows[0]!;
   }
 
-  async update(id: string, data: Partial<Group>): Promise<Group> {
+  async update(id: string, data: Partial<Groups>): Promise<Groups> {
     const keys = Object.keys(data);
     if (keys.length === 0) {
       const existing = await this.findById(id);
@@ -89,7 +89,7 @@ export class GroupRepository implements IGroupRepository {
     const values = Object.values(data);
     const setClause = keys.map((key, i) => `${key} = $${i + 2}`).join(', ');
 
-    const res = await this.query<Group>(
+    const res = await this.query<Groups>(
       `UPDATE ${this.tableName}
        SET ${setClause}
        WHERE id = $1
