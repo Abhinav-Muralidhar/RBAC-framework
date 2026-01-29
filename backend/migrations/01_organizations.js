@@ -2,7 +2,7 @@
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
  */
-exports.up = async function(knex) {
+exports.up = async function (knex) {
   await knex.schema.createTable('organizations', (table) => {
     table.bigIncrements('id').primary();
     table.string('company_name').notNullable();
@@ -23,7 +23,7 @@ exports.up = async function(knex) {
     table.string('gstin', 15).notNullable().unique();
     table.boolean('is_active').defaultTo(true);
     table.timestamp('created_at').defaultTo(knex.fn.now());
-    table.bigInteger('created_by').unsigned();  
+    table.bigInteger('created_by').unsigned();
     table.timestamp('updated_at');
     table.index('company_name');
   });
@@ -40,6 +40,6 @@ exports.up = async function(knex) {
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
  */
-exports.down = async function(knex) {
+exports.down = async function (knex) {
   await knex.schema.dropTableIfExists('organizations');
 };

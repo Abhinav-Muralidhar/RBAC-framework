@@ -2,8 +2,8 @@
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
  */
-exports.up = async function(knex){
- await knex.schema.createTable('roles',(table)=>{
+exports.up = async function (knex) {
+  await knex.schema.createTable('roles', (table) => {
     table.bigIncrements('id').primary();
     table.string('name').notNullable();
     table.string('code').notNullable();
@@ -19,7 +19,7 @@ exports.up = async function(knex){
       ['parent_role_id', 'parent_role_id', 'id']
     );
 
- })
+  })
 }
 
 exports.down = async function (knex) {

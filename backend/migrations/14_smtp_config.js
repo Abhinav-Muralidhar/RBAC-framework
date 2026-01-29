@@ -2,7 +2,7 @@
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
  */
-exports.up = async function(knex) {
+exports.up = async function (knex) {
     await knex.schema.createTable('smtp_config', (table) => {
         table.bigIncrements('id').primary();
         table.string('name').notNullable();
@@ -16,7 +16,8 @@ exports.up = async function(knex) {
         table.string('from_name').notNullable();
         table.string('reply_to_email').nullable();
         table.index('name');
-    })}
-exports.down = async function(knex) {
+    })
+}
+exports.down = async function (knex) {
     await knex.schema.dropTableIfExists('smtp_config');
 }

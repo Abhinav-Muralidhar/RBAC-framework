@@ -2,7 +2,7 @@
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
  */
-exports.up = async function(knex) {
+exports.up = async function (knex) {
     await knex.schema.createTable('auth_sessions', (table) => {
         table.bigIncrements('id').primary();
         table.bigInteger('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
@@ -15,7 +15,8 @@ exports.up = async function(knex) {
         table.index('user_id');
         table.index('session_token');
         table.index('login_at');
-    })}
-exports.down = async function(knex) {
+    })
+}
+exports.down = async function (knex) {
     await knex.schema.dropTableIfExists('auth_sessions');
 }
