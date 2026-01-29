@@ -1,6 +1,6 @@
-export interface RoleProfile {
+export interface GroupRoles {
+  group_id: string;
   role_id: string;
-  profile_id: string;
 
   assigned_at: Date;
   assigned_by?: string | null;

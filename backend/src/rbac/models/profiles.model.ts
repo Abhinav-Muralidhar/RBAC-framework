@@ -1,4 +1,4 @@
-export interface Module {
+export interface Profiles {
   id: string;
 
   name: string;
@@ -6,5 +6,7 @@ export interface Module {
   description?: string | null;
 
   is_active: boolean;
-  sort_order: number;
+
+  created_at: Date;
+  created_by?: string | null;
 }

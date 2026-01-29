@@ -1,4 +1,4 @@
-export interface OtpToken {
+export interface OtpTokens {
   id: string;
 
   user_id: string;

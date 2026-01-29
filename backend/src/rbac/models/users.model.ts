@@ -2,7 +2,7 @@ export type UserStatus = 'active' | 'inactive' | 'deleted';
 export type SymbolPlacement = 'before' | 'after';
 export type TrailingZeroHandling = 'show' | 'hide';
 
-export interface User {
+export interface Users {
   id: string;
 
   username: string;

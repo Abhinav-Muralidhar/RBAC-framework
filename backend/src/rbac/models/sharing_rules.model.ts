@@ -1,6 +1,6 @@
 export type SharingRuleType = 'public' | 'private';
 
-export interface SharingRule {
+export interface SharingRules {
   id: string;
 
   rule_type: SharingRuleType;

@@ -1,4 +1,4 @@
-export interface AuthSession {
+export interface AuthSessions {
   id: string;
 
   user_id: string;

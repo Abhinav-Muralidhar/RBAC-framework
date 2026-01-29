@@ -5,7 +5,7 @@ export type PermissionAction =
   | 'delete'
   | 'export';
 
-export interface Permission {
+export interface Permissions {
   id: string;
 
   module_id: string;
