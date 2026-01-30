@@ -1,8 +1,12 @@
 /**
  * PermissionService
  * 
- * Business logic for permission and profile management.
- * NO permission evaluation logic here.
+ * Business logic for permission management and profile-permission assignments.
+ * 
+ * OWNS: Permission CRUD, profile-permission assignments, role-profile assignments
+ * DOES NOT OWN: Profile CRUD (see ProfileService), Role CRUD (see RoleService)
+ * 
+ * All mutating operations require RBAC enforcement.
  */
 
 import { Permissions, PermissionAction } from '../models/permissions.model';
@@ -14,6 +18,7 @@ import { IRoleProfilesRepository } from '../repositories/role_profiles.repositor
 import { IProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
 import { IModuleRepository } from '../repositories/modules.repository';
 import { IRoleRepository } from '../repositories/roles.repository';
+import { IEvaluationService } from './evaluation.service';
 import {
     PermissionNotFoundError,
     ProfileNotFoundError,
@@ -21,169 +26,34 @@ import {
     ModuleNotFoundError,
     RoleNotFoundError
 } from '../errors/rbac.errors';
+import { PermissionListFilterDto, CreatePermissionRequestDto, UpdatePermissionRequestDto } from '../dto/permission.dto';
+import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
+
+// Module code for RBAC operations
+const MODULE_CODE = 'SETTINGS';
 
 export interface IPermissionService {
-    /**
-     * Get permission by ID
-     * @throws PermissionNotFoundError
-     */
-    getPermissionById(permissionId: string): Promise<Permissions>;
+    // Permission CRUD
+    getPermissionById(actingUserId: string, permissionId: string): Promise<Permissions>;
+    getPermissionByModuleAction(actingUserId: string, moduleCode: string, action: PermissionAction): Promise<Permissions>;
+    listPermissionsByModule(actingUserId: string, moduleCode: string): Promise<Permissions[]>;
+    listAllPermissions(actingUserId: string): Promise<Permissions[]>;
+    listPermissionsPaginated(actingUserId: string, filters?: PermissionListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Permissions>>;
+    createPermission(actingUserId: string, data: CreatePermissionRequestDto): Promise<Permissions>;
+    updatePermission(actingUserId: string, permissionId: string, data: UpdatePermissionRequestDto): Promise<Permissions>;
+    deletePermission(actingUserId: string, permissionId: string): Promise<void>;
 
-    /**
-     * Get permission by module and action
-     * @throws PermissionNotFoundError
-     */
-    getPermissionByModuleAction(
-        moduleCode: string,
-        action: PermissionAction
-    ): Promise<Permissions>;
+    // Profile-Permission assignments (links between profiles and permissions)
+    assignPermissionToProfile(actingUserId: string, profileId: string, permissionId: string, effect: PermissionEffect): Promise<void>;
+    revokePermissionFromProfile(actingUserId: string, profileId: string, permissionId: string): Promise<void>;
+    getProfilePermissions(actingUserId: string, profileId: string): Promise<Array<{ permission: Permissions; effect: PermissionEffect }>>;
 
-    /**
-     * List all permissions for module
-     */
-    listPermissionsByModule(moduleCode: string): Promise<Permissions[]>;
-
-    /**
-     * List all permissions in organization
-     */
-    listAllPermissions(): Promise<Permissions[]>;
-
-    /**
-     * Create permission
-     * @throws DuplicateAssignmentError
-     * @throws ModuleNotFoundError
-     */
-    createPermission(
-        data: {
-            module_id: string;
-            action: PermissionAction;
-            description?: string;
-            is_active?: boolean;
-        }
-    ): Promise<Permissions>;
-
-    /**
-     * Update permission
-     * @throws PermissionNotFoundError
-     */
-    updatePermission(
-        permissionId: string,
-        data: Partial<Permissions>
-    ): Promise<Permissions>;
-
-    /**
-     * Delete permission
-     * @throws PermissionNotFoundError
-     */
-    deletePermission(permissionId: string): Promise<void>;
-
-    /**
-     * Get profile by ID
-     * @throws ProfileNotFoundError
-     */
-    getProfileById(profileId: string): Promise<Profiles>;
-
-    /**
-     * Get profile by code
-     * @throws ProfileNotFoundError
-     */
-    getProfileByCode(code: string): Promise<Profiles>;
-
-    /**
-     * List all profiles
-     */
-    listAllProfiles(): Promise<Profiles[]>;
-
-    /**
-     * Create profile
-     * @throws DuplicateAssignmentError
-     */
-    createProfile(
-        data: {
-            name: string;
-            code: string;
-            description?: string;
-            is_active?: boolean;
-        },
-        createdBy?: string
-    ): Promise<Profiles>;
-
-    /**
-     * Update profile
-     * @throws ProfileNotFoundError
-     */
-    updateProfile(
-        profileId: string,
-        data: Partial<Profiles>
-    ): Promise<Profiles>;
-
-    /**
-     * Delete profile
-     * @throws ProfileNotFoundError
-     */
-    deleteProfile(profileId: string): Promise<void>;
-
-    /**
-     * Assign permission to profile with effect
-     * @throws ProfileNotFoundError
-     * @throws PermissionNotFoundError
-     * @throws DuplicateAssignmentError
-     */
-    assignPermissionToProfile(
-        profileId: string,
-        permissionId: string,
-        effect: PermissionEffect
-    ): Promise<void>;
-
-    /**
-     * Revoke permission from profile
-     * @throws ProfileNotFoundError
-     * @throws PermissionNotFoundError
-     */
-    revokePermissionFromProfile(
-        profileId: string,
-        permissionId: string
-    ): Promise<void>;
-
-    /**
-     * Assign profile to role
-     * @throws ProfileNotFoundError
-     * @throws RoleNotFoundError
-     * @throws DuplicateAssignmentError
-     */
-    assignProfileToRole(
-        profileId: string,
-        roleId: string,
-        assignedBy?: string
-    ): Promise<void>;
-
-    /**
-     * Revoke profile from role
-     * @throws ProfileNotFoundError
-     * @throws RoleNotFoundError
-     */
-    revokeProfileFromRole(
-        profileId: string,
-        roleId: string
-    ): Promise<void>;
-
-    /**
-     * Get all permissions for a profile
-     */
-    getProfilePermissions(profileId: string): Promise<Array<{
-        permission: Permissions;
-        effect: PermissionEffect;
-    }>>;
-
-    /**
-     * Get all profiles for a role
-     */
-    getRoleProfiles(roleId: string): Promise<Profiles[]>;
+    // Role-Profile assignments (links between roles and profiles)
+    assignProfileToRole(actingUserId: string, profileId: string, roleId: string): Promise<void>;
+    revokeProfileFromRole(actingUserId: string, profileId: string, roleId: string): Promise<void>;
+    getRoleProfiles(actingUserId: string, roleId: string): Promise<Profiles[]>;
 }
 
-/**
- * PermissionService implementation
- */
 export class PermissionService implements IPermissionService {
     constructor(
         private permissionsRepository: IPermissionsRepository,
@@ -191,10 +61,17 @@ export class PermissionService implements IPermissionService {
         private profilePermissionsRepository: IProfilePermissionsRepository,
         private roleProfilesRepository: IRoleProfilesRepository,
         private moduleRepository: IModuleRepository,
-        private roleRepository: IRoleRepository
+        private roleRepository: IRoleRepository,
+        private evaluationService: IEvaluationService
     ) { }
 
-    async getPermissionById(permissionId: string): Promise<Permissions> {
+    // ===================================
+    // Permission CRUD
+    // ===================================
+
+    async getPermissionById(actingUserId: string, permissionId: string): Promise<Permissions> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
+
         const permission = await this.permissionsRepository.findById(permissionId);
         if (!permission) {
             throw new PermissionNotFoundError(permissionId);
@@ -202,7 +79,9 @@ export class PermissionService implements IPermissionService {
         return permission;
     }
 
-    async getPermissionByModuleAction(moduleCode: string, action: PermissionAction): Promise<Permissions> {
+    async getPermissionByModuleAction(actingUserId: string, moduleCode: string, action: PermissionAction): Promise<Permissions> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
+
         const module = await this.moduleRepository.findByCode(moduleCode);
         if (!module) {
             throw new ModuleNotFoundError(moduleCode);
@@ -215,7 +94,9 @@ export class PermissionService implements IPermissionService {
         return permission;
     }
 
-    async listPermissionsByModule(moduleCode: string): Promise<Permissions[]> {
+    async listPermissionsByModule(actingUserId: string, moduleCode: string): Promise<Permissions[]> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
+
         const module = await this.moduleRepository.findByCode(moduleCode);
         if (!module) {
             throw new ModuleNotFoundError(moduleCode);
@@ -225,23 +106,28 @@ export class PermissionService implements IPermissionService {
         return allPermissions.filter(p => p.module_id === module.id);
     }
 
-    async listAllPermissions(): Promise<Permissions[]> {
+    async listAllPermissions(actingUserId: string): Promise<Permissions[]> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
         return this.permissionsRepository.findAll();
     }
 
-    async createPermission(data: {
-        module_id: string;
-        action: PermissionAction;
-        description?: string;
-        is_active?: boolean;
-    }): Promise<Permissions> {
-        // Check that module exists
+    async listPermissionsPaginated(
+        actingUserId: string,
+        filters?: PermissionListFilterDto,
+        pagination?: Partial<PaginationParams>
+    ): Promise<PaginatedResult<Permissions>> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
+        return this.permissionsRepository.findAllPaginated(filters, pagination);
+    }
+
+    async createPermission(actingUserId: string, data: CreatePermissionRequestDto): Promise<Permissions> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
+
         const module = await this.moduleRepository.findById(data.module_id);
         if (!module) {
             throw new ModuleNotFoundError(data.module_id);
         }
 
-        // Check for duplicate
         const existing = await this.permissionsRepository.findByModuleAndAction(data.module_id, data.action);
         if (existing) {
             throw new DuplicateAssignmentError(`permission ${data.action} for module ${data.module_id}`);
@@ -255,7 +141,9 @@ export class PermissionService implements IPermissionService {
         });
     }
 
-    async updatePermission(permissionId: string, data: Partial<Permissions>): Promise<Permissions> {
+    async updatePermission(actingUserId: string, permissionId: string, data: UpdatePermissionRequestDto): Promise<Permissions> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
+
         const existing = await this.permissionsRepository.findById(permissionId);
         if (!existing) {
             throw new PermissionNotFoundError(permissionId);
@@ -264,7 +152,9 @@ export class PermissionService implements IPermissionService {
         return this.permissionsRepository.update(permissionId, data);
     }
 
-    async deletePermission(permissionId: string): Promise<void> {
+    async deletePermission(actingUserId: string, permissionId: string): Promise<void> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
+
         const existing = await this.permissionsRepository.findById(permissionId);
         if (!existing) {
             throw new PermissionNotFoundError(permissionId);
@@ -273,97 +163,30 @@ export class PermissionService implements IPermissionService {
         return this.permissionsRepository.delete(permissionId);
     }
 
-    async getProfileById(profileId: string): Promise<Profiles> {
-        const profile = await this.profilesRepository.findById(profileId);
-        if (!profile) {
-            throw new ProfileNotFoundError(profileId);
-        }
-        return profile;
-    }
-
-    async getProfileByCode(code: string): Promise<Profiles> {
-        const profile = await this.profilesRepository.findByCode(code);
-        if (!profile) {
-            throw new ProfileNotFoundError(code);
-        }
-        return profile;
-    }
-
-    async listAllProfiles(): Promise<Profiles[]> {
-        return this.profilesRepository.findAll();
-    }
-
-    async createProfile(
-        data: {
-            name: string;
-            code: string;
-            description?: string;
-            is_active?: boolean;
-        },
-        createdBy?: string
-    ): Promise<Profiles> {
-        // Check for duplicate code
-        const existing = await this.profilesRepository.findByCode(data.code);
-        if (existing) {
-            throw new DuplicateAssignmentError(`profile code '${data.code}'`);
-        }
-
-        return this.profilesRepository.create({
-            name: data.name,
-            code: data.code,
-            description: data.description ?? null,
-            is_active: data.is_active ?? true,
-            created_by: createdBy ?? null
-        });
-    }
-
-    async updateProfile(profileId: string, data: Partial<Profiles>): Promise<Profiles> {
-        const existing = await this.profilesRepository.findById(profileId);
-        if (!existing) {
-            throw new ProfileNotFoundError(profileId);
-        }
-
-        // Check code uniqueness if changing code
-        if (data.code && data.code !== existing.code) {
-            const codeConflict = await this.profilesRepository.findByCode(data.code);
-            if (codeConflict) {
-                throw new DuplicateAssignmentError(`profile code '${data.code}'`);
-            }
-        }
-
-        return this.profilesRepository.update(profileId, data);
-    }
-
-    async deleteProfile(profileId: string): Promise<void> {
-        const existing = await this.profilesRepository.findById(profileId);
-        if (!existing) {
-            throw new ProfileNotFoundError(profileId);
-        }
-
-        return this.profilesRepository.delete(profileId);
-    }
+    // ===================================
+    // Profile-Permission Assignments
+    // ===================================
 
     async assignPermissionToProfile(
+        actingUserId: string,
         profileId: string,
         permissionId: string,
         effect: PermissionEffect
     ): Promise<void> {
-        // Verify profile exists
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
+
         const profile = await this.profilesRepository.findById(profileId);
         if (!profile) {
             throw new ProfileNotFoundError(profileId);
         }
 
-        // Verify permission exists
         const permission = await this.permissionsRepository.findById(permissionId);
         if (!permission) {
             throw new PermissionNotFoundError(permissionId);
         }
 
-        // Check if already assigned
         const existingAssignment = await this.profilePermissionsRepository.findAssignment(profileId, permissionId);
         if (existingAssignment) {
-            // Update effect if different
             if (existingAssignment.effect !== effect) {
                 await this.profilePermissionsRepository.updateEffect(profileId, permissionId, effect);
             }
@@ -373,7 +196,9 @@ export class PermissionService implements IPermissionService {
         await this.profilePermissionsRepository.assign(profileId, permissionId, effect);
     }
 
-    async revokePermissionFromProfile(profileId: string, permissionId: string): Promise<void> {
+    async revokePermissionFromProfile(actingUserId: string, profileId: string, permissionId: string): Promise<void> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
+
         const profile = await this.profilesRepository.findById(profileId);
         if (!profile) {
             throw new ProfileNotFoundError(profileId);
@@ -382,33 +207,53 @@ export class PermissionService implements IPermissionService {
         await this.profilePermissionsRepository.revoke(profileId, permissionId);
     }
 
-    async assignProfileToRole(
-        profileId: string,
-        roleId: string,
-        assignedBy?: string
-    ): Promise<void> {
-        // Verify profile exists
+    async getProfilePermissions(
+        actingUserId: string,
+        profileId: string
+    ): Promise<Array<{ permission: Permissions; effect: PermissionEffect }>> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
+
+        const profilePermissions = await this.profilePermissionsRepository.findPermissionsByProfile(profileId);
+        const result: Array<{ permission: Permissions; effect: PermissionEffect }> = [];
+
+        for (const pp of profilePermissions) {
+            const permission = await this.permissionsRepository.findById(pp.permission_id);
+            if (permission) {
+                result.push({ permission, effect: pp.effect });
+            }
+        }
+
+        return result;
+    }
+
+    // ===================================
+    // Role-Profile Assignments
+    // ===================================
+
+    async assignProfileToRole(actingUserId: string, profileId: string, roleId: string): Promise<void> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
+
         const profile = await this.profilesRepository.findById(profileId);
         if (!profile) {
             throw new ProfileNotFoundError(profileId);
         }
 
-        // Verify role exists
         const role = await this.roleRepository.findById(roleId);
         if (!role) {
             throw new RoleNotFoundError(roleId);
         }
 
-        // Check if already assigned
         const hasProfile = await this.roleProfilesRepository.hasProfile(roleId, profileId);
         if (hasProfile) {
-            return; // Idempotent - already assigned
+            return; // Idempotent
         }
 
-        await this.roleProfilesRepository.assign(roleId, profileId, assignedBy);
+        await this.roleProfilesRepository.assign(roleId, profileId, actingUserId);
     }
 
-    async revokeProfileFromRole(profileId: string, roleId: string): Promise<void> {
+    async revokeProfileFromRole(actingUserId: string, profileId: string, roleId: string): Promise<void> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
+
         const profile = await this.profilesRepository.findById(profileId);
         if (!profile) {
             throw new ProfileNotFoundError(profileId);
@@ -422,28 +267,9 @@ export class PermissionService implements IPermissionService {
         await this.roleProfilesRepository.revoke(roleId, profileId);
     }
 
-    async getProfilePermissions(profileId: string): Promise<Array<{
-        permission: Permissions;
-        effect: PermissionEffect;
-    }>> {
-        const profilePermissions = await this.profilePermissionsRepository.findPermissionsByProfile(profileId);
+    async getRoleProfiles(actingUserId: string, roleId: string): Promise<Profiles[]> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
-        const result: Array<{ permission: Permissions; effect: PermissionEffect }> = [];
-
-        for (const pp of profilePermissions) {
-            const permission = await this.permissionsRepository.findById(pp.permission_id);
-            if (permission) {
-                result.push({
-                    permission,
-                    effect: pp.effect
-                });
-            }
-        }
-
-        return result;
-    }
-
-    async getRoleProfiles(roleId: string): Promise<Profiles[]> {
         const roleProfiles = await this.roleProfilesRepository.findProfilesByRole(roleId);
         const profiles: Profiles[] = [];
 

@@ -1,16 +1,29 @@
 import { Pool, QueryResultRow } from 'pg';
-import { SharingRules } from '../models/sharing_rules.model';
+import { SharingRules, SharingRuleType } from '../models/sharing_rules.model';
+import { SharingRuleListFilterDto } from '../dto/sharing-rule.dto';
+import {
+  PaginationParams,
+  PaginatedResult,
+  normalizePaginationParams,
+  getPaginationOffset,
+  buildPaginatedResult
+} from '../utils/pagination.utils';
 
 export interface ISharingRulesRepository {
   create(data: Partial<SharingRules>): Promise<SharingRules>;
   update(id: string, data: Partial<SharingRules>): Promise<SharingRules>;
   delete(id: string): Promise<void>;
   findById(id: string): Promise<SharingRules | null>;
-  findAll(): Promise<SharingRules[]>;
+  findByIdIncludingInactive(id: string): Promise<SharingRules | null>;
+  findAll(filters?: SharingRuleListFilterDto): Promise<SharingRules[]>;
+  findAllPaginated(filters?: SharingRuleListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<SharingRules>>;
   findActive(): Promise<SharingRules[]>;
-  findByType(type: string): Promise<SharingRules[]>;
+  findByType(type: SharingRuleType): Promise<SharingRules[]>;
   findByModule(moduleId: string): Promise<SharingRules[]>;
+  count(filters?: SharingRuleListFilterDto): Promise<number>;
 }
+
+const ACTIVE_FILTER = `is_active = true`;
 
 export class SharingRulesRepository implements ISharingRulesRepository {
   private tableName = 'sharing_rules';
@@ -26,29 +39,98 @@ export class SharingRulesRepository implements ISharingRulesRepository {
 
   async findById(id: string): Promise<SharingRules | null> {
     const res = await this.query<SharingRules>(
+      `SELECT * FROM ${this.tableName} WHERE id = $1 AND ${ACTIVE_FILTER}`,
+      [id]
+    );
+    return res.rows[0] ?? null;
+  }
+
+  async findByIdIncludingInactive(id: string): Promise<SharingRules | null> {
+    const res = await this.query<SharingRules>(
       `SELECT * FROM ${this.tableName} WHERE id = $1`,
       [id]
     );
     return res.rows[0] ?? null;
   }
 
-  async findAll(): Promise<SharingRules[]> {
-    const res = await this.query<SharingRules>(
-      `SELECT * FROM ${this.tableName}`
-    );
+  async findAll(filters?: SharingRuleListFilterDto): Promise<SharingRules[]> {
+    let sql = `SELECT * FROM ${this.tableName} WHERE ${ACTIVE_FILTER}`;
+    const params: unknown[] = [];
+    let paramIndex = 1;
+
+    if (filters) {
+      if (filters.rule_type) {
+        params.push(filters.rule_type);
+        sql += ` AND rule_type = $${paramIndex++}`;
+      }
+      if (filters.module_id) {
+        params.push(filters.module_id);
+        sql += ` AND module_id = $${paramIndex++}`;
+      }
+    }
+
+    sql += ` ORDER BY created_at DESC`;
+    const res = await this.query<SharingRules>(sql, params);
     return res.rows;
+  }
+
+  async findAllPaginated(
+    filters?: SharingRuleListFilterDto,
+    pagination?: Partial<PaginationParams>
+  ): Promise<PaginatedResult<SharingRules>> {
+    const normalizedPagination = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(normalizedPagination.page, normalizedPagination.limit);
+
+    const total = await this.count(filters);
+
+    let sql = `SELECT * FROM ${this.tableName} WHERE ${ACTIVE_FILTER}`;
+    const params: unknown[] = [];
+    let paramIndex = 1;
+
+    if (filters?.rule_type) {
+      params.push(filters.rule_type);
+      sql += ` AND rule_type = $${paramIndex++}`;
+    }
+    if (filters?.module_id) {
+      params.push(filters.module_id);
+      sql += ` AND module_id = $${paramIndex++}`;
+    }
+
+    sql += ` ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
+    params.push(normalizedPagination.limit, offset);
+
+    const res = await this.query<SharingRules>(sql, params);
+    return buildPaginatedResult(res.rows, total, normalizedPagination);
+  }
+
+  async count(filters?: SharingRuleListFilterDto): Promise<number> {
+    let sql = `SELECT COUNT(*) as count FROM ${this.tableName} WHERE ${ACTIVE_FILTER}`;
+    const params: unknown[] = [];
+    let paramIndex = 1;
+
+    if (filters?.rule_type) {
+      params.push(filters.rule_type);
+      sql += ` AND rule_type = $${paramIndex++}`;
+    }
+    if (filters?.module_id) {
+      params.push(filters.module_id);
+      sql += ` AND module_id = $${paramIndex++}`;
+    }
+
+    const res = await this.query<{ count: string }>(sql, params);
+    return parseInt(res.rows[0]?.count ?? '0', 10);
   }
 
   async findActive(): Promise<SharingRules[]> {
     const res = await this.query<SharingRules>(
-      `SELECT * FROM ${this.tableName} WHERE is_active = true`
+      `SELECT * FROM ${this.tableName} WHERE ${ACTIVE_FILTER} ORDER BY created_at DESC`
     );
     return res.rows;
   }
 
-  async findByType(type: string): Promise<SharingRules[]> {
+  async findByType(type: SharingRuleType): Promise<SharingRules[]> {
     const res = await this.query<SharingRules>(
-      `SELECT * FROM ${this.tableName} WHERE rule_type = $1`,
+      `SELECT * FROM ${this.tableName} WHERE rule_type = $1 AND ${ACTIVE_FILTER}`,
       [type]
     );
     return res.rows;
@@ -56,7 +138,7 @@ export class SharingRulesRepository implements ISharingRulesRepository {
 
   async findByModule(moduleId: string): Promise<SharingRules[]> {
     const res = await this.query<SharingRules>(
-      `SELECT * FROM ${this.tableName} WHERE module_id = $1`,
+      `SELECT * FROM ${this.tableName} WHERE module_id = $1 AND ${ACTIVE_FILTER}`,
       [moduleId]
     );
     return res.rows;
@@ -87,7 +169,7 @@ export class SharingRulesRepository implements ISharingRulesRepository {
     const setClause = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
 
     const res = await this.query<SharingRules>(
-      `UPDATE ${this.tableName} SET ${setClause} WHERE id = $1 RETURNING *`,
+      `UPDATE ${this.tableName} SET ${setClause} WHERE id = $1 AND ${ACTIVE_FILTER} RETURNING *`,
       [id, ...values]
     );
 

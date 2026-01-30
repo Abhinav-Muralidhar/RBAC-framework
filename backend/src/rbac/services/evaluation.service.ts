@@ -18,6 +18,7 @@ import { IUserRoleRepository } from '../repositories/user_roles.repository';
 import { IRoleProfilesRepository } from '../repositories/role_profiles.repository';
 import { IProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
 import { IPermissionsRepository } from '../repositories/permissions.repository';
+import { IUsersRepository } from '../repositories/users.repository';
 import {
     PermissionDeniedError,
     InvalidModuleActionError,
@@ -65,7 +66,8 @@ export class EvaluationService implements IEvaluationService {
         private readonly userRoleRepository: IUserRoleRepository,
         private readonly roleProfilesRepository: IRoleProfilesRepository,
         private readonly profilePermissionsRepository: IProfilePermissionsRepository,
-        private readonly permissionsRepository: IPermissionsRepository
+        private readonly permissionsRepository: IPermissionsRepository,
+        private readonly usersRepository: IUsersRepository
     ) { }
 
     /**
@@ -87,116 +89,61 @@ export class EvaluationService implements IEvaluationService {
         action: string
     ): Promise<PermissionDecision> {
         try {
-            // 1. Resolve module
-            const module = await this.moduleRepository.findByCode(moduleCode);
-            if (!module) {
-                return createDenyDecision(
-                    userId,
-                    moduleCode,
-                    action,
-                    `Module '${moduleCode}' not found`,
-                    false,
-                    false
-                );
-            }
-
-            // 2. Find the specific permission for this module + action
-            const permission = await this.permissionsRepository.findByModuleAndAction(
-                module.id,
+            // OPTIMIZED: Single JOIN query instead of 6+ sequential queries
+            // Traverses: users -> user_roles -> role_profiles -> profile_permissions -> permissions -> modules
+            const effects = await this.permissionsRepository.findEffectsByUserAndModuleAction(
+                userId,
+                moduleCode,
                 action as PermissionAction
             );
-            if (!permission) {
+
+            // No effects found = no permission assigned
+            if (effects.length === 0) {
                 return createDenyDecision(
                     userId,
                     moduleCode,
                     action,
-                    `Permission for action '${action}' on module '${moduleCode}' not found`,
+                    `No permission found for '${action}' on '${moduleCode}'`,
                     false,
                     false
                 );
             }
 
-            // 3. Get user's roles
-            const userRoles = await this.userRoleRepository.findRolesByUser(userId);
-            if (userRoles.length === 0) {
+            // Deny-override: any 'deny' effect = DENY (even if 'allow' exists)
+            const hasExplicitDeny = effects.includes('deny');
+            const hasExplicitAllow = effects.includes('allow');
+
+            if (hasExplicitDeny) {
                 return createDenyDecision(
                     userId,
                     moduleCode,
                     action,
-                    'User has no roles assigned',
-                    false,
-                    false
+                    `Explicit DENY for '${action}' on '${moduleCode}'`,
+                    true,
+                    hasExplicitAllow
                 );
             }
 
-            // 4-6. Collect all profile IDs and check permissions
-            const profileIds = new Set<string>();
-            for (const userRole of userRoles) {
-                const roleProfiles = await this.roleProfilesRepository.findProfilesByRole(userRole.role_id);
-                for (const rp of roleProfiles) {
-                    profileIds.add(rp.profile_id);
-                }
-            }
-
-            if (profileIds.size === 0) {
-                return createDenyDecision(
-                    userId,
-                    moduleCode,
-                    action,
-                    'No profiles assigned to user roles',
-                    false,
-                    false
-                );
-            }
-
-            // Check each profile for the specific permission
-            let hasExplicitAllow = false;
-            let hasExplicitDeny = false;
-
-            for (const profileId of profileIds) {
-                const profilePermissions = await this.profilePermissionsRepository.findPermissionsByProfile(profileId);
-
-                // Find the assignment for THIS specific permission
-                const assignment = profilePermissions.find(pp => pp.permission_id === permission.id);
-
-                if (assignment) {
-                    if (assignment.effect === 'deny') {
-                        hasExplicitDeny = true;
-                        // Deny-override: immediately return DENY
-                        return createDenyDecision(
-                            userId,
-                            moduleCode,
-                            action,
-                            `Explicit DENY for '${action}' on '${moduleCode}'`,
-                            true,
-                            hasExplicitAllow
-                        );
-                    } else if (assignment.effect === 'allow') {
-                        hasExplicitAllow = true;
-                    }
-                }
-            }
-
-            // 7. If any ALLOW exists (and no DENY was found)
+            // Has allow (and no deny)
             if (hasExplicitAllow) {
                 return createAllowDecision(
                     userId,
                     moduleCode,
                     action,
                     `Permission granted for '${action}' on '${moduleCode}'`,
-                    hasExplicitDeny,
-                    hasExplicitAllow
+                    false,
+                    true
                 );
             }
 
-            // 8. Default: DENY (fail-closed)
+            // Fallback: DENY (fail-closed)
             return createDenyDecision(
                 userId,
                 moduleCode,
                 action,
                 `No explicit permission for '${action}' on '${moduleCode}'`,
-                hasExplicitDeny,
-                hasExplicitAllow
+                false,
+                false
             );
 
         } catch (error) {

@@ -178,3 +178,58 @@ export class DuplicateAssignmentError extends RBACError {
     }
 }
 
+/**
+ * AccessDeniedError
+ * 
+ * Thrown when user lacks permission for a specific resource/action.
+ */
+export class AccessDeniedError extends RBACError {
+    constructor(
+        public readonly userId: string,
+        public readonly action: string,
+        public readonly resource: string
+    ) {
+        super(`Access denied: User ${userId} cannot '${action}' on '${resource}'`);
+    }
+}
+
+/**
+ * InvalidPasswordError
+ * 
+ * Thrown when password validation fails.
+ */
+export class InvalidPasswordError extends RBACError {
+    constructor(public readonly reason: string) {
+        super(`Invalid password: ${reason}`);
+    }
+}
+
+/**
+ * InvalidStateError
+ * 
+ * Thrown when an operation is attempted on an entity in an invalid state.
+ */
+export class InvalidStateError extends RBACError {
+    constructor(
+        public readonly entity: string,
+        public readonly state: string,
+        public readonly operation: string
+    ) {
+        super(`Cannot ${operation} ${entity} in state '${state}'`);
+    }
+}
+
+/**
+ * SoftDeletedEntityError
+ * 
+ * Thrown when attempting to access or modify a soft-deleted entity.
+ */
+export class SoftDeletedEntityError extends RBACError {
+    constructor(
+        public readonly entityType: string,
+        public readonly entityId: string
+    ) {
+        super(`Entity ${entityType} with ID ${entityId} has been deleted`);
+    }
+}
+

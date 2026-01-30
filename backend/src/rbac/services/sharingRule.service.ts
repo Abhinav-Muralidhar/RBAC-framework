@@ -2,15 +2,20 @@
  * SharingRuleService
  * 
  * Service layer for SharingRule management.
- * OWNS: Sharing rule lifecycle, rule validation
- * MUST NOT: Evaluate permissions, manage record shares directly, manage users/roles/groups
+ * All mutating operations require RBAC enforcement.
  */
 
 import { SharingRules, SharingRuleType } from '../models/sharing_rules.model';
 import { ISharingRulesRepository } from '../repositories/sharing_rules.repository';
+import { IEvaluationService } from './evaluation.service';
 import { RBACInternalError } from '../errors/rbac.errors';
+import { SharingRuleListFilterDto, CreateSharingRuleRequestDto, UpdateSharingRuleRequestDto } from '../dto/sharing-rule.dto';
+import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
 
-// Define SharingMode type (not in model, define here)
+// Module code for RBAC operations
+const MODULE_CODE = 'SETTINGS';
+
+// Define SharingMode type
 export type SharingMode = 'read' | 'write' | 'full';
 
 // Custom error for sharing rules
@@ -21,73 +26,26 @@ export class SharingRuleNotFoundError extends RBACInternalError {
 }
 
 export interface ISharingRuleService {
-    /**
-     * Get sharing rule by ID
-     * @throws SharingRuleNotFoundError
-     */
-    getById(ruleId: string): Promise<SharingRules>;
-
-    /**
-     * List all sharing rules in organization
-     */
-    listAll(): Promise<SharingRules[]>;
-
-    /**
-     * List all active sharing rules in organization
-     */
-    listActive(): Promise<SharingRules[]>;
-
-    /**
-     * List sharing rules by type
-     */
-    listByType(ruleType: SharingRuleType): Promise<SharingRules[]>;
-
-    /**
-     * List sharing rules for a module
-     */
-    listByModule(moduleId: string): Promise<SharingRules[]>;
-
-    /**
-     * Create new sharing rule
-     * @throws SharingRuleCreationError
-     */
-    create(
-        data: {
-            rule_type: SharingRuleType;
-            sharing_mode: SharingMode;
-            module_id: string;
-            is_active?: boolean;
-        },
-        actingUserId: string
-    ): Promise<SharingRules>;
-
-    /**
-     * Update sharing rule
-     * @throws SharingRuleNotFoundError
-     */
-    update(
-        ruleId: string,
-        data: Partial<SharingRules>,
-        actingUserId: string
-    ): Promise<SharingRules>;
-
-    /**
-     * Delete sharing rule
-     * @throws SharingRuleNotFoundError
-     */
-    delete(
-        ruleId: string,
-        actingUserId: string
-    ): Promise<void>;
+    getById(actingUserId: string, ruleId: string): Promise<SharingRules>;
+    listAll(actingUserId: string): Promise<SharingRules[]>;
+    listPaginated(actingUserId: string, filters?: SharingRuleListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<SharingRules>>;
+    listActive(actingUserId: string): Promise<SharingRules[]>;
+    listByType(actingUserId: string, ruleType: SharingRuleType): Promise<SharingRules[]>;
+    listByModule(actingUserId: string, moduleId: string): Promise<SharingRules[]>;
+    create(actingUserId: string, data: CreateSharingRuleRequestDto): Promise<SharingRules>;
+    update(actingUserId: string, ruleId: string, data: UpdateSharingRuleRequestDto): Promise<SharingRules>;
+    delete(actingUserId: string, ruleId: string): Promise<void>;
 }
 
-/**
- * SharingRuleService implementation
- */
 export class SharingRuleService implements ISharingRuleService {
-    constructor(private sharingRulesRepository: ISharingRulesRepository) { }
+    constructor(
+        private sharingRulesRepository: ISharingRulesRepository,
+        private evaluationService: IEvaluationService
+    ) { }
 
-    async getById(ruleId: string): Promise<SharingRules> {
+    async getById(actingUserId: string, ruleId: string): Promise<SharingRules> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
+
         const rule = await this.sharingRulesRepository.findById(ruleId);
         if (!rule) {
             throw new SharingRuleNotFoundError(ruleId);
@@ -95,43 +53,49 @@ export class SharingRuleService implements ISharingRuleService {
         return rule;
     }
 
-    async listAll(): Promise<SharingRules[]> {
+    async listAll(actingUserId: string): Promise<SharingRules[]> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
         return this.sharingRulesRepository.findAll();
     }
 
-    async listActive(): Promise<SharingRules[]> {
+    async listPaginated(
+        actingUserId: string,
+        filters?: SharingRuleListFilterDto,
+        pagination?: Partial<PaginationParams>
+    ): Promise<PaginatedResult<SharingRules>> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
+        return this.sharingRulesRepository.findAllPaginated(filters, pagination);
+    }
+
+    async listActive(actingUserId: string): Promise<SharingRules[]> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
         return this.sharingRulesRepository.findActive();
     }
 
-    async listByType(ruleType: SharingRuleType): Promise<SharingRules[]> {
+    async listByType(actingUserId: string, ruleType: SharingRuleType): Promise<SharingRules[]> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
         return this.sharingRulesRepository.findByType(ruleType);
     }
 
-    async listByModule(moduleId: string): Promise<SharingRules[]> {
+    async listByModule(actingUserId: string, moduleId: string): Promise<SharingRules[]> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
         return this.sharingRulesRepository.findByModule(moduleId);
     }
 
-    async create(
-        data: {
-            rule_type: SharingRuleType;
-            sharing_mode: SharingMode;
-            module_id: string;
-            is_active?: boolean;
-        },
-        _actingUserId: string
-    ): Promise<SharingRules> {
+    async create(actingUserId: string, data: CreateSharingRuleRequestDto): Promise<SharingRules> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
+
         return this.sharingRulesRepository.create({
             rule_type: data.rule_type,
             module_id: data.module_id,
-            is_active: data.is_active ?? true
+            is_active: data.is_active ?? true,
+            created_by: actingUserId
         });
     }
 
-    async update(
-        ruleId: string,
-        data: Partial<SharingRules>,
-        _actingUserId: string
-    ): Promise<SharingRules> {
+    async update(actingUserId: string, ruleId: string, data: UpdateSharingRuleRequestDto): Promise<SharingRules> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
+
         const existing = await this.sharingRulesRepository.findById(ruleId);
         if (!existing) {
             throw new SharingRuleNotFoundError(ruleId);
@@ -140,7 +104,9 @@ export class SharingRuleService implements ISharingRuleService {
         return this.sharingRulesRepository.update(ruleId, data);
     }
 
-    async delete(ruleId: string, _actingUserId: string): Promise<void> {
+    async delete(actingUserId: string, ruleId: string): Promise<void> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
+
         const existing = await this.sharingRulesRepository.findById(ruleId);
         if (!existing) {
             throw new SharingRuleNotFoundError(ruleId);

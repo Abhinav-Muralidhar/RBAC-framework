@@ -12,7 +12,7 @@
 
 import crypto from 'node:crypto';
 import bcrypt from 'bcrypt';
-import { RBACInternalError } from '../errors/rbac.errors';
+import { RBACInternalError, InvalidPasswordError } from '../errors/rbac.errors';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16; // 16 bytes for AES-GCM
@@ -106,6 +106,35 @@ export function decryptAES(cipherText: string): string {
     } catch (error) {
         // CRITICAL: Fail closed on decryption error (wrong key, tampering, etc)
         throw new RBACInternalError('Decryption failed', error as Error);
+    }
+}
+
+/**
+ * Validate password strength.
+ * 
+ * Rules:
+ * - Not null/empty
+ * - Minimum 8 characters
+ * - At least 1 number
+ * - At least 1 special character
+ * 
+ * @throws InvalidPasswordError if validation fails
+ */
+export function validatePassword(password: string | null | undefined): void {
+    if (!password) {
+        throw new InvalidPasswordError('Password is required');
+    }
+
+    if (password.length < 8) {
+        throw new InvalidPasswordError('Password must be at least 8 characters');
+    }
+
+    if (!/\d/.test(password)) {
+        throw new InvalidPasswordError('Password must contain at least one number');
+    }
+
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+        throw new InvalidPasswordError('Password must contain at least one special character');
     }
 }
 
