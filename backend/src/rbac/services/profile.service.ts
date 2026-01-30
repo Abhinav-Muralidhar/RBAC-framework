@@ -125,6 +125,7 @@ export class ProfileService implements IProfileService {
             throw new ProfileNotFoundError(profileId);
         }
 
+        // Check code uniqueness if changing code
         if (data.code && data.code !== existing.code) {
             const codeConflict = await this.profilesRepository.findByCode(data.code);
             if (codeConflict) {

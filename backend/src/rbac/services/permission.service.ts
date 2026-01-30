@@ -3,8 +3,7 @@
  * 
  * Business logic for permission management and profile-permission assignments.
  * 
- * OWNS: Permission CRUD, profile-permission assignments, role-profile assignments
- * DOES NOT OWN: Profile CRUD (see ProfileService), Role CRUD (see RoleService)
+ * Permission CRUD, profile-permission assignments, role-profile assignments
  * 
  * All mutating operations require RBAC enforcement.
  */
@@ -33,7 +32,6 @@ import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
 const MODULE_CODE = 'SETTINGS';
 
 export interface IPermissionService {
-    // Permission CRUD
     getPermissionById(actingUserId: string, permissionId: string): Promise<Permissions>;
     getPermissionByModuleAction(actingUserId: string, moduleCode: string, action: PermissionAction): Promise<Permissions>;
     listPermissionsByModule(actingUserId: string, moduleCode: string): Promise<Permissions[]>;
