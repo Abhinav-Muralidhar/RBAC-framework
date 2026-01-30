@@ -1,134 +1,47 @@
-/**
- * GroupService
- * 
- * Service layer for Group management.
- * OWNS: Group lifecycle, user-group memberships
- * MUST NOT: Evaluate permissions, manage roles directly, manage sharing rules
- */
-
 import { Groups } from '../models/groups.model';
 import { IGroupRepository } from '../repositories/groups.repository';
-import { IUserGroupsRepository } from '../repositories/user_groups.repository';
+import { IGroupRoleRepository } from '../repositories/group_roles.repository';
 import {
     GroupNotFoundError,
-    DuplicateAssignmentError,
-    RBACInternalError
+    DuplicateAssignmentError
 } from '../errors/rbac.errors';
 
-export interface IGroupService {
-    /**
-     * Get group by ID
-     * @throws GroupNotFoundError
-     */
+export interface IUnifiedGroupService {
+    // Group operations
     getById(groupId: string): Promise<Groups>;
-
-    /**
-     * Get group by name
-     * @throws GroupNotFoundError
-     */
     getByName(name: string): Promise<Groups>;
-
-    /**
-     * List all groups in organization
-     */
     listAll(): Promise<Groups[]>;
-
-    /**
-     * List all active groups in organization
-     */
     listActive(): Promise<Groups[]>;
-
-    /**
-     * List all inactive groups in organization
-     */
     listInactive(): Promise<Groups[]>;
+    create(data: Partial<Groups>, actingUserId: string): Promise<Groups>;
+    update(groupId: string, data: Partial<Groups>, actingUserId: string): Promise<Groups>;
+    delete(groupId: string, actingUserId: string): Promise<void>;
 
-    /**
-     * Create new group
-     * @throws DuplicateAssignmentError if name exists
-     */
-    create(
-        data: {
-            name: string;
-            description?: string;
-            is_active?: boolean;
-        },
-        actingUserId: string
-    ): Promise<Groups>;
-
-    /**
-     * Update group
-     * @throws GroupNotFoundError
-     */
-    update(
-        groupId: string,
-        data: Partial<Groups>,
-        actingUserId: string
-    ): Promise<Groups>;
-
-    /**
-     * Delete group
-     * @throws GroupNotFoundError
-     */
-    delete(
-        groupId: string,
-        actingUserId: string
-    ): Promise<void>;
-
-    /**
-     * Add user to group
-     * @throws GroupNotFoundError
-     * @throws DuplicateAssignmentError
-     */
-    addMember(
-        groupId: string,
-        userId: string,
-        actingUserId: string
-    ): Promise<void>;
-
-    /**
-     * Remove user from group
-     * @throws GroupNotFoundError
-     */
-    removeMember(
-        groupId: string,
-        userId: string,
-        actingUserId: string
-    ): Promise<void>;
-
-    /**
-     * Get all users in a group
-     */
-    getMembers(groupId: string): Promise<string[]>;
-
-    /**
-     * Get all groups a user belongs to
-     */
-    getUserGroups(userId: string): Promise<Groups[]>;
+    // Role operations
+    assignRole(groupId: string, roleId: string, assignedBy?: string | null): Promise<void>;
+    removeRole(groupId: string, roleId: string): Promise<void>;
+    replaceRoles(groupId: string, roleIds: string[], assignedBy?: string | null): Promise<void>;
+    getRoles(groupId: string): Promise<string[]>;
 }
 
-/**
- * GroupService implementation
- */
-export class GroupService implements IGroupService {
+export class UnifiedGroupService implements IUnifiedGroupService {
     constructor(
         private groupRepository: IGroupRepository,
-        private userGroupsRepository: IUserGroupsRepository
-    ) { }
+        private groupRoleRepository: IGroupRoleRepository
+    ) {}
 
+    // -----------------------
+    // Group operations
+    // -----------------------
     async getById(groupId: string): Promise<Groups> {
         const group = await this.groupRepository.findById(groupId);
-        if (!group) {
-            throw new GroupNotFoundError(groupId);
-        }
+        if (!group) throw new GroupNotFoundError(groupId);
         return group;
     }
 
     async getByName(name: string): Promise<Groups> {
         const group = await this.groupRepository.findByName(name);
-        if (!group) {
-            throw new GroupNotFoundError(name);
-        }
+        if (!group) throw new GroupNotFoundError(name);
         return group;
     }
 
@@ -144,19 +57,10 @@ export class GroupService implements IGroupService {
         return this.groupRepository.findInactive();
     }
 
-    async create(
-        data: {
-            name: string;
-            description?: string;
-            is_active?: boolean;
-        },
-        actingUserId: string
-    ): Promise<Groups> {
-        // Check for duplicate name
+    async create(data: Partial<Groups>, actingUserId: string): Promise<Groups> {
+        if (!data.name) throw new Error('Group name is required');
         const existing = await this.groupRepository.findByName(data.name);
-        if (existing) {
-            throw new DuplicateAssignmentError(`group name '${data.name}'`);
-        }
+        if (existing) throw new DuplicateAssignmentError(`group name '${data.name}'`);
 
         return this.groupRepository.create({
             name: data.name,
@@ -166,23 +70,13 @@ export class GroupService implements IGroupService {
         });
     }
 
-    async update(
-        groupId: string,
-        data: Partial<Groups>,
-        _actingUserId: string
-    ): Promise<Groups> {
-        // Verify group exists
+    async update(groupId: string, data: Partial<Groups>, _actingUserId: string): Promise<Groups> {
         const existing = await this.groupRepository.findById(groupId);
-        if (!existing) {
-            throw new GroupNotFoundError(groupId);
-        }
+        if (!existing) throw new GroupNotFoundError(groupId);
 
-        // Check name uniqueness if changing name
         if (data.name && data.name !== existing.name) {
-            const nameConflict = await this.groupRepository.findByName(data.name);
-            if (nameConflict) {
-                throw new DuplicateAssignmentError(`group name '${data.name}'`);
-            }
+            const conflict = await this.groupRepository.findByName(data.name);
+            if (conflict) throw new DuplicateAssignmentError(`group name '${data.name}'`);
         }
 
         return this.groupRepository.update(groupId, data);
@@ -190,57 +84,31 @@ export class GroupService implements IGroupService {
 
     async delete(groupId: string, _actingUserId: string): Promise<void> {
         const existing = await this.groupRepository.findById(groupId);
-        if (!existing) {
-            throw new GroupNotFoundError(groupId);
-        }
+        if (!existing) throw new GroupNotFoundError(groupId);
 
-        return this.groupRepository.delete(groupId);
+        await this.groupRepository.delete(groupId);
     }
 
-    async addMember(
-        groupId: string,
-        userId: string,
-        actingUserId: string
-    ): Promise<void> {
-        // Verify group exists
-        const group = await this.groupRepository.findById(groupId);
-        if (!group) {
-            throw new GroupNotFoundError(groupId);
-        }
-
-        await this.userGroupsRepository.addMember(userId, groupId, actingUserId);
+    // -----------------------
+    // Role operations
+    // -----------------------
+    async assignRole(groupId: string, roleId: string, assignedBy?: string | null): Promise<void> {
+        await this.getById(groupId); // validate group exists
+        await this.groupRoleRepository.assignRole(groupId, roleId, assignedBy);
     }
 
-    async removeMember(
-        groupId: string,
-        userId: string,
-        _actingUserId: string
-    ): Promise<void> {
-        // Verify group exists
-        const group = await this.groupRepository.findById(groupId);
-        if (!group) {
-            throw new GroupNotFoundError(groupId);
-        }
-
-        await this.userGroupsRepository.removeMember(userId, groupId);
+    async removeRole(groupId: string, roleId: string): Promise<void> {
+        await this.getById(groupId); // validate group exists
+        await this.groupRoleRepository.removeRole(groupId, roleId);
     }
 
-    async getMembers(groupId: string): Promise<string[]> {
-        const members = await this.userGroupsRepository.findUsersByGroup(groupId);
-        return members.map(m => m.user_id);
+    async replaceRoles(groupId: string, roleIds: string[], assignedBy?: string | null): Promise<void> {
+        await this.getById(groupId); // validate group exists
+        await this.groupRoleRepository.replaceRoles(groupId, roleIds, assignedBy);
     }
 
-    async getUserGroups(userId: string): Promise<Groups[]> {
-        const memberships = await this.userGroupsRepository.findGroupsByUser(userId);
-        const groups: Groups[] = [];
-
-        for (const membership of memberships) {
-            const group = await this.groupRepository.findById(membership.group_id);
-            if (group) {
-                groups.push(group);
-            }
-        }
-
-        return groups;
+    async getRoles(groupId: string): Promise<string[]> {
+        await this.getById(groupId); // validate group exists
+        return this.groupRoleRepository.findRolesByGroup(groupId);
     }
 }
