@@ -4,10 +4,12 @@
  * Service layer for authentication session management.
  * OWNS: Session lifecycle, session validation, concurrent session limits
  * MUST NOT: Evaluate permissions, manage users, handle authentication logic
+ * All mutations are audit logged.
  */
 
 import { AuthSessions } from '../models/auth_sessions.model';
 import { IAuthSessionsRepository } from '../repositories/auth_sessions.repository';
+import { IAuditService } from './audit.service';
 import { RBACInternalError } from '../errors/rbac.errors';
 import crypto from 'node:crypto';
 
@@ -99,7 +101,10 @@ export interface IAuthSessionService {
  * AuthSessionService Implementation
  */
 export class AuthSessionService implements IAuthSessionService {
-    constructor(private readonly authSessionsRepository: IAuthSessionsRepository) { }
+    constructor(
+        private readonly authSessionsRepository: IAuthSessionsRepository,
+        private readonly auditService: IAuditService
+    ) { }
 
     async getById(sessionId: string): Promise<AuthSessions> {
         const session = await this.authSessionsRepository.findById(sessionId);
@@ -142,6 +147,23 @@ export class AuthSessionService implements IAuthSessionService {
             logout_at: null
         });
 
+        // AUDIT: Log session creation (login) (fire-and-forget)
+        this.auditService.log({
+            user_id: data.user_id,
+            action: 'create',
+            entity_type: 'session',
+            entity_id: session.id,
+            old_values: null,
+            new_values: {
+                ip_address: data.ip_address,
+                user_agent: data.user_agent,
+                login_at: now.toISOString()
+            },
+            ip_address: data.ip_address,
+            user_agent: data.user_agent,
+            status: 'success'
+        }).catch(console.error);
+
         return session;
     }
 
@@ -153,17 +175,54 @@ export class AuthSessionService implements IAuthSessionService {
 
     async logout(sessionId: string): Promise<void> {
         // Verify session exists
-        await this.getById(sessionId);
+        const session = await this.getById(sessionId);
         await this.authSessionsRepository.update(sessionId, { logout_at: new Date() });
+
+        // AUDIT: Log session logout (fire-and-forget)
+        this.auditService.log({
+            user_id: session.user_id,
+            action: 'update',
+            entity_type: 'session',
+            entity_id: sessionId,
+            old_values: { logout_at: null },
+            new_values: { logout_at: new Date().toISOString() },
+            status: 'success'
+        }).catch(console.error);
     }
 
     async revoke(sessionId: string, actingUserId: string): Promise<void> {
-        await this.getById(sessionId);
+        const session = await this.getById(sessionId);
         await this.authSessionsRepository.delete(sessionId, actingUserId);
+
+        // AUDIT: Log session revocation (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'delete',
+            entity_type: 'session',
+            entity_id: sessionId,
+            old_values: { ...session } as Record<string, unknown>,
+            new_values: { revoked: true, revoked_by: actingUserId },
+            status: 'success'
+        }).catch(console.error);
     }
 
-    async revokeAllByUser(userId: string, _actingUserId: string): Promise<void> {
+    async revokeAllByUser(userId: string, actingUserId: string): Promise<void> {
+        // Get session count for audit
+        const sessions = await this.authSessionsRepository.findAllByUser(userId);
+        const sessionCount = sessions.length;
+
         await this.authSessionsRepository.deleteAllByUser(userId);
+
+        // AUDIT: Log bulk session revocation (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'delete',
+            entity_type: 'sessions_bulk',
+            entity_id: userId,
+            old_values: { session_count: sessionCount },
+            new_values: { revoked_all: true, target_user_id: userId },
+            status: 'success'
+        }).catch(console.error);
     }
 
     async cleanupExpired(): Promise<number> {

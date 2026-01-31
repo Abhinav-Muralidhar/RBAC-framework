@@ -3,11 +3,13 @@
  * 
  * Service layer for SharingRule management.
  * All mutating operations require RBAC enforcement.
+ * All mutations are audit logged.
  */
 
 import { SharingRules, SharingRuleType } from '../models/sharing_rules.model';
 import { ISharingRulesRepository } from '../repositories/sharing_rules.repository';
 import { IEvaluationService } from './evaluation.service';
+import { IAuditService } from './audit.service';
 import { RBACInternalError } from '../errors/rbac.errors';
 import { SharingRuleListFilterDto, CreateSharingRuleRequestDto, UpdateSharingRuleRequestDto } from '../dto/sharing-rule.dto';
 import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
@@ -40,7 +42,8 @@ export interface ISharingRuleService {
 export class SharingRuleService implements ISharingRuleService {
     constructor(
         private sharingRulesRepository: ISharingRulesRepository,
-        private evaluationService: IEvaluationService
+        private evaluationService: IEvaluationService,
+        private auditService: IAuditService
     ) { }
 
     async getById(actingUserId: string, ruleId: string): Promise<SharingRules> {
@@ -85,12 +88,25 @@ export class SharingRuleService implements ISharingRuleService {
     async create(actingUserId: string, data: CreateSharingRuleRequestDto): Promise<SharingRules> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
 
-        return this.sharingRulesRepository.create({
+        const rule = await this.sharingRulesRepository.create({
             rule_type: data.rule_type,
             module_id: data.module_id,
             is_active: data.is_active ?? true,
             created_by: actingUserId
         });
+
+        // AUDIT: Log sharing rule creation (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'create',
+            entity_type: 'sharing_rule',
+            entity_id: rule.id,
+            old_values: null,
+            new_values: { ...data } as Record<string, unknown>,
+            status: 'success'
+        }).catch(console.error);
+
+        return rule;
     }
 
     async update(actingUserId: string, ruleId: string, data: UpdateSharingRuleRequestDto): Promise<SharingRules> {
@@ -101,7 +117,20 @@ export class SharingRuleService implements ISharingRuleService {
             throw new SharingRuleNotFoundError(ruleId);
         }
 
-        return this.sharingRulesRepository.update(ruleId, data);
+        const updatedRule = await this.sharingRulesRepository.update(ruleId, data);
+
+        // AUDIT: Log sharing rule update (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'update',
+            entity_type: 'sharing_rule',
+            entity_id: ruleId,
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { ...data } as Record<string, unknown>,
+            status: 'success'
+        }).catch(console.error);
+
+        return updatedRule;
     }
 
     async delete(actingUserId: string, ruleId: string): Promise<void> {
@@ -112,6 +141,17 @@ export class SharingRuleService implements ISharingRuleService {
             throw new SharingRuleNotFoundError(ruleId);
         }
 
-        return this.sharingRulesRepository.delete(ruleId);
+        await this.sharingRulesRepository.delete(ruleId);
+
+        // AUDIT: Log sharing rule deletion (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'delete',
+            entity_type: 'sharing_rule',
+            entity_id: ruleId,
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { is_deleted: true },
+            status: 'success'
+        }).catch(console.error);
     }
 }

@@ -145,6 +145,7 @@ export interface UserListFilterDto {
 /**
  * User Response DTO
  * Safe fields to return to clients (excludes password)
+ * Includes JOINed data for human-readable context
  */
 export interface UserResponseDto {
     id: string;
@@ -156,7 +157,9 @@ export interface UserResponseDto {
     title: string | null;
     department: string | null;
 
+    // Manager (JOINed)
     reports_to_user_id: string | null;
+    reports_to_user_name: string | null;   // JOINed: manager's first_name + ' ' + last_name
 
     primary_email: string;
     secondary_email: string | null;
@@ -192,8 +195,15 @@ export interface UserResponseDto {
     aggregation_format: string | null;
     signature: string | null;
 
+    // Assigned roles (JOINed)
+    roles?: Array<{ id: string; name: string; code: string }>;
+
+    // Assigned groups (JOINed)
+    groups?: Array<{ id: string; name: string }>;
+
     created_at: Date;
     created_by: string | null;
+    created_by_name: string | null;        // JOINed: creator's first_name + ' ' + last_name
     updated_at: Date | null;
     last_login_at: Date | null;
     password_changed_at: Date | null;

@@ -3,6 +3,7 @@
  * 
  * Service layer for Profile management.
  * All mutating operations require RBAC enforcement.
+ * All mutations are audit logged.
  */
 
 import { Profiles } from '../models/profiles.model';
@@ -12,6 +13,7 @@ import { IProfilesRepository } from '../repositories/profiles.repository';
 import { IProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
 import { IPermissionsRepository } from '../repositories/permissions.repository';
 import { IEvaluationService } from './evaluation.service';
+import { IAuditService } from './audit.service';
 import {
     ProfileNotFoundError,
     PermissionNotFoundError,
@@ -60,7 +62,8 @@ export class ProfileService implements IProfileService {
         private profilesRepository: IProfilesRepository,
         private profilePermissionsRepository: IProfilePermissionsRepository,
         private permissionsRepository: IPermissionsRepository,
-        private evaluationService: IEvaluationService
+        private evaluationService: IEvaluationService,
+        private auditService: IAuditService
     ) { }
 
     async getById(actingUserId: string, profileId: string): Promise<Profiles> {
@@ -108,13 +111,26 @@ export class ProfileService implements IProfileService {
             throw new DuplicateAssignmentError(`profile code '${data.code}'`);
         }
 
-        return this.profilesRepository.create({
+        const profile = await this.profilesRepository.create({
             name: data.name,
             code: data.code,
             description: data.description ?? null,
             is_active: data.is_active ?? true,
             created_by: actingUserId
         });
+
+        // AUDIT: Log profile creation (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'create',
+            entity_type: 'profile',
+            entity_id: profile.id,
+            old_values: null,
+            new_values: { ...data } as Record<string, unknown>,
+            status: 'success'
+        }).catch(console.error);
+
+        return profile;
     }
 
     async update(actingUserId: string, profileId: string, data: UpdateProfileRequestDto): Promise<Profiles> {
@@ -133,7 +149,20 @@ export class ProfileService implements IProfileService {
             }
         }
 
-        return this.profilesRepository.update(profileId, data);
+        const updatedProfile = await this.profilesRepository.update(profileId, data);
+
+        // AUDIT: Log profile update (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'update',
+            entity_type: 'profile',
+            entity_id: profileId,
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { ...data } as Record<string, unknown>,
+            status: 'success'
+        }).catch(console.error);
+
+        return updatedProfile;
     }
 
     async delete(actingUserId: string, profileId: string): Promise<void> {
@@ -144,7 +173,18 @@ export class ProfileService implements IProfileService {
             throw new ProfileNotFoundError(profileId);
         }
 
-        return this.profilesRepository.delete(profileId);
+        await this.profilesRepository.delete(profileId);
+
+        // AUDIT: Log profile deletion (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'delete',
+            entity_type: 'profile',
+            entity_id: profileId,
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { is_deleted: true },
+            status: 'success'
+        }).catch(console.error);
     }
 
     async assignPermission(
@@ -169,11 +209,32 @@ export class ProfileService implements IProfileService {
         if (existingAssignment) {
             if (existingAssignment.effect !== effect) {
                 await this.profilePermissionsRepository.updateEffect(profileId, permissionId, effect);
+                // AUDIT: Log permission effect update
+                this.auditService.log({
+                    user_id: actingUserId,
+                    action: 'update',
+                    entity_type: 'profile_permission',
+                    entity_id: `${profileId}:${permissionId}`,
+                    old_values: { effect: existingAssignment.effect },
+                    new_values: { effect },
+                    status: 'success'
+                }).catch(console.error);
             }
             return;
         }
 
         await this.profilePermissionsRepository.assign(profileId, permissionId, effect);
+
+        // AUDIT: Log permission assignment (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'create',
+            entity_type: 'profile_permission',
+            entity_id: `${profileId}:${permissionId}`,
+            old_values: null,
+            new_values: { profile_id: profileId, permission_id: permissionId, effect },
+            status: 'success'
+        }).catch(console.error);
     }
 
     async revokePermission(actingUserId: string, profileId: string, permissionId: string): Promise<void> {
@@ -185,6 +246,16 @@ export class ProfileService implements IProfileService {
         }
 
         await this.profilePermissionsRepository.revoke(profileId, permissionId);
+
+        // AUDIT: Log permission revocation (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'delete',
+            entity_type: 'profile_permission',
+            entity_id: `${profileId}:${permissionId}`,
+            old_values: { profile_id: profileId, permission_id: permissionId },
+            status: 'success'
+        }).catch(console.error);
     }
 
     async getPermissions(actingUserId: string, profileId: string): Promise<Array<{ permission: Permissions; effect: PermissionEffect }>> {
@@ -248,6 +319,17 @@ export class ProfileService implements IProfileService {
             await this.profilePermissionsRepository.batchAssign(profile.id, data.permission_ids);
         }
 
+        // AUDIT: Log profile creation with permissions (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'create',
+            entity_type: 'profile',
+            entity_id: profile.id,
+            old_values: null,
+            new_values: { ...data, code },
+            status: 'success'
+        }).catch(console.error);
+
         return { id: profile.id };
     }
 
@@ -259,6 +341,21 @@ export class ProfileService implements IProfileService {
             throw new ProfileNotFoundError(profileId);
         }
 
+        // Get old permissions for audit
+        const oldPerms = await this.profilePermissionsRepository.findPermissionsByProfile(profileId);
+        const oldPermissionIds = oldPerms.map(p => p.permission_id);
+
         await this.profilePermissionsRepository.replacePermissions(profileId, permissionIds);
+
+        // AUDIT: Log profile permissions update (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'update',
+            entity_type: 'profile_permissions',
+            entity_id: profileId,
+            old_values: { permission_ids: oldPermissionIds },
+            new_values: { permission_ids: permissionIds },
+            status: 'success'
+        }).catch(console.error);
     }
 }

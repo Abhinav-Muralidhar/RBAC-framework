@@ -1,6 +1,7 @@
 import { Pool, QueryResultRow } from 'pg';
 import { Profiles } from '../models/profiles.model';
-import { ProfileListFilterDto } from '../dto/profile.dto';
+import { ProfileListFilterDto, ProfileResponseDto } from '../dto/profile.dto';
+import { PermissionEffect } from '../models/profile_permissions.model';
 import {
   PaginationParams,
   PaginatedResult,
@@ -14,6 +15,7 @@ export interface IProfilesRepository {
   update(id: string, data: Partial<Profiles>): Promise<Profiles>;
   delete(id: string): Promise<void>;
   findById(id: string): Promise<Profiles | null>;
+  findByIdWithDetails(id: string): Promise<ProfileResponseDto | null>;
   findByIdIncludingInactive(id: string): Promise<Profiles | null>;
   findByCode(code: string): Promise<Profiles | null>;
   findAll(filters?: ProfileListFilterDto): Promise<Profiles[]>;
@@ -42,6 +44,68 @@ export class ProfilesRepository implements IProfilesRepository {
       [id]
     );
     return res.rows[0] ?? null;
+  }
+
+  /**
+   * Find profile by ID with JOINed permissions (including module info), role count, and creator name
+   */
+  async findByIdWithDetails(id: string): Promise<ProfileResponseDto | null> {
+    // Get the profile with creator name and role count
+    const profileRes = await this.query<Profiles & {
+      created_by_name: string | null;
+      role_count: string;
+    }>(
+      `SELECT 
+        p.*,
+        CASE 
+          WHEN u.id IS NOT NULL THEN COALESCE(u.first_name, '') || ' ' || u.last_name
+          ELSE NULL
+        END AS created_by_name,
+        (SELECT COUNT(*) FROM role_profiles rp WHERE rp.profile_id = p.id) AS role_count
+      FROM ${this.tableName} p
+      LEFT JOIN users u ON p.created_by = u.id
+      WHERE p.id = $1 AND p.${ACTIVE_FILTER}`,
+      [id]
+    );
+
+    const profile = profileRes.rows[0];
+    if (!profile) return null;
+
+    // Get assigned permissions with module info
+    const permissionsRes = await this.query<{
+      id: string;
+      action: string;
+      effect: PermissionEffect;
+      module_id: string;
+      module_name: string;
+      module_code: string;
+    }>(
+      `SELECT 
+        perm.id,
+        perm.action,
+        pp.effect,
+        perm.module_id,
+        m.name AS module_name,
+        m.code AS module_code
+       FROM permissions perm
+       INNER JOIN profile_permissions pp ON perm.id = pp.permission_id
+       INNER JOIN modules m ON perm.module_id = m.id
+       WHERE pp.profile_id = $1`,
+      [id]
+    );
+
+    return {
+      id: profile.id,
+      name: profile.name,
+      code: profile.code,
+      description: profile.description ?? null,
+      is_active: profile.is_active,
+      permissions: permissionsRes.rows,
+      role_count: parseInt(profile.role_count, 10),
+      created_at: profile.created_at,
+      created_by: profile.created_by ?? null,
+      created_by_name: profile.created_by_name ?? null
+    };
   }
 
   async findByIdIncludingInactive(id: string): Promise<Profiles | null> {

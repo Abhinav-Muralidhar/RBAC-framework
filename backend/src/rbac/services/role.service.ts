@@ -3,6 +3,7 @@
  * 
  * Business logic for role management.
  * All mutating operations require RBAC enforcement.
+ * All mutations are audit logged.
  */
 
 import { Roles } from '../models/roles.model';
@@ -10,6 +11,7 @@ import { IRoleRepository } from '../repositories/roles.repository';
 import { IUserRoleRepository } from '../repositories/user_roles.repository';
 import { IRoleProfilesRepository } from '../repositories/role_profiles.repository';
 import { IEvaluationService } from './evaluation.service';
+import { IAuditService } from './audit.service';
 import {
     RoleNotFoundError,
     DuplicateAssignmentError
@@ -51,7 +53,8 @@ export class RoleService implements IRoleService {
         private roleRepository: IRoleRepository,
         private userRoleRepository: IUserRoleRepository,
         private roleProfilesRepository: IRoleProfilesRepository,
-        private evaluationService: IEvaluationService
+        private evaluationService: IEvaluationService,
+        private auditService: IAuditService
     ) { }
 
     async getById(actingUserId: string, roleId: string): Promise<RoleResponseDto> {
@@ -145,6 +148,17 @@ export class RoleService implements IRoleService {
             await this.roleProfilesRepository.assignAllByRole(role.id, data.profile_ids, actingUserId);
         }
 
+        // AUDIT: Log role creation (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'create',
+            entity_type: 'role',
+            entity_id: role.id,
+            old_values: null,
+            new_values: { ...data },
+            status: 'success'
+        }).catch(console.error);
+
         return role;
     }
 
@@ -156,11 +170,26 @@ export class RoleService implements IRoleService {
             throw new RoleNotFoundError(roleId);
         }
 
+        // Get old profile IDs for audit
+        const oldProfiles = await this.roleProfilesRepository.findProfilesByRole(roleId);
+        const oldProfileIds = oldProfiles.map(rp => rp.profile_id);
+
         await this.roleProfilesRepository.revokeAllByRole(roleId);
 
         if (profileIds.length > 0) {
             await this.roleProfilesRepository.assignAllByRole(roleId, profileIds, actingUserId);
         }
+
+        // AUDIT: Log role-profile update (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'update',
+            entity_type: 'role_profiles',
+            entity_id: roleId,
+            old_values: { profile_ids: oldProfileIds },
+            new_values: { profile_ids: profileIds },
+            status: 'success'
+        }).catch(console.error);
     }
 
     async update(actingUserId: string, roleId: string, data: UpdateRoleRequestDto): Promise<Roles> {
@@ -178,7 +207,20 @@ export class RoleService implements IRoleService {
             }
         }
 
-        return this.roleRepository.update(roleId, data);
+        const updatedRole = await this.roleRepository.update(roleId, data);
+
+        // AUDIT: Log role update (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'update',
+            entity_type: 'role',
+            entity_id: roleId,
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { ...data } as Record<string, unknown>,
+            status: 'success'
+        }).catch(console.error);
+
+        return updatedRole;
     }
 
     async delete(actingUserId: string, roleId: string): Promise<void> {
@@ -189,7 +231,18 @@ export class RoleService implements IRoleService {
             throw new RoleNotFoundError(roleId);
         }
 
-        return this.roleRepository.delete(roleId);
+        await this.roleRepository.delete(roleId);
+
+        // AUDIT: Log role deletion (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'delete',
+            entity_type: 'role',
+            entity_id: roleId,
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { is_deleted: true },
+            status: 'success'
+        }).catch(console.error);
     }
 
     async assignToUser(actingUserId: string, roleId: string, userId: string): Promise<void> {
@@ -201,6 +254,17 @@ export class RoleService implements IRoleService {
         }
 
         await this.userRoleRepository.assign(userId, roleId, actingUserId);
+
+        // AUDIT: Log user-role assignment (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'create',
+            entity_type: 'user_role',
+            entity_id: `${userId}:${roleId}`,
+            old_values: null,
+            new_values: { user_id: userId, role_id: roleId },
+            status: 'success'
+        }).catch(console.error);
     }
 
     async revokeFromUser(actingUserId: string, roleId: string, userId: string): Promise<void> {
@@ -212,6 +276,16 @@ export class RoleService implements IRoleService {
         }
 
         await this.userRoleRepository.revoke(userId, roleId);
+
+        // AUDIT: Log user-role revocation (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'delete',
+            entity_type: 'user_role',
+            entity_id: `${userId}:${roleId}`,
+            old_values: { user_id: userId, role_id: roleId },
+            status: 'success'
+        }).catch(console.error);
     }
 
     async getUsersWithRole(actingUserId: string, roleId: string): Promise<string[]> {

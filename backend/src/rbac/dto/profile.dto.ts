@@ -4,6 +4,8 @@
  * Request, Response, and Filter DTOs for Profiles.
  */
 
+import { PermissionEffect } from '../models/profile_permissions.model';
+
 // ============================================================================
 // REQUEST DTOs
 // ============================================================================
@@ -36,17 +38,38 @@ export interface ProfileListFilterDto {
 // RESPONSE DTOs
 // ============================================================================
 
+/**
+ * Profile Response DTO with JOINed data
+ * Includes human-readable permission and module names
+ */
 export interface ProfileResponseDto {
     id: string;
     name: string;
     code: string;
     description: string | null;
     is_active: boolean;
+
+    // Assigned permissions (JOINed with module info)
+    permissions: Array<{
+        id: string;
+        action: string;              // e.g., 'read', 'create', 'update', 'delete'
+        effect: PermissionEffect;    // 'allow' or 'deny'
+        module_id: string;
+        module_name: string;         // JOINed: modules.name
+        module_code: string;         // JOINed: modules.code
+    }>;
+
+    // Role count using this profile
+    role_count?: number;
+
     created_at: Date;
     created_by: string | null;
-    permissions: ProfilePermissionFlagDto[];
+    created_by_name: string | null;  // JOINed: creator's name
 }
 
+/**
+ * Legacy permission flag format (for backwards compatibility)
+ */
 export interface ProfilePermissionFlagDto {
     permissionId: string;
     allowed: boolean;
@@ -59,3 +82,4 @@ export interface ProfileSummaryDto {
     code: string;
     is_active: boolean;
 }
+

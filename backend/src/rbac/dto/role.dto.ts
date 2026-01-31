@@ -39,16 +39,39 @@ export interface RoleListFilterDto {
 // RESPONSE DTOs
 // ============================================================================
 
+/**
+ * Role Response DTO with JOINed data
+ * Includes human-readable names alongside IDs
+ */
 export interface RoleResponseDto {
     id: string;
     name: string;
     code: string;
     description: string | null;
-    parent_role_id: string | null;
     is_active: boolean;
+
+    // Parent role (JOINed)
+    parent_role_id: string | null;
+    parent_role: {
+        id: string;
+        name: string;
+        code: string;
+    } | null;
+
+    // Assigned profiles (JOINed with names)
+    profiles: Array<{
+        id: string;
+        name: string;
+        code: string;
+    }>;
+
+    // Counts
+    user_count?: number;
+    child_role_count?: number;
+
     created_at: Date;
     created_by: string | null;
-    profile_ids: string[];
+    created_by_name: string | null;  // JOINed: creator's name
 }
 
 export interface RoleSummaryDto {
@@ -57,3 +80,4 @@ export interface RoleSummaryDto {
     code: string;
     is_active: boolean;
 }
+

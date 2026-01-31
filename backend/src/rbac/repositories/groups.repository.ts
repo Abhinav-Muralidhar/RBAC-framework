@@ -1,6 +1,6 @@
 import { Pool, QueryResultRow } from 'pg';
 import { Groups } from '../models/groups.model';
-import { GroupListFilterDto } from '../dto/group.dto';
+import { GroupListFilterDto, GroupResponseDto } from '../dto/group.dto';
 import {
   PaginationParams,
   PaginatedResult,
@@ -14,6 +14,7 @@ export interface IGroupRepository {
   update(id: string, data: Partial<Groups>): Promise<Groups>;
   delete(id: string): Promise<void>;
   findById(id: string): Promise<Groups | null>;
+  findByIdWithDetails(id: string): Promise<GroupResponseDto | null>;
   findByIdIncludingInactive(id: string): Promise<Groups | null>;
   findAll(filters?: GroupListFilterDto): Promise<Groups[]>;
   findAllPaginated(filters?: GroupListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
@@ -43,6 +44,54 @@ export class GroupRepository implements IGroupRepository {
       [id]
     );
     return res.rows[0] ?? null;
+  }
+
+  /**
+   * Find group by ID with JOINed roles, user count, and creator name
+   */
+  async findByIdWithDetails(id: string): Promise<GroupResponseDto | null> {
+    // Get the group with creator name and user count
+    const groupRes = await this.query<Groups & {
+      created_by_name: string | null;
+      user_count: string;
+    }>(
+      `SELECT 
+        g.*,
+        CASE 
+          WHEN u.id IS NOT NULL THEN COALESCE(u.first_name, '') || ' ' || u.last_name
+          ELSE NULL
+        END AS created_by_name,
+        (SELECT COUNT(*) FROM user_groups ug WHERE ug.group_id = g.id) AS user_count
+      FROM ${this.tableName} g
+      LEFT JOIN users u ON g.created_by = u.id
+      WHERE g.id = $1 AND g.${ACTIVE_FILTER}`,
+      [id]
+    );
+
+    const group = groupRes.rows[0];
+    if (!group) return null;
+
+    // Get assigned roles
+    const rolesRes = await this.query<{ id: string; name: string; code: string }>(
+      `SELECT r.id, r.name, r.code
+       FROM roles r
+       INNER JOIN group_roles gr ON r.id = gr.role_id
+       WHERE gr.group_id = $1 AND r.is_active = true`,
+      [id]
+    );
+
+    return {
+      id: group.id,
+      name: group.name,
+      code: group.code,
+      description: group.description ?? null,
+      is_active: group.is_active,
+      roles: rolesRes.rows,
+      user_count: parseInt(group.user_count, 10),
+      created_at: group.created_at,
+      created_by: group.created_by ?? null,
+      created_by_name: group.created_by_name ?? null
+    };
   }
 
   async findByIdIncludingInactive(id: string): Promise<Groups | null> {

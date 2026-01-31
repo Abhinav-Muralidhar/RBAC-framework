@@ -36,15 +36,30 @@ export interface GroupListFilterDto {
 // RESPONSE DTOs
 // ============================================================================
 
+/**
+ * Group Response DTO with JOINed data
+ * Includes human-readable role names
+ */
 export interface GroupResponseDto {
     id: string;
     name: string;
     code: string;
     description: string | null;
     is_active: boolean;
+
+    // Assigned roles (JOINed with names)
+    roles: Array<{
+        id: string;
+        name: string;
+        code: string;
+    }>;
+
+    // User count in this group
+    user_count?: number;
+
     created_at: Date;
     created_by: string | null;
-    role_ids: string[];
+    created_by_name: string | null;  // JOINed: creator's name
 }
 
 export interface GroupSummaryDto {
@@ -53,3 +68,4 @@ export interface GroupSummaryDto {
     code: string;
     is_active: boolean;
 }
+

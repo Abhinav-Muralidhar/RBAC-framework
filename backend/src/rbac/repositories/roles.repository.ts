@@ -1,6 +1,6 @@
 import { Pool, QueryResultRow } from 'pg';
 import { Roles } from '../models/roles.model';
-import { RoleListFilterDto } from '../dto/role.dto';
+import { RoleListFilterDto, RoleResponseDto } from '../dto/role.dto';
 import {
   PaginationParams,
   PaginatedResult,
@@ -14,6 +14,7 @@ export interface IRoleRepository {
   update(id: string, data: Partial<Roles>): Promise<Roles>;
   delete(id: string): Promise<void>;
   findById(id: string): Promise<Roles | null>;
+  findByIdWithDetails(id: string): Promise<RoleResponseDto | null>;
   findByIdIncludingInactive(id: string): Promise<Roles | null>;
   findByCode(code: string): Promise<Roles | null>;
   findAll(filters?: RoleListFilterDto): Promise<Roles[]>;
@@ -45,6 +46,68 @@ export class RoleRepository implements IRoleRepository {
       [id]
     );
     return res.rows[0] ?? null;
+  }
+
+  /**
+   * Find role by ID with JOINed parent role, profiles, user count, and creator name
+   */
+  async findByIdWithDetails(id: string): Promise<RoleResponseDto | null> {
+    // Get the role with parent role and creator names
+    const roleRes = await this.query<Roles & {
+      parent_role_name: string | null;
+      parent_role_code: string | null;
+      created_by_name: string | null;
+      user_count: string;
+      child_role_count: string;
+    }>(
+      `SELECT 
+        r.*,
+        pr.name AS parent_role_name,
+        pr.code AS parent_role_code,
+        CASE 
+          WHEN u.id IS NOT NULL THEN COALESCE(u.first_name, '') || ' ' || u.last_name
+          ELSE NULL
+        END AS created_by_name,
+        (SELECT COUNT(*) FROM user_roles ur WHERE ur.role_id = r.id) AS user_count,
+        (SELECT COUNT(*) FROM roles cr WHERE cr.parent_role_id = r.id AND cr.is_active = true) AS child_role_count
+      FROM ${this.tableName} r
+      LEFT JOIN ${this.tableName} pr ON r.parent_role_id = pr.id
+      LEFT JOIN users u ON r.created_by = u.id
+      WHERE r.id = $1 AND r.${ACTIVE_FILTER}`,
+      [id]
+    );
+
+    const role = roleRes.rows[0];
+    if (!role) return null;
+
+    // Get assigned profiles
+    const profilesRes = await this.query<{ id: string; name: string; code: string }>(
+      `SELECT p.id, p.name, p.code
+       FROM profiles p
+       INNER JOIN role_profiles rp ON p.id = rp.profile_id
+       WHERE rp.role_id = $1 AND p.is_active = true`,
+      [id]
+    );
+
+    return {
+      id: role.id,
+      name: role.name,
+      code: role.code,
+      description: role.description ?? null,
+      is_active: role.is_active,
+      parent_role_id: role.parent_role_id ?? null,
+      parent_role: role.parent_role_id ? {
+        id: role.parent_role_id,
+        name: role.parent_role_name!,
+        code: role.parent_role_code!
+      } : null,
+      profiles: profilesRes.rows,
+      user_count: parseInt(role.user_count, 10),
+      child_role_count: parseInt(role.child_role_count, 10),
+      created_at: role.created_at,
+      created_by: role.created_by ?? null,
+      created_by_name: role.created_by_name ?? null
+    };
   }
 
   async findByIdIncludingInactive(id: string): Promise<Roles | null> {

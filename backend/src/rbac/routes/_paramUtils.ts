@@ -94,3 +94,42 @@ export function getOptionalQuery(query: Query, key: string): string | undefined 
 
     return value;
 }
+
+// ============================================================================
+// HIGH-LEVEL ROUTE HELPERS
+// ============================================================================
+
+/**
+ * Parse and validate an ID parameter from Express params
+ * Handles the string | string[] | undefined type from req.params
+ */
+export function parseId(value: string | string[] | undefined, paramName: string): string {
+    if (value === undefined || value === null) {
+        throw new Error(`${paramName} is required`);
+    }
+
+    if (Array.isArray(value)) {
+        throw new Error(`${paramName} must be a single value, got array`);
+    }
+
+    const trimmed = value.trim();
+    if (trimmed === '') {
+        throw new Error(`${paramName} is required`);
+    }
+
+    return trimmed;
+}
+
+/**
+ * Parse pagination parameters from query string
+ * Provides safe defaults and validates bounds
+ */
+export function parsePagination(query: Query): { page: number; limit: number } {
+    const pageStr = getOptionalQuery(query, 'page');
+    const limitStr = getOptionalQuery(query, 'limit');
+
+    const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(limitStr ?? '20', 10) || 20));
+
+    return { page, limit };
+}

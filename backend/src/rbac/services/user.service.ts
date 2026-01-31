@@ -3,12 +3,14 @@
  * 
  * Business logic for user management.
  * All mutating operations require RBAC enforcement.
+ * All mutations are audit logged.
  */
 
 import { IUsersRepository } from '../repositories/users.repository';
 import { Users } from '../models/users.model';
 import { hashPassword, validatePassword } from '../utils/crypto.utils';
 import { IEvaluationService } from './evaluation.service';
+import { IAuditService } from './audit.service';
 import { UserListFilterDto, CreateUserRequestDto, UpdateUserRequestDto } from '../dto/user.dto';
 import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
 
@@ -27,7 +29,8 @@ export interface IUserService {
 export class UserService implements IUserService {
     constructor(
         private userRepository: IUsersRepository,
-        private evaluationService: IEvaluationService
+        private evaluationService: IEvaluationService,
+        private auditService: IAuditService
     ) { }
 
     async list(actingUserId: string, filters?: UserListFilterDto): Promise<Users[]> {
@@ -58,11 +61,27 @@ export class UserService implements IUserService {
             data.password = await hashPassword(data.password);
         }
 
-        return this.userRepository.create(data);
+        const user = await this.userRepository.create(data);
+
+        // AUDIT: Log user creation (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'create',
+            entity_type: 'user',
+            entity_id: user.id,
+            old_values: null,
+            new_values: { ...data, password: '[REDACTED]' },
+            status: 'success'
+        }).catch(console.error);
+
+        return user;
     }
 
     async update(actingUserId: string, id: string, data: UpdateUserRequestDto): Promise<Users> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
+
+        // Fetch old values for audit
+        const oldUser = await this.userRepository.findById(id);
 
         // Validate and hash password if changing
         if (data.password) {
@@ -70,11 +89,39 @@ export class UserService implements IUserService {
             data.password = await hashPassword(data.password);
         }
 
-        return this.userRepository.update(id, data);
+        const updatedUser = await this.userRepository.update(id, data);
+
+        // AUDIT: Log user update (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'update',
+            entity_type: 'user',
+            entity_id: id,
+            old_values: oldUser ? { ...oldUser, password: '[REDACTED]' } : null,
+            new_values: { ...data, password: data.password ? '[REDACTED]' : undefined },
+            status: 'success'
+        }).catch(console.error);
+
+        return updatedUser;
     }
 
     async delete(actingUserId: string, id: string): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
-        return this.userRepository.delete(id);
+
+        // Fetch old values for audit
+        const oldUser = await this.userRepository.findById(id);
+
+        await this.userRepository.delete(id);
+
+        // AUDIT: Log user deletion (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'delete',
+            entity_type: 'user',
+            entity_id: id,
+            old_values: oldUser ? { ...oldUser, password: '[REDACTED]' } : null,
+            new_values: { is_deleted: true },
+            status: 'success'
+        }).catch(console.error);
     }
 }

@@ -3,12 +3,14 @@
  * 
  * Business logic for group management.
  * All mutating operations require RBAC enforcement.
+ * All mutations are audit logged.
  */
 
 import { Groups } from '../models/groups.model';
 import { IGroupRepository } from '../repositories/groups.repository';
 import { IGroupRoleRepository } from '../repositories/group_roles.repository';
 import { IEvaluationService } from './evaluation.service';
+import { IAuditService } from './audit.service';
 import {
     GroupNotFoundError,
     DuplicateAssignmentError
@@ -42,7 +44,8 @@ export class UnifiedGroupService implements IUnifiedGroupService {
     constructor(
         private groupRepository: IGroupRepository,
         private groupRoleRepository: IGroupRoleRepository,
-        private evaluationService: IEvaluationService
+        private evaluationService: IEvaluationService,
+        private auditService: IAuditService
     ) { }
 
     // -----------------------
@@ -93,13 +96,26 @@ export class UnifiedGroupService implements IUnifiedGroupService {
         const existing = await this.groupRepository.findByName(data.name);
         if (existing) throw new DuplicateAssignmentError(`group name '${data.name}'`);
 
-        return this.groupRepository.create({
+        const group = await this.groupRepository.create({
             name: data.name,
             code: data.code,
             description: data.description ?? null,
             is_active: data.is_active ?? true,
             created_by: actingUserId
         });
+
+        // AUDIT: Log group creation (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'create',
+            entity_type: 'group',
+            entity_id: group.id,
+            old_values: null,
+            new_values: { ...data } as Record<string, unknown>,
+            status: 'success'
+        }).catch(console.error);
+
+        return group;
     }
 
     async update(actingUserId: string, groupId: string, data: UpdateGroupRequestDto): Promise<Groups> {
@@ -113,7 +129,20 @@ export class UnifiedGroupService implements IUnifiedGroupService {
             if (conflict) throw new DuplicateAssignmentError(`group name '${data.name}'`);
         }
 
-        return this.groupRepository.update(groupId, data);
+        const updatedGroup = await this.groupRepository.update(groupId, data);
+
+        // AUDIT: Log group update (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'update',
+            entity_type: 'group',
+            entity_id: groupId,
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { ...data } as Record<string, unknown>,
+            status: 'success'
+        }).catch(console.error);
+
+        return updatedGroup;
     }
 
     async delete(actingUserId: string, groupId: string): Promise<void> {
@@ -123,6 +152,17 @@ export class UnifiedGroupService implements IUnifiedGroupService {
         if (!existing) throw new GroupNotFoundError(groupId);
 
         await this.groupRepository.delete(groupId);
+
+        // AUDIT: Log group deletion (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'delete',
+            entity_type: 'group',
+            entity_id: groupId,
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { is_deleted: true },
+            status: 'success'
+        }).catch(console.error);
     }
 
     // -----------------------
@@ -132,18 +172,54 @@ export class UnifiedGroupService implements IUnifiedGroupService {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
         await this.getById(actingUserId, groupId); // validate group exists
         await this.groupRoleRepository.assignRole(groupId, roleId, actingUserId);
+
+        // AUDIT: Log group-role assignment (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'create',
+            entity_type: 'group_role',
+            entity_id: `${groupId}:${roleId}`,
+            old_values: null,
+            new_values: { group_id: groupId, role_id: roleId },
+            status: 'success'
+        }).catch(console.error);
     }
 
     async removeRole(actingUserId: string, groupId: string, roleId: string): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
         await this.getById(actingUserId, groupId); // validate group exists
         await this.groupRoleRepository.removeRole(groupId, roleId);
+
+        // AUDIT: Log group-role removal (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'delete',
+            entity_type: 'group_role',
+            entity_id: `${groupId}:${roleId}`,
+            old_values: { group_id: groupId, role_id: roleId },
+            status: 'success'
+        }).catch(console.error);
     }
 
     async replaceRoles(actingUserId: string, groupId: string, roleIds: string[]): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
         await this.getById(actingUserId, groupId); // validate group exists
+
+        // Get old roles for audit
+        const oldRoleIds = await this.groupRoleRepository.findRolesByGroup(groupId);
+
         await this.groupRoleRepository.replaceRoles(groupId, roleIds, actingUserId);
+
+        // AUDIT: Log group roles replacement (fire-and-forget)
+        this.auditService.log({
+            user_id: actingUserId,
+            action: 'update',
+            entity_type: 'group_roles',
+            entity_id: groupId,
+            old_values: { role_ids: oldRoleIds },
+            new_values: { role_ids: roleIds },
+            status: 'success'
+        }).catch(console.error);
     }
 
     async getRoles(actingUserId: string, groupId: string): Promise<string[]> {

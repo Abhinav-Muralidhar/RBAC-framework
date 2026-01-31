@@ -23,10 +23,11 @@ const SESSION_EXTEND_MS = 24 * 60 * 60 * 1000;
 export function createAuthenticateMiddleware(authSessionService: IAuthSessionService) {
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            // 1. Read Cookie
-            const sessionId = req.cookies['sessionId'];
+            // 1. Read Signed Cookie (tamper-proof)
+            // If cookie was tampered with, signedCookies[key] will be false
+            const sessionId = req.signedCookies['sessionId'];
 
-            if (!sessionId) {
+            if (!sessionId || sessionId === false) {
                 res.status(401).json({
                     error: 'Unauthorized',
                     message: 'Authentication required',

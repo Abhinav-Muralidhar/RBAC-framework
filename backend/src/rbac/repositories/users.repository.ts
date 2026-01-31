@@ -1,6 +1,6 @@
 import { Pool, QueryResultRow } from 'pg';
 import { Users } from '../models/users.model';
-import { UserListFilterDto } from '../dto/user.dto';
+import { UserListFilterDto, UserResponseDto } from '../dto/user.dto';
 import {
   PaginationParams,
   PaginatedResult,
@@ -11,6 +11,7 @@ import {
 
 export interface IUsersRepository {
   findById(userId: string): Promise<Users | null>;
+  findByIdWithDetails(userId: string): Promise<UserResponseDto | null>;
   findByIdIncludingDeleted(userId: string): Promise<Users | null>;
   findByUsername(username: string): Promise<Users | null>;
   findByEmail(email: string): Promise<Users | null>;
@@ -46,6 +47,62 @@ export class UsersRepository implements IUsersRepository {
       [userId]
     );
     return res.rows[0] ?? null;
+  }
+
+  /**
+   * Find user by ID with JOINed manager name, creator name, roles, and groups
+   */
+  async findByIdWithDetails(userId: string): Promise<UserResponseDto | null> {
+    // Get the user with manager and creator names
+    const userRes = await this.query<Users & {
+      reports_to_user_name: string | null;
+      created_by_name: string | null;
+    }>(
+      `SELECT 
+        u.*,
+        CASE 
+          WHEN m.id IS NOT NULL THEN COALESCE(m.first_name, '') || ' ' || m.last_name
+          ELSE NULL
+        END AS reports_to_user_name,
+        CASE 
+          WHEN c.id IS NOT NULL THEN COALESCE(c.first_name, '') || ' ' || c.last_name
+          ELSE NULL
+        END AS created_by_name
+      FROM ${this.tableName} u
+      LEFT JOIN ${this.tableName} m ON u.reports_to_user_id = m.id
+      LEFT JOIN ${this.tableName} c ON u.created_by = c.id
+      WHERE u.id = $1 AND u.${ACTIVE_USER_FILTER}`,
+      [userId]
+    );
+
+    const user = userRes.rows[0];
+    if (!user) return null;
+
+    // Get user's roles
+    const rolesRes = await this.query<{ id: string; name: string; code: string }>(
+      `SELECT r.id, r.name, r.code
+       FROM roles r
+       INNER JOIN user_roles ur ON r.id = ur.role_id
+       WHERE ur.user_id = $1 AND r.is_active = true`,
+      [userId]
+    );
+
+    // Get user's groups
+    const groupsRes = await this.query<{ id: string; name: string }>(
+      `SELECT g.id, g.name
+       FROM groups g
+       INNER JOIN user_groups ug ON g.id = ug.group_id
+       WHERE ug.user_id = $1 AND g.is_active = true`,
+      [userId]
+    );
+
+    return {
+      ...user,
+      reports_to_user_name: user.reports_to_user_name,
+      created_by_name: user.created_by_name,
+      roles: rolesRes.rows,
+      groups: groupsRes.rows
+    } as UserResponseDto;
   }
 
   /**

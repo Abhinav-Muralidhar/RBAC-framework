@@ -1,0 +1,90 @@
+GET /groups/active
+// GET /groups/inactive
+ // GET /groups/:id
+// POST /groups
+// POST /groups
+// PATCH /groups/:id
+// DELETE /groups/:id
+
+GET /groups/name/:name
+GET /grpoups/
+Groups deal with not jsut groups but also with group , groupuser and grouproles too
+audit logs-
+GET /audit-logs
+GET /audit-logs/export
+   * EXPORT audit logs as CSV
+
+GET /audit-logs/:id
+   * READ single audit log
+/audit/user/:userId
+/audit/action/:action
+/audit/date-range(or we can pass them as a qyer param in get /audit logs)
+
+Sessions
+/sessions-only current uiser session
+/session/all-all session in this system (with paginatioN)
+/logout logout current session
+/revoke/id-revoke a particular session if with eprmission or userid is same
+/revokeall/userid -revoke all session of a user 
+
+/login-do login stuff
+
+organziton-
+post-create orgnatization(not exposed crete it and comment it out completely)
+get-get org details(we only ahve a single org for now)
+
+OTP-
+/otp/geenmrate
+post-otp/validate
+/otp/cleanup(delete)
+
+Profiles-
+post /profiles
+get prfoiles
+get profiles/id
+get profiles/code
+put /profuioles/id (update)
+del /profiles(soft)
+public route /profiles(for dropdowns etc)
+//roles/roleid/profiles-all profiles assinge dot a role
+NOTE PROFILES DONT JSUT DEAL WIHT PROFILES BUT ALSO PROFILE PREMISSIOSN TOOO, Note profils_permission also menthionds wihcn module too so we should eb creeful
+/profiles/:profileId/permissions
+/profiles/active
+/profiles/inactive-
+/profiles/actideacti-active aor deactive a profile based on current state
+
+
+Roles-
+get/roles/:id
+get/roles/code/:code
+get/roles
+get/roles/:id/ancestors
+get/roles/:id/children
+posdt /roles
+del /groups/id
+put /role/id(update role)
+/roles/:id/users get users with that role
+
+Sharing rules-
+/get sharingrule/id
+get sharingrule
+get sharingrules/active
+/sharing-rules/type/:type we can file as private or public
+del /sharing-rules/:id soft deal/set inactive
+put update sharing rule(update it as active or inactive, also do something like change from private to public vice versa, we need to ceck the sharing reule exist then do mutation on tha evennif inactive then activeate it)(so hsaringrule number=no of moudles)
+
+SMTP-
+get /smtp/id
+/smtp
+/smtp/active
+post /smtp
+/put /smtp
+/delete //smtp- as spoft delete
+
+USer-
+/get /suers
+/user/id
+post /users
+put /users
+/delete /users
+NOTE e cna set use as active inactive or deleted  so please check how to proceed forwards
