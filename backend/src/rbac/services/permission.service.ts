@@ -134,8 +134,7 @@ export class PermissionService implements IPermissionService {
         return this.permissionsRepository.create({
             module_id: data.module_id,
             action: data.action,
-            description: data.description ?? null,
-            is_active: data.is_active ?? true
+            description: data.description ?? null
         });
     }
 

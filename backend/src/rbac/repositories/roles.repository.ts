@@ -8,10 +8,11 @@ import {
   getPaginationOffset,
   buildPaginatedResult
 } from '../utils/pagination.utils';
+import { CreateRoleInput, UpdateRoleInput } from '../types/repository.types';
 
 export interface IRoleRepository {
-  create(data: Partial<Roles>): Promise<Roles>;
-  update(id: string, data: Partial<Roles>): Promise<Roles>;
+  create(input: CreateRoleInput): Promise<Roles>;
+  update(id: string, input: UpdateRoleInput): Promise<Roles>;
   delete(id: string): Promise<void>;
   findById(id: string): Promise<Roles | null>;
   findByIdWithDetails(id: string): Promise<RoleResponseDto | null>;
@@ -205,33 +206,59 @@ export class RoleRepository implements IRoleRepository {
     return res.rows;
   }
 
-  async create(data: Partial<Roles>): Promise<Roles> {
-    const keys = Object.keys(data);
-    const values = Object.values(data);
-    const columns = keys.join(', ');
-    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-
+  async create(input: CreateRoleInput): Promise<Roles> {
     const res = await this.query<Roles>(
-      `INSERT INTO ${this.tableName} (${columns}) VALUES (${placeholders}) RETURNING *`,
-      values
+      `INSERT INTO ${this.tableName} (name, code, description, parent_role_id, is_active, created_by)
+       VALUES ($1, $2, $3, $4, COALESCE($5, true), $6)
+       RETURNING *`,
+      [
+        input.name,
+        input.code,
+        input.description ?? null,
+        input.parent_role_id ?? null,
+        input.is_active ?? null,
+        input.created_by ?? null
+      ]
     );
-    return res.rows[0]!;
+    if (!res.rows[0]) throw new Error('Role creation failed');
+    return res.rows[0];
   }
 
-  async update(id: string, data: Partial<Roles>): Promise<Roles> {
-    const keys = Object.keys(data);
-    if (keys.length === 0) {
+  async update(id: string, input: UpdateRoleInput): Promise<Roles> {
+    const updates: string[] = [];
+    const values: unknown[] = [id];
+    let paramIdx = 2;
+
+    if (input.name !== undefined) {
+      updates.push(`name = $${paramIdx++}`);
+      values.push(input.name);
+    }
+    if (input.code !== undefined) {
+      updates.push(`code = $${paramIdx++}`);
+      values.push(input.code);
+    }
+    if (input.description !== undefined) {
+      updates.push(`description = $${paramIdx++}`);
+      values.push(input.description);
+    }
+    if (input.parent_role_id !== undefined) {
+      updates.push(`parent_role_id = $${paramIdx++}`);
+      values.push(input.parent_role_id);
+    }
+    if (input.is_active !== undefined) {
+      updates.push(`is_active = $${paramIdx++}`);
+      values.push(input.is_active);
+    }
+
+    if (updates.length === 0) {
       const existing = await this.findById(id);
       if (!existing) throw new Error(`Role ${id} not found`);
       return existing;
     }
 
-    const values = Object.values(data);
-    const setClause = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
-
     const res = await this.query<Roles>(
-      `UPDATE ${this.tableName} SET ${setClause} WHERE id = $1 AND ${ACTIVE_FILTER} RETURNING *`,
-      [id, ...values]
+      `UPDATE ${this.tableName} SET ${updates.join(', ')} WHERE id = $1 AND ${ACTIVE_FILTER} RETURNING *`,
+      values
     );
 
     if (!res.rows[0]) throw new Error(`Role ${id} not found`);

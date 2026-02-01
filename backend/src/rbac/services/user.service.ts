@@ -55,13 +55,16 @@ export class UserService implements IUserService {
     async create(actingUserId: string, data: CreateUserRequestDto): Promise<Users> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
 
+        // Clone input to avoid mutation side effects
+        const userData = { ...data };
+
         // Validate and hash password
-        if (data.password) {
-            validatePassword(data.password);
-            data.password = await hashPassword(data.password);
+        if (userData.password) {
+            validatePassword(userData.password);
+            userData.password = await hashPassword(userData.password);
         }
 
-        const user = await this.userRepository.create(data);
+        const user = await this.userRepository.create(userData);
 
         // AUDIT: Log user creation (fire-and-forget)
         this.auditService.log({
@@ -83,13 +86,16 @@ export class UserService implements IUserService {
         // Fetch old values for audit
         const oldUser = await this.userRepository.findById(id);
 
+        // Clone input to avoid mutation side effects
+        const userData = { ...data };
+
         // Validate and hash password if changing
-        if (data.password) {
-            validatePassword(data.password);
-            data.password = await hashPassword(data.password);
+        if (userData.password) {
+            validatePassword(userData.password);
+            userData.password = await hashPassword(userData.password);
         }
 
-        const updatedUser = await this.userRepository.update(id, data);
+        const updatedUser = await this.userRepository.update(id, userData);
 
         // AUDIT: Log user update (fire-and-forget)
         this.auditService.log({

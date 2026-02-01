@@ -8,6 +8,7 @@ import {
     getPaginationOffset,
     buildPaginatedResult
 } from '../utils/pagination.utils';
+import { CreatePermissionInput, UpdatePermissionInput } from '../types/repository.types';
 
 // Permission effect from profile_permissions
 export type PermissionEffect = 'allow' | 'deny';
@@ -19,8 +20,8 @@ export interface IPermissionsRepository {
     findAllPaginated(filters?: PermissionListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Permissions>>;
     findByModuleAndAction(moduleId: string, action: PermissionAction): Promise<Permissions | null>;
     findByIds(ids: string[]): Promise<Permissions[]>;
-    create(data: Partial<Permissions>): Promise<Permissions>;
-    update(id: string, data: Partial<Permissions>): Promise<Permissions>;
+    create(input: CreatePermissionInput): Promise<Permissions>;
+    update(id: string, input: UpdatePermissionInput): Promise<Permissions>;
     delete(id: string): Promise<void>;
     count(filters?: PermissionListFilterDto): Promise<number>;
 
@@ -176,32 +177,40 @@ export class PermissionsRepository implements IPermissionsRepository {
         return res.rows.map(row => row.effect);
     }
 
-    async create(data: Partial<Permissions>): Promise<Permissions> {
-        const keys = Object.keys(data);
-        const values = Object.values(data);
-        const columns = keys.join(', ');
-        const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-
+    async create(input: CreatePermissionInput): Promise<Permissions> {
         const res = await this.query<Permissions>(
-            `INSERT INTO ${this.tableName} (${columns}) VALUES (${placeholders}) RETURNING *`,
-            values
+            `INSERT INTO ${this.tableName} (action, module_id, description)
+             VALUES ($1, $2, $3)
+             RETURNING *`,
+            [input.action, input.module_id, input.description ?? null]
         );
-        return res.rows[0]!;
+        if (!res.rows[0]) throw new Error('Permission creation failed');
+        return res.rows[0];
     }
 
-    async update(id: string, data: Partial<Permissions>): Promise<Permissions> {
-        const keys = Object.keys(data);
-        const values = Object.values(data);
-        if (!keys.length) {
+    async update(id: string, input: UpdatePermissionInput): Promise<Permissions> {
+        const updates: string[] = [];
+        const values: unknown[] = [id];
+        let paramIdx = 2;
+
+        if (input.action !== undefined) {
+            updates.push(`action = $${paramIdx++}`);
+            values.push(input.action);
+        }
+        if (input.description !== undefined) {
+            updates.push(`description = $${paramIdx++}`);
+            values.push(input.description);
+        }
+
+        if (!updates.length) {
             const existing = await this.findById(id);
             if (!existing) throw new Error(`Permission ${id} not found`);
             return existing;
         }
 
-        const setClause = keys.map((key, i) => `${key} = $${i + 2}`).join(', ');
         const res = await this.query<Permissions>(
-            `UPDATE ${this.tableName} SET ${setClause} WHERE id = $1 AND ${ACTIVE_FILTER} RETURNING *`,
-            [id, ...values]
+            `UPDATE ${this.tableName} SET ${updates.join(', ')} WHERE id = $1 AND ${ACTIVE_FILTER} RETURNING *`,
+            values
         );
 
         if (!res.rows.length) throw new Error(`Permission ${id} not found for update`);

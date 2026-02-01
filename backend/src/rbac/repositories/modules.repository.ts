@@ -1,12 +1,17 @@
 import { Pool, QueryResultRow } from 'pg';
 import { Modules } from '../models/modules.model';
+import { CreateModuleInput, UpdateModuleInput } from '../types/repository.types';
+
+export interface ModuleListFilterDto {
+  is_active?: boolean;
+}
 
 export interface IModuleRepository {
-  findAll(filters?: Record<string, unknown>): Promise<Modules[]>;
+  findAll(filters?: ModuleListFilterDto): Promise<Modules[]>;
   findByCode(code: string): Promise<Modules | null>;
   findById(id: string): Promise<Modules | null>;
-  create(data: Partial<Modules>): Promise<Modules>;
-  update(id: string, data: Partial<Modules>): Promise<Modules>;
+  create(input: CreateModuleInput): Promise<Modules>;
+  update(id: string, input: UpdateModuleInput): Promise<Modules>;
 }
 
 export class ModuleRepository implements IModuleRepository {
@@ -37,53 +42,72 @@ export class ModuleRepository implements IModuleRepository {
     return res.rows[0] ?? null;
   }
 
-  async findAll(filters?: Record<string, unknown>): Promise<Modules[]> {
+  async findAll(filters?: ModuleListFilterDto): Promise<Modules[]> {
     let query = `SELECT * FROM ${this.tableName}`;
     const params: unknown[] = [];
+    let paramIdx = 1;
 
-    if (filters && Object.keys(filters).length > 0) {
-      const clauses = Object.entries(filters).map(([key, value], i) => {
-        params.push(value);
-        return `${key} = $${i + 1}`;
-      });
-      query += ` WHERE ${clauses.join(' AND ')}`;
+    if (filters?.is_active !== undefined) {
+      query += ` WHERE is_active = $${paramIdx++}`;
+      params.push(filters.is_active);
     }
 
     const res = await this.query<Modules>(query, params);
     return res.rows;
   }
 
-  async create(data: Partial<Modules>): Promise<Modules> {
-    const keys = Object.keys(data);
-    const values = Object.values(data);
-
-    if (keys.length === 0) throw new Error('Cannot create module with empty data');
-
-    const columns = keys.join(', ');
-    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-
+  async create(input: CreateModuleInput): Promise<Modules> {
     const res = await this.query<Modules>(
-      `INSERT INTO ${this.tableName} (${columns})
-       VALUES (${placeholders})
+      `INSERT INTO ${this.tableName} (name, code, description, is_active)
+       VALUES ($1, $2, $3, COALESCE($4, true))
        RETURNING *`,
-      values
+      [
+        input.name,
+        input.code,
+        input.description ?? null,
+        input.is_active ?? null
+      ]
     );
-
-    return res.rows[0]!;
+    if (!res.rows[0]) throw new Error('Module creation failed');
+    return res.rows[0];
   }
-  async update(id: string, data: Partial<Modules>): Promise<Modules> {
-    const keys = Object.keys(data);
-    if (!keys.length) throw new Error('No fields provided for update');
 
-    const values = Object.values(data);
-    const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+  async update(id: string, input: UpdateModuleInput): Promise<Modules> {
+    const updates: string[] = [];
+    const values: unknown[] = [id];
+    let paramIdx = 2;
+
+    if (input.name !== undefined) {
+      updates.push(`name = $${paramIdx++}`);
+      values.push(input.name);
+    }
+    if (input.code !== undefined) {
+      updates.push(`code = $${paramIdx++}`);
+      values.push(input.code);
+    }
+    if (input.description !== undefined) {
+      updates.push(`description = $${paramIdx++}`);
+      values.push(input.description);
+    }
+    if (input.is_active !== undefined) {
+      updates.push(`is_active = $${paramIdx++}`);
+      values.push(input.is_active);
+    }
+
+    if (!updates.length) {
+      const existing = await this.findById(id);
+      if (!existing) throw new Error(`Module ${id} not found`);
+      return existing;
+    }
+
+    updates.push('updated_at = NOW()');
 
     const res = await this.query<Modules>(
       `UPDATE ${this.tableName}
-        SET ${setClause}, updated_at = NOW()
-        WHERE id = $${keys.length + 1}
-        RETURNING *`,
-      [...values, id]
+       SET ${updates.join(', ')}
+       WHERE id = $1
+       RETURNING *`,
+      values
     );
 
     if (!res.rows[0]) throw new Error('Module not found for update');

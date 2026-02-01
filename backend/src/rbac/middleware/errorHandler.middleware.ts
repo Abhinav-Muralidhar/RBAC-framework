@@ -6,6 +6,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { PermissionDeniedError, RBACError } from '../errors/rbac.errors';
+import { SessionNotFoundError, ConcurrentSessionLimitError } from '../services/authSession.service';
 
 /**
  * Standard error response
@@ -28,6 +29,8 @@ interface ErrorResponse {
  */
 function getStatusCode(error: Error): number {
     if (error instanceof PermissionDeniedError) return 403;
+    if (error instanceof SessionNotFoundError) return 401;
+    if (error instanceof ConcurrentSessionLimitError) return 429;
 
     // Check for "not found" errors by class name pattern
     if (error instanceof RBACError && error.constructor.name.includes('NotFound')) return 404;
@@ -56,6 +59,8 @@ function getStatusCode(error: Error): number {
  */
 function getErrorCode(error: Error): string {
     if (error instanceof PermissionDeniedError) return 'PERMISSION_DENIED';
+    if (error instanceof SessionNotFoundError) return 'INVALID_SESSION';
+    if (error instanceof ConcurrentSessionLimitError) return 'TOO_MANY_SESSIONS';
 
     // Check for "not found" errors by class name pattern
     if (error instanceof RBACError && error.constructor.name.includes('NotFound')) return 'NOT_FOUND';

@@ -9,10 +9,11 @@ import {
   getPaginationOffset,
   buildPaginatedResult
 } from '../utils/pagination.utils';
+import { CreateProfileInput, UpdateProfileInput } from '../types/repository.types';
 
 export interface IProfilesRepository {
-  create(data: Partial<Profiles>): Promise<Profiles>;
-  update(id: string, data: Partial<Profiles>): Promise<Profiles>;
+  create(input: CreateProfileInput): Promise<Profiles>;
+  update(id: string, input: UpdateProfileInput): Promise<Profiles>;
   delete(id: string): Promise<void>;
   findById(id: string): Promise<Profiles | null>;
   findByIdWithDetails(id: string): Promise<ProfileResponseDto | null>;
@@ -153,38 +154,58 @@ export class ProfilesRepository implements IProfilesRepository {
     return parseInt(res.rows[0]?.count ?? '0', 10);
   }
 
-  async create(data: Partial<Profiles>): Promise<Profiles> {
-    const keys = Object.keys(data);
-    const values = Object.values(data);
-    const indices = keys.map((_, i) => `$${i + 1}`).join(', ');
-    const columns = keys.join(',');
-
-    const query = `
-            INSERT INTO ${this.tableName} (${columns})
-            VALUES (${indices})
-            RETURNING *
-        `;
-    const res = await this.query<Profiles>(query, values);
-    return res.rows[0]!;
+  async create(input: CreateProfileInput): Promise<Profiles> {
+    const res = await this.query<Profiles>(
+      `INSERT INTO ${this.tableName} (name, code, description, is_active, created_by)
+       VALUES ($1, $2, $3, COALESCE($4, true), $5)
+       RETURNING *`,
+      [
+        input.name,
+        input.code,
+        input.description ?? null,
+        input.is_active ?? null,
+        input.created_by ?? null
+      ]
+    );
+    if (!res.rows[0]) throw new Error('Profile creation failed');
+    return res.rows[0];
   }
 
-  async update(id: string, data: Partial<Profiles>): Promise<Profiles> {
-    const keys = Object.keys(data);
-    const values = Object.values(data);
-    if (keys.length === 0) {
+  async update(id: string, input: UpdateProfileInput): Promise<Profiles> {
+    const updates: string[] = [];
+    const values: unknown[] = [id];
+    let paramIdx = 2;
+
+    if (input.name !== undefined) {
+      updates.push(`name = $${paramIdx++}`);
+      values.push(input.name);
+    }
+    if (input.code !== undefined) {
+      updates.push(`code = $${paramIdx++}`);
+      values.push(input.code);
+    }
+    if (input.description !== undefined) {
+      updates.push(`description = $${paramIdx++}`);
+      values.push(input.description);
+    }
+    if (input.is_active !== undefined) {
+      updates.push(`is_active = $${paramIdx++}`);
+      values.push(input.is_active);
+    }
+
+    if (updates.length === 0) {
       const existing = await this.findById(id);
       if (!existing) throw new Error(`Profile ${id} not found`);
       return existing;
     }
 
-    const setClause = keys.map((key, i) => `${key} = $${i + 2}`).join(', ');
-    const query = `
-            UPDATE ${this.tableName}
-            SET ${setClause}
-            WHERE id = $1 AND ${ACTIVE_FILTER}
-            RETURNING *
-        `;
-    const res = await this.query<Profiles>(query, [id, ...values]);
+    const res = await this.query<Profiles>(
+      `UPDATE ${this.tableName}
+       SET ${updates.join(', ')}
+       WHERE id = $1 AND ${ACTIVE_FILTER}
+       RETURNING *`,
+      values
+    );
     if (res.rows.length === 0) throw new Error(`Profile ${id} not found for update`);
     return res.rows[0]!;
   }

@@ -1,8 +1,9 @@
 import { Pool, QueryResultRow } from 'pg';
 import { OtpTokens } from '../models/otp_tokens.model';
+import { CreateOtpTokenInput } from '../types/repository.types';
 
 export interface IOtpTokenRepository {
-  create(otp: Partial<OtpTokens>): Promise<OtpTokens>;
+  create(input: CreateOtpTokenInput): Promise<OtpTokens>;
   findLatestByUser(userId: string): Promise<OtpTokens | null>;
   incrementAttempts(userId: string): Promise<OtpTokens | null>;
   deleteExpired(): Promise<void>;
@@ -12,7 +13,7 @@ export interface IOtpTokenRepository {
 export class OtpTokenRepository implements IOtpTokenRepository {
   private tableName = 'otp_tokens';
 
-  constructor(private pool: InstanceType<typeof Pool>) {}
+  constructor(private pool: InstanceType<typeof Pool>) { }
 
   protected async query<T extends QueryResultRow>(
     text: string,
@@ -22,23 +23,23 @@ export class OtpTokenRepository implements IOtpTokenRepository {
   }
 
   /** Create a new OTP token entry */
-  async create(otp: Partial<OtpTokens>): Promise<OtpTokens> {
-    const keys = Object.keys(otp);
-    const values = Object.values(otp);
-
-    if (keys.length === 0) throw new Error('Cannot create empty OTP token');
-
-    const columns = keys.join(', ');
-    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-
+  async create(input: CreateOtpTokenInput): Promise<OtpTokens> {
     const res = await this.query<OtpTokens>(
-      `INSERT INTO ${this.tableName} (${columns})
-       VALUES (${placeholders})
+      `INSERT INTO ${this.tableName} (user_id, otp_hash, expires_at, sent_to, ip_address, user_agent, attempt_count)
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 0))
        RETURNING *`,
-      values
+      [
+        input.user_id,
+        input.otp_hash,
+        input.expires_at,
+        input.sent_to,
+        input.ip_address,
+        input.user_agent,
+        input.attempt_count ?? null
+      ]
     );
-
-    return res.rows[0]!;
+    if (!res.rows[0]) throw new Error('OTP token creation failed');
+    return res.rows[0];
   }
 
   /** Get the latest valid OTP token for a user */

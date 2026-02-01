@@ -103,23 +103,22 @@ export class AuditService implements IAuditService {
         user_agent?: string | undefined;
         status: AuditStatus;
     }): Promise<AuditLogs> {
-        // Build partial object, omitting undefined fields
-        const entry: Partial<AuditLogs> = {
+        // Build strict input object - all required fields must have values
+        const input = {
             action: data.action,
             module_id: data.module_id || '',
             entity_type: data.entity_type || '',
             entity_id: data.entity_id || '',
             ip_address: data.ip_address || '',
             user_agent: data.user_agent || '',
-            status: data.status
+            status: data.status,
+            user_id: data.user_id ?? null,
+            role_id: data.role_id ?? null,
+            old_values: data.old_values ?? null,
+            new_values: data.new_values ?? null
         };
 
-        if (data.user_id) entry.user_id = data.user_id;
-        if (data.role_id) entry.role_id = data.role_id;
-        if (data.old_values !== undefined) entry.old_values = data.old_values;
-        if (data.new_values !== undefined) entry.new_values = data.new_values;
-
-        return this.auditLogsRepository.create(entry);
+        return this.auditLogsRepository.create(input);
     }
 
     async getById(logId: string): Promise<AuditLogs> {

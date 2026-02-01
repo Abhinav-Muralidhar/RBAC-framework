@@ -1,6 +1,7 @@
 import { Pool, QueryResultRow } from 'pg';
 import { AuditLogs, AuditAction, AuditStatus } from '../models/audit_logs.model';
 import { AuditLogResponseDto } from '../dto/audit-log.dto';
+import { CreateAuditLogInput } from '../types/repository.types';
 
 /**
  * Raw row type from JOIN query
@@ -27,7 +28,7 @@ interface AuditLogWithDetailsRow extends QueryResultRow {
 }
 
 export interface IAuditLogsRepository {
-  create(entry: Partial<AuditLogs>): Promise<AuditLogs>;
+  create(input: CreateAuditLogInput): Promise<AuditLogs>;
   findById(id: string): Promise<AuditLogs | null>;
   findByIdWithDetails(id: string): Promise<AuditLogResponseDto | null>;
   findByUser(userId: string, limit?: number, offset?: number): Promise<AuditLogs[]>;
@@ -172,23 +173,29 @@ export class AuditLogsRepository implements IAuditLogsRepository {
     return res.rows;
   }
 
-  async create(entry: Partial<AuditLogs>): Promise<AuditLogs> {
-    const keys = Object.keys(entry);
-    const values = Object.values(entry);
-
-    if (keys.length === 0) throw new Error('Cannot create audit log with empty data');
-
-    const columns = keys.join(', ');
-    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-
+  async create(input: CreateAuditLogInput): Promise<AuditLogs> {
     const res = await this.query<AuditLogs>(
-      `INSERT INTO ${this.tableName} (${columns})
-       VALUES (${placeholders})
-       RETURNING *`,
-      values
+      `INSERT INTO ${this.tableName} (
+        action, module_id, entity_type, entity_id, ip_address, user_agent, status,
+        user_id, role_id, old_values, new_values
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING *`,
+      [
+        input.action,
+        input.module_id,
+        input.entity_type,
+        input.entity_id,
+        input.ip_address,
+        input.user_agent,
+        input.status,
+        input.user_id ?? null,
+        input.role_id ?? null,
+        input.old_values ? JSON.stringify(input.old_values) : null,
+        input.new_values ? JSON.stringify(input.new_values) : null
+      ]
     );
-
-    return res.rows[0]!;
+    if (!res.rows[0]) throw new Error('Audit log creation failed');
+    return res.rows[0];
   }
 }
 

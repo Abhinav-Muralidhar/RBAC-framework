@@ -95,7 +95,7 @@ export function createAuthRouter(pool: Pool): Router {
             });
 
             // Set signed cookie with session token
-            res.cookie('sessionId', session.session_token, COOKIE_OPTIONS);
+            res.cookie('sessionToken', session.session_token, COOKIE_OPTIONS);
 
             // Update last login
             await usersRepo.update(user.id, { last_login_at: new Date() });
@@ -134,7 +134,7 @@ export function createAuthRouter(pool: Pool): Router {
     router.post('/logout', async (req: Request, res: Response): Promise<void> => {
         try {
             // Try to invalidate session if cookie exists
-            const sessionToken = req.signedCookies['sessionId'];
+            const sessionToken = req.signedCookies['sessionToken'];
             if (sessionToken) {
                 try {
                     // Find session by token and logout
@@ -148,7 +148,7 @@ export function createAuthRouter(pool: Pool): Router {
             }
 
             // Clear cookie
-            res.clearCookie('sessionId', {
+            res.clearCookie('sessionToken', {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'strict',
@@ -164,7 +164,7 @@ export function createAuthRouter(pool: Pool): Router {
         } catch (error) {
             console.error('Logout error:', error);
             // Still clear cookie even on error
-            res.clearCookie('sessionId');
+            res.clearCookie('sessionToken');
             res.status(200).json({
                 data: { message: 'Logged out' },
                 error: null,

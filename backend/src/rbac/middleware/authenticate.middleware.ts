@@ -25,9 +25,9 @@ export function createAuthenticateMiddleware(authSessionService: IAuthSessionSer
         try {
             // 1. Read Signed Cookie (tamper-proof)
             // If cookie was tampered with, signedCookies[key] will be false
-            const sessionId = req.signedCookies['sessionId'];
+            const sessionToken = req.signedCookies['sessionToken'];
 
-            if (!sessionId || sessionId === false) {
+            if (!sessionToken || sessionToken === false) {
                 res.status(401).json({
                     error: 'Unauthorized',
                     message: 'Authentication required',
@@ -36,7 +36,7 @@ export function createAuthenticateMiddleware(authSessionService: IAuthSessionSer
                 return;
             }
 
-            const session = await authSessionService.resolveSession(sessionId);
+            const session = await authSessionService.resolveSession(sessionToken);
 
             // 3. Populate Context
             req.user = {

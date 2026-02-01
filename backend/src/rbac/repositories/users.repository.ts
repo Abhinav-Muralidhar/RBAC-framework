@@ -8,6 +8,7 @@ import {
   getPaginationOffset,
   buildPaginatedResult
 } from '../utils/pagination.utils';
+import { CreateUserInput, UpdateUserInput } from '../types/repository.types';
 
 export interface IUsersRepository {
   findById(userId: string): Promise<Users | null>;
@@ -17,8 +18,8 @@ export interface IUsersRepository {
   findByEmail(email: string): Promise<Users | null>;
   findAll(filters?: UserListFilterDto): Promise<Users[]>;
   findAllPaginated(filters?: UserListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Users>>;
-  create(data: Partial<Users>): Promise<Users>;
-  update(userId: string, data: Partial<Users>): Promise<Users>;
+  create(input: CreateUserInput): Promise<Users>;
+  update(userId: string, input: UpdateUserInput): Promise<Users>;
   delete(userId: string): Promise<void>;
   count(filters?: UserListFilterDto): Promise<number>;
 }
@@ -253,46 +254,238 @@ export class UsersRepository implements IUsersRepository {
     return parseInt(res.rows[0]?.count ?? '0', 10);
   }
 
-  async create(data: Partial<Users>): Promise<Users> {
-    const keys = Object.keys(data);
-    const values = Object.values(data);
-
-    if (keys.length === 0) {
-      throw new Error('Cannot create user with empty payload');
-    }
-
-    const columns = keys.join(', ');
-    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-
+  async create(input: CreateUserInput): Promise<Users> {
     const res = await this.query<Users>(
-      `INSERT INTO ${this.tableName} (${columns})
-             VALUES (${placeholders})
-             RETURNING *`,
-      values
+      `INSERT INTO ${this.tableName} (
+        username, password, last_name, primary_email,
+        status, first_name, title, department, reports_to_user_id,
+        secondary_email, other_email, office_phone, mobile_phone,
+        home_phone, secondary_phone, fax, street, city, state,
+        country, postal_code, default_landing_page, name_format,
+        phone_country_code, full_screen_preview, preferred_currency,
+        digit_grouping_pattern, decimal_separator, decimal_precision,
+        symbol_placement, time_zone, business_hours, trailing_zero_handling,
+        aggregation_format, signature, created_by
+      ) VALUES (
+        $1, $2, $3, $4,
+        COALESCE($5, 'active'), $6, $7, $8, $9,
+        $10, $11, $12, $13,
+        $14, $15, $16, $17, $18, $19,
+        $20, $21, $22, $23,
+        $24, $25, $26,
+        $27, $28, $29,
+        $30, $31, $32, $33,
+        $34, $35, $36
+      ) RETURNING *`,
+      [
+        input.username,
+        input.password,
+        input.last_name,
+        input.primary_email,
+        input.status ?? null,
+        input.first_name ?? null,
+        input.title ?? null,
+        input.department ?? null,
+        input.reports_to_user_id ?? null,
+        input.secondary_email ?? null,
+        input.other_email ?? null,
+        input.office_phone ?? null,
+        input.mobile_phone ?? null,
+        input.home_phone ?? null,
+        input.secondary_phone ?? null,
+        input.fax ?? null,
+        input.street ?? null,
+        input.city ?? null,
+        input.state ?? null,
+        input.country ?? null,
+        input.postal_code ?? null,
+        input.default_landing_page ?? null,
+        input.name_format ?? null,
+        input.phone_country_code ?? null,
+        input.full_screen_preview ?? null,
+        input.preferred_currency ?? null,
+        input.digit_grouping_pattern ?? null,
+        input.decimal_separator ?? null,
+        input.decimal_precision ?? null,
+        input.symbol_placement ?? null,
+        input.time_zone ?? null,
+        input.business_hours ? JSON.stringify(input.business_hours) : null,
+        input.trailing_zero_handling ?? null,
+        input.aggregation_format ?? null,
+        input.signature ?? null,
+        input.created_by ?? null
+      ]
     );
 
     if (!res.rows[0]) throw new Error('User creation failed');
     return res.rows[0];
   }
 
-  async update(userId: string, data: Partial<Users>): Promise<Users> {
-    const keys = Object.keys(data);
-    const values = Object.values(data);
+  async update(userId: string, input: UpdateUserInput): Promise<Users> {
+    // Build SET clause only for provided fields
+    const updates: string[] = [];
+    const values: unknown[] = [userId];
+    let paramIdx = 2;
 
-    if (keys.length === 0) {
+    if (input.password !== undefined) {
+      updates.push(`password = $${paramIdx++}`);
+      values.push(input.password);
+    }
+    if (input.status !== undefined) {
+      updates.push(`status = $${paramIdx++}`);
+      values.push(input.status);
+    }
+    if (input.first_name !== undefined) {
+      updates.push(`first_name = $${paramIdx++}`);
+      values.push(input.first_name);
+    }
+    if (input.last_name !== undefined) {
+      updates.push(`last_name = $${paramIdx++}`);
+      values.push(input.last_name);
+    }
+    if (input.title !== undefined) {
+      updates.push(`title = $${paramIdx++}`);
+      values.push(input.title);
+    }
+    if (input.department !== undefined) {
+      updates.push(`department = $${paramIdx++}`);
+      values.push(input.department);
+    }
+    if (input.reports_to_user_id !== undefined) {
+      updates.push(`reports_to_user_id = $${paramIdx++}`);
+      values.push(input.reports_to_user_id);
+    }
+    if (input.primary_email !== undefined) {
+      updates.push(`primary_email = $${paramIdx++}`);
+      values.push(input.primary_email);
+    }
+    if (input.secondary_email !== undefined) {
+      updates.push(`secondary_email = $${paramIdx++}`);
+      values.push(input.secondary_email);
+    }
+    if (input.other_email !== undefined) {
+      updates.push(`other_email = $${paramIdx++}`);
+      values.push(input.other_email);
+    }
+    if (input.office_phone !== undefined) {
+      updates.push(`office_phone = $${paramIdx++}`);
+      values.push(input.office_phone);
+    }
+    if (input.mobile_phone !== undefined) {
+      updates.push(`mobile_phone = $${paramIdx++}`);
+      values.push(input.mobile_phone);
+    }
+    if (input.home_phone !== undefined) {
+      updates.push(`home_phone = $${paramIdx++}`);
+      values.push(input.home_phone);
+    }
+    if (input.secondary_phone !== undefined) {
+      updates.push(`secondary_phone = $${paramIdx++}`);
+      values.push(input.secondary_phone);
+    }
+    if (input.fax !== undefined) {
+      updates.push(`fax = $${paramIdx++}`);
+      values.push(input.fax);
+    }
+    if (input.street !== undefined) {
+      updates.push(`street = $${paramIdx++}`);
+      values.push(input.street);
+    }
+    if (input.city !== undefined) {
+      updates.push(`city = $${paramIdx++}`);
+      values.push(input.city);
+    }
+    if (input.state !== undefined) {
+      updates.push(`state = $${paramIdx++}`);
+      values.push(input.state);
+    }
+    if (input.country !== undefined) {
+      updates.push(`country = $${paramIdx++}`);
+      values.push(input.country);
+    }
+    if (input.postal_code !== undefined) {
+      updates.push(`postal_code = $${paramIdx++}`);
+      values.push(input.postal_code);
+    }
+    if (input.default_landing_page !== undefined) {
+      updates.push(`default_landing_page = $${paramIdx++}`);
+      values.push(input.default_landing_page);
+    }
+    if (input.name_format !== undefined) {
+      updates.push(`name_format = $${paramIdx++}`);
+      values.push(input.name_format);
+    }
+    if (input.phone_country_code !== undefined) {
+      updates.push(`phone_country_code = $${paramIdx++}`);
+      values.push(input.phone_country_code);
+    }
+    if (input.full_screen_preview !== undefined) {
+      updates.push(`full_screen_preview = $${paramIdx++}`);
+      values.push(input.full_screen_preview);
+    }
+    if (input.preferred_currency !== undefined) {
+      updates.push(`preferred_currency = $${paramIdx++}`);
+      values.push(input.preferred_currency);
+    }
+    if (input.digit_grouping_pattern !== undefined) {
+      updates.push(`digit_grouping_pattern = $${paramIdx++}`);
+      values.push(input.digit_grouping_pattern);
+    }
+    if (input.decimal_separator !== undefined) {
+      updates.push(`decimal_separator = $${paramIdx++}`);
+      values.push(input.decimal_separator);
+    }
+    if (input.decimal_precision !== undefined) {
+      updates.push(`decimal_precision = $${paramIdx++}`);
+      values.push(input.decimal_precision);
+    }
+    if (input.symbol_placement !== undefined) {
+      updates.push(`symbol_placement = $${paramIdx++}`);
+      values.push(input.symbol_placement);
+    }
+    if (input.time_zone !== undefined) {
+      updates.push(`time_zone = $${paramIdx++}`);
+      values.push(input.time_zone);
+    }
+    if (input.business_hours !== undefined) {
+      updates.push(`business_hours = $${paramIdx++}`);
+      values.push(input.business_hours ? JSON.stringify(input.business_hours) : null);
+    }
+    if (input.trailing_zero_handling !== undefined) {
+      updates.push(`trailing_zero_handling = $${paramIdx++}`);
+      values.push(input.trailing_zero_handling);
+    }
+    if (input.aggregation_format !== undefined) {
+      updates.push(`aggregation_format = $${paramIdx++}`);
+      values.push(input.aggregation_format);
+    }
+    if (input.signature !== undefined) {
+      updates.push(`signature = $${paramIdx++}`);
+      values.push(input.signature);
+    }
+    if (input.last_login_at !== undefined) {
+      updates.push(`last_login_at = $${paramIdx++}`);
+      values.push(input.last_login_at);
+    }
+    if (input.password_changed_at !== undefined) {
+      updates.push(`password_changed_at = $${paramIdx++}`);
+      values.push(input.password_changed_at);
+    }
+
+    if (updates.length === 0) {
       const user = await this.findById(userId);
       if (!user) throw new Error('User not found');
       return user;
     }
 
-    const setClause = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
+    updates.push('updated_at = NOW()');
 
     const res = await this.query<Users>(
       `UPDATE ${this.tableName}
-             SET ${setClause}, updated_at = NOW()
-             WHERE id = $1 AND ${ACTIVE_USER_FILTER}
-             RETURNING *`,
-      [userId, ...values]
+       SET ${updates.join(', ')}
+       WHERE id = $1 AND ${ACTIVE_USER_FILTER}
+       RETURNING *`,
+      values
     );
 
     if (!res.rows[0]) throw new Error('User not found for update');

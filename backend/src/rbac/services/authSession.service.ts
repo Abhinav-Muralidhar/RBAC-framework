@@ -90,11 +90,11 @@ export interface IAuthSessionService {
     isValid(sessionId: string): Promise<boolean>;
 
     /**
-     * Resolve session from ID alone (Global Lookup)
+     * Resolve session from session_token (Global Lookup)
      * Used by Authentication Middleware
      * @throws RBACInternalError (Session Not Found)
      */
-    resolveSession(sessionId: string): Promise<AuthSessions>;
+    resolveSession(sessionToken: string): Promise<AuthSessions>;
 }
 
 /**
@@ -137,7 +137,6 @@ export class AuthSessionService implements IAuthSessionService {
         const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
 
         const session = await this.authSessionsRepository.create({
-            id: crypto.randomUUID(),
             user_id: data.user_id,
             session_token: crypto.randomUUID(),
             ip_address: data.ip_address || '',
@@ -245,15 +244,15 @@ export class AuthSessionService implements IAuthSessionService {
     }
 
     /**
-     * Resolve session from ID (Global Lookup).
+     * Resolve session from session_token (Global Lookup).
      * Used by authentication middleware.
      * @throws RBACInternalError if session not found or invalid
      */
-    async resolveSession(sessionId: string): Promise<AuthSessions> {
-        const session = await this.authSessionsRepository.findBySessionIdGlobal(sessionId);
+    async resolveSession(sessionToken: string): Promise<AuthSessions> {
+        const session = await this.authSessionsRepository.findBySessionToken(sessionToken);
 
         if (!session) {
-            throw new RBACInternalError(`Session not found: ${sessionId}`);
+            throw new RBACInternalError(`Session not found for token`);
         }
 
         // Check if session is logged out
