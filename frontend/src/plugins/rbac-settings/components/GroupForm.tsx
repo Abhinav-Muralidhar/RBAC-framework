@@ -80,6 +80,12 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
             if (codeErr) newErrors.code = codeErr;
         }
 
+        if (!formData.code.trim()) {
+            newErrors.code = 'Code is required';
+        } else if (!/^[A-Z_]+$/.test(formData.code)) {
+            newErrors.code = 'Code must be uppercase letters and underscores only';
+        }
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -139,6 +145,17 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
                 error={errors.code}
                 disabled={isEditing}
                 required
+                hint="Uppercase letters and underscores only"
+            />
+
+            <FormInput
+                label="Code"
+                value={formData.code}
+                onChange={e => handleChange('code', e.target.value.toUpperCase())}
+                error={errors.code}
+                disabled={isEditing}
+                required
+                placeholder="e.g., ENGINEERING"
                 hint="Uppercase letters and underscores only"
             />
 
