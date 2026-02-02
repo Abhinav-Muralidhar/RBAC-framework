@@ -1,120 +1,58 @@
-import { Pool, QueryResultRow } from 'pg';
 import { IDatabase, ITask } from 'pg-promise';
 
 export interface IGroupRoleRepository {
-  assignRole(groupId: string, roleId: string, assignedBy?: string | null): Promise<void>;
-  removeRole(groupId: string, roleId: string): Promise<void>;
-  replaceRoles(groupId: string, roleIds: string[], assignedBy?: string | null): Promise<void>;
-  findRolesByGroup(groupId: string): Promise<string[]>;
-  findGroupsByRole(roleId: string): Promise<string[]>;
+  assignRole(groupId: string, roleId: string, assignedBy?: string | null, t?: ITask<unknown>): Promise<void>;
+  removeRole(groupId: string, roleId: string, t?: ITask<unknown>): Promise<void>;
+  replaceRoles(groupId: string, roleIds: string[], assignedBy?: string | null, t?: ITask<unknown>): Promise<void>;
+  findRolesByGroup(groupId: string, t?: ITask<unknown>): Promise<string[]>;
+  findGroupsByRole(roleId: string, t?: ITask<unknown>): Promise<string[]>;
 }
 
 export class GroupRoleRepository implements IGroupRoleRepository {
   private tableName = 'group_roles';
 
-  constructor(private pool: InstanceType<typeof Pool>) { }
+  constructor(private db: IDatabase<unknown>) { }
 
-  protected async query<T extends QueryResultRow>(
-    text: string,
-    params?: unknown[]
-  ): Promise<{ rows: T[]; rowCount: number | null }> {
-    return this.pool.query<T>(text, params);
+  protected async query<T>(text: string, params?: unknown[], t?: ITask<unknown>): Promise<T[]> {
+    return (t ?? this.db).any<T>(text, params);
   }
 
-  async assignRole(
-    groupId: string,
-    roleId: string,
-    assignedBy?: string | null
-  ): Promise<void> {
-    await this.query(
-      `
-      INSERT INTO ${this.tableName} (group_id, role_id, assigned_by)
-      VALUES ($1, $2, $3)
-      ON CONFLICT DO NOTHING
-      `,
+  async assignRole(groupId: string, roleId: string, assignedBy?: string | null, t?: ITask<unknown>): Promise<void> {
+    await (t ?? this.db).none(
+      `INSERT INTO ${this.tableName} (group_id, role_id, assigned_by) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
       [groupId, roleId, assignedBy ?? null]
     );
   }
 
-  async removeRole(groupId: string, roleId: string): Promise<void> {
-    await this.query(
-      `
-      DELETE FROM ${this.tableName}
-      WHERE group_id = $1 AND role_id = $2
-      `,
-      [groupId, roleId]
-    );
+  async removeRole(groupId: string, roleId: string, t?: ITask<unknown>): Promise<void> {
+    await (t ?? this.db).none(`DELETE FROM ${this.tableName} WHERE group_id = $1 AND role_id = $2`, [groupId, roleId]);
   }
 
-  async replaceRoles(
-    groupId: string,
-    roleIds: string[],
-    assignedBy?: string | null
-  ): Promise<void> {
-    const client = await this.pool.connect();
+  async replaceRoles(groupId: string, roleIds: string[], assignedBy?: string | null, t?: ITask<unknown>): Promise<void> {
+    await (t ?? this.db).tx(async t => {
+      await t.none(`DELETE FROM ${this.tableName} WHERE group_id = $1`, [groupId]);
 
-    try {
-      // Start a transaction
-      await client.query('BEGIN');
-
-      // Remove all existing roles for this group
-      await client.query(
-        `DELETE FROM ${this.tableName} WHERE group_id = $1`,
-        [groupId]
-      );
-
-      // If there are new roles to assign
       if (roleIds.length > 0) {
         const values: unknown[] = [];
-
-        // Build the placeholders dynamically and fill the values array
-        const placeholders = roleIds.map((roleId) => {
-          values.push(groupId, roleId, assignedBy ?? null);
-          const idx = values.length - 2; // index of roleId in values
+        const placeholders = roleIds.map((_, i) => {
+          const idx = i * 3 + 1;
+          values.push(groupId, roleIds[i], assignedBy ?? null);
           return `($${idx}, $${idx + 1}, $${idx + 2})`;
         }).join(', ');
 
-        // Single insert for all roles
-        await client.query(
-          `INSERT INTO ${this.tableName} (group_id, role_id, assigned_by) VALUES ${placeholders}`,
-          values
-        );
+
+        await t.none(`INSERT INTO ${this.tableName} (group_id, role_id, assigned_by) VALUES ${placeholders}`, values);
       }
-
-      // Commit the transaction
-      await client.query('COMMIT');
-    } catch (err) {
-      // Rollback on error
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }
 
-  async findRolesByGroup(groupId: string): Promise<string[]> {
-    const res = await this.query<{ role_id: string }>(
-      `
-      SELECT role_id
-      FROM ${this.tableName}
-      WHERE group_id = $1
-      `,
-      [groupId]
-    );
-
-    return res.rows.map(r => r.role_id);
+  async findRolesByGroup(groupId: string, t?: ITask<unknown>): Promise<string[]> {
+    const res = await this.query<{ role_id: string }>(`SELECT role_id FROM ${this.tableName} WHERE group_id = $1`, [groupId], t);
+    return res.map(r => r.role_id);
   }
 
-  async findGroupsByRole(roleId: string): Promise<string[]> {
-    const res = await this.query<{ group_id: string }>(
-      `
-      SELECT group_id
-      FROM ${this.tableName}
-      WHERE role_id = $1
-      `,
-      [roleId]
-    );
-
-    return res.rows.map(r => r.group_id);
+  async findGroupsByRole(roleId: string, t?: ITask<unknown>): Promise<string[]> {
+    const res = await this.query<{ group_id: string }>(`SELECT group_id FROM ${this.tableName} WHERE role_id = $1`, [roleId], t);
+    return res.map(r => r.group_id);
   }
 }

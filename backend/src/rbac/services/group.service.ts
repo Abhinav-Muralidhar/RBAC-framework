@@ -5,7 +5,8 @@
  * All mutating operations require RBAC enforcement.
  * All mutations are audit logged.
  */
-
+import { IDatabase } from 'pg-promise';
+import { withTransaction, TransactionTask } from '../utils/transaction.utils';
 import { Groups } from '../models/groups.model';
 import { IGroupRepository } from '../repositories/groups.repository';
 import { IGroupRoleRepository } from '../repositories/group_roles.repository';
@@ -15,7 +16,7 @@ import {
     GroupNotFoundError,
     DuplicateAssignmentError
 } from '../errors/rbac.errors';
-import { GroupListFilterDto, CreateGroupRequestDto, UpdateGroupRequestDto, GroupResponseDto } from '../dto/group.dto';
+import { GroupResponseDto } from '../dto/group.dto';
 import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
 import { IUserGroupsRepository } from '../repositories/user_groups.repository';
 
@@ -33,6 +34,7 @@ export interface IUnifiedGroupService {
 
 export class UnifiedGroupService implements IUnifiedGroupService {
     constructor(
+        private db: IDatabase<unknown>,
         private groupRepository: IGroupRepository,
         private groupRoleRepository: IGroupRoleRepository,
         private evaluationService: IEvaluationService,
