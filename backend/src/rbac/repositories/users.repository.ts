@@ -1,6 +1,5 @@
 import { Pool, QueryResultRow } from 'pg';
-import { Users } from '../models/users.model';
-import { UserListFilterDto, UserResponseDto } from '../dto/user.dto';
+import { SymbolPlacement, TrailingZeroHandling, Users } from '../models/users.model';
 import {
   PaginationParams,
   PaginatedResult,
@@ -9,23 +8,79 @@ import {
   buildPaginatedResult
 } from '../utils/pagination.utils';
 import { CreateUserInput, UpdateUserInput } from '../types/repository.types';
+import { UserStatus } from '../models/users.model';
 
-export interface IUsersRepository {
-  findById(userId: string): Promise<Users | null>;
-  findByIdWithDetails(userId: string): Promise<UserResponseDto | null>;
-  findByIdIncludingDeleted(userId: string): Promise<Users | null>;
-  findByUsername(username: string): Promise<Users | null>;
-  findByEmail(email: string): Promise<Users | null>;
-  findAll(filters?: UserListFilterDto): Promise<Users[]>;
-  findAllPaginated(filters?: UserListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Users>>;
-  create(input: CreateUserInput): Promise<Users>;
-  update(userId: string, input: UpdateUserInput): Promise<Users>;
-  delete(userId: string): Promise<void>;
-  count(filters?: UserListFilterDto): Promise<number>;
+export interface UserDetail {
+  id: string;
+  username: string;
+  status: UserStatus;
+
+  first_name: string | null;
+  last_name: string;
+  title: string | null;
+  department: string | null;
+
+  // Manager (JOINed)
+  reports_to_user_id: string | null;
+  reports_to_user_name: string | null;   // JOINed: manager's first_name + ' ' + last_name
+
+  primary_email: string;
+  secondary_email: string | null;
+  other_email: string | null;
+
+  office_phone: string | null;
+  mobile_phone: string | null;
+  home_phone: string | null;
+  secondary_phone: string | null;
+  fax: string | null;
+
+  street: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  postal_code: string | null;
+
+  default_landing_page: string | null;
+  name_format: string | null;
+  phone_country_code: string | null;
+  full_screen_preview: boolean | null;
+
+  preferred_currency: string | null;
+  digit_grouping_pattern: string | null;
+  decimal_separator: string | null;
+  decimal_precision: number | null;
+  symbol_placement: SymbolPlacement | null;
+  trailing_zero_handling: TrailingZeroHandling | null;
+
+  time_zone: string | null;
+  business_hours: Record<string, unknown> | null;
+
+  aggregation_format: string | null;
+  signature: string | null;
+
+  // Assigned roles (JOINed)
+  roles?: Array<{ id: string; name: string; code: string }>;
+
+  // Assigned groups (JOINed)
+  groups?: Array<{ id: string; name: string }>;
+
+  created_at: Date;
+  created_by: string | null;
+  created_by_name: string | null;        // JOINed: creator's first_name + ' ' + last_name
+  updated_at: Date | null;
+  last_login_at: Date | null;
+  password_changed_at: Date | null;
 }
 
-// Active user filter: excludes deleted and inactive
-const ACTIVE_USER_FILTER = `status NOT IN ('deleted', 'inactive')`;
+
+export interface IUsersRepository {
+  findById(userId: string, status: string): Promise<Users | null>;
+  findByIdWithDetails(userId: string): Promise<UserDetail | null>;
+  findAllPaginated(filters?: { status: string, email: string, username: string, name: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Users>>;
+  create(input: CreateUserInput): Promise<Users>;
+  update(input: Users): Promise<Users>;
+  delete(userId: string): Promise<void>;
+}
 
 export class UsersRepository implements IUsersRepository {
   private tableName = 'users';
@@ -42,10 +97,10 @@ export class UsersRepository implements IUsersRepository {
   /**
    * Find user by ID (excludes deleted/inactive)
    */
-  async findById(userId: string): Promise<Users | null> {
+  async findById(userId: string, status: string): Promise<Users | null> {
     const res = await this.query<Users>(
-      `SELECT * FROM ${this.tableName} WHERE id = $1 AND ${ACTIVE_USER_FILTER}`,
-      [userId]
+      `SELECT * FROM ${this.tableName} WHERE id = $1 AND status = $2`,
+      [userId, status]
     );
     return res.rows[0] ?? null;
   }
@@ -53,7 +108,7 @@ export class UsersRepository implements IUsersRepository {
   /**
    * Find user by ID with JOINed manager name, creator name, roles, and groups
    */
-  async findByIdWithDetails(userId: string): Promise<UserResponseDto | null> {
+  async findByIdWithDetails(userId: string): Promise<UserDetail | null> {
     // Get the user with manager and creator names
     const userRes = await this.query<Users & {
       reports_to_user_name: string | null;
@@ -72,7 +127,7 @@ export class UsersRepository implements IUsersRepository {
       FROM ${this.tableName} u
       LEFT JOIN ${this.tableName} m ON u.reports_to_user_id = m.id
       LEFT JOIN ${this.tableName} c ON u.created_by = c.id
-      WHERE u.id = $1 AND u.${ACTIVE_USER_FILTER}`,
+      WHERE u.id = $1`,
       [userId]
     );
 
@@ -96,165 +151,137 @@ export class UsersRepository implements IUsersRepository {
        WHERE ug.user_id = $1 AND g.is_active = true`,
       [userId]
     );
+    const groupsrole = await this.query<{ id: string; name: string }>(
+      `SELECT g.id,g.name
+       FROM groups g
+       INNER JOIN group_roles gr
+       ON g.id = gr.group_id
+       INNER JOIN roles r
+       ON gr.role_id = r.id
+       inner JOIN user_roles ur
+       ON r.id = ur.role_id
+       inner JOIN users u
+       ON ur.user_id = u.id
+       WHERE u.id = $1 and g.is_active = true and r.is_active = true`,
+      [userId]
+    )
+    const allGroups = [...groupsRes.rows, ...groupsrole.rows];
+
+    const groups = Array.from(
+      new Map(allGroups.map(group => [group.id, group])).values()
+    );
 
     return {
       ...user,
       reports_to_user_name: user.reports_to_user_name,
       created_by_name: user.created_by_name,
       roles: rolesRes.rows,
-      groups: groupsRes.rows
-    } as UserResponseDto;
+      groups: groups
+    } as UserDetail;
   }
-
-  /**
-   * Find user by ID including deleted (admin use only)
-   */
-  async findByIdIncludingDeleted(userId: string): Promise<Users | null> {
-    const res = await this.query<Users>(
-      `SELECT * FROM ${this.tableName} WHERE id = $1`,
-      [userId]
-    );
-    return res.rows[0] ?? null;
-  }
-
-  /**
-   * Find user by username (excludes deleted/inactive)
-   */
-  async findByUsername(username: string): Promise<Users | null> {
-    const res = await this.query<Users>(
-      `SELECT * FROM ${this.tableName} WHERE username = $1 AND ${ACTIVE_USER_FILTER}`,
-      [username]
-    );
-    return res.rows[0] ?? null;
-  }
-
-  /**
-   * Find user by email (excludes deleted/inactive)
-   */
-  async findByEmail(email: string): Promise<Users | null> {
-    const res = await this.query<Users>(
-      `SELECT * FROM ${this.tableName} WHERE primary_email = $1 AND ${ACTIVE_USER_FILTER}`,
-      [email]
-    );
-    return res.rows[0] ?? null;
-  }
-
-  /**
-   * Find all users with typed filters (excludes deleted/inactive)
-   */
-  async findAll(filters?: UserListFilterDto): Promise<Users[]> {
-    let sql = `SELECT * FROM ${this.tableName} WHERE ${ACTIVE_USER_FILTER}`;
-    const params: unknown[] = [];
-    let paramIndex = 1;
-
-    if (filters) {
-      if (filters.status !== undefined) {
-        params.push(filters.status);
-        sql += ` AND status = $${paramIndex++}`;
-      }
-      if (filters.department) {
-        params.push(filters.department);
-        sql += ` AND department = $${paramIndex++}`;
-      }
-      if (filters.reports_to_user_id) {
-        params.push(filters.reports_to_user_id);
-        sql += ` AND reports_to_user_id = $${paramIndex++}`;
-      }
-      if (filters.city) {
-        params.push(filters.city);
-        sql += ` AND city = $${paramIndex++}`;
-      }
-      if (filters.state) {
-        params.push(filters.state);
-        sql += ` AND state = $${paramIndex++}`;
-      }
-      if (filters.country) {
-        params.push(filters.country);
-        sql += ` AND country = $${paramIndex++}`;
-      }
-    }
-
-    sql += ` ORDER BY created_at DESC`;
-    const res = await this.query<Users>(sql, params);
-    return res.rows;
-  }
-
   /**
    * Find all users with pagination
    */
   async findAllPaginated(
-    filters?: UserListFilterDto,
+    filters?: { status: string; email: string; username: string; name: string },
     pagination?: Partial<PaginationParams>
   ): Promise<PaginatedResult<Users>> {
-    const normalizedPagination = normalizePaginationParams(pagination);
-    const offset = getPaginationOffset(normalizedPagination.page, normalizedPagination.limit);
 
-    // Get total count
-    const total = await this.count(filters);
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
 
-    // Get paginated data
-    let sql = `SELECT * FROM ${this.tableName} WHERE ${ACTIVE_USER_FILTER}`;
+    const whereClauses: string[] = [];
     const params: unknown[] = [];
     let paramIndex = 1;
 
-    if (filters) {
-      if (filters.status !== undefined) {
-        params.push(filters.status);
-        sql += ` AND status = $${paramIndex++}`;
-      }
-      if (filters.department) {
-        params.push(filters.department);
-        sql += ` AND department = $${paramIndex++}`;
-      }
-      if (filters.reports_to_user_id) {
-        params.push(filters.reports_to_user_id);
-        sql += ` AND reports_to_user_id = $${paramIndex++}`;
-      }
+    // ---- filters ----
+    if (filters?.status) {
+      whereClauses.push(`status = $${paramIndex++}`);
+      params.push(filters.status);
     }
 
-    sql += ` ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
-    params.push(normalizedPagination.limit, offset);
-
-    const res = await this.query<Users>(sql, params);
-    return buildPaginatedResult(res.rows, total, normalizedPagination);
-  }
-
-  /**
-   * Count users with filters
-   */
-  async count(filters?: UserListFilterDto): Promise<number> {
-    let sql = `SELECT COUNT(*) as count FROM ${this.tableName} WHERE ${ACTIVE_USER_FILTER}`;
-    const params: unknown[] = [];
-    let paramIndex = 1;
-
-    if (filters) {
-      if (filters.id) {
-        params.push(filters.id);
-        sql += ` AND id = $${paramIndex++}`;
-      }
-      if (filters.username) {
-        params.push(filters.username);
-        sql += ` AND username = $${paramIndex++}`;
-      }
-      if (filters.status !== undefined) {
-        params.push(filters.status);
-        sql += ` AND status = $${paramIndex++}`;
-      }
-      if (filters.department) {
-        params.push(filters.department);
-        sql += ` AND department = $${paramIndex++}`;
-      }
-      if (filters.reports_to_user_id) {
-        params.push(filters.reports_to_user_id);
-        sql += ` AND reports_to_user_id = $${paramIndex++}`;
-      }
+    if (filters?.email) {
+      whereClauses.push(`primary_email = $${paramIndex++}`);
+      params.push(filters.email);
     }
 
-    const res = await this.query<{ count: string }>(sql, params);
-    return parseInt(res.rows[0]?.count ?? '0', 10);
+    if (filters?.username) {
+      whereClauses.push(`username = $${paramIndex++}`);
+      params.push(filters.username);
+    }
+
+    if (filters?.name) {
+      whereClauses.push(`(first_name ILIKE $${paramIndex} OR last_name ILIKE $${paramIndex})`);
+      params.push(`%${filters.name}%`);
+      paramIndex++;
+    }
+
+    const whereSql = whereClauses.length
+      ? `WHERE ${whereClauses.join(' AND ')}`
+      : '';
+
+    // ---- total count ----
+    const totalRes = await this.query<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName} ${whereSql}`,
+      params
+    );
+
+    const total = parseInt(totalRes.rows[0]?.count ?? '0', 10);
+
+    // ---- paginated data ----
+    const dataRes = await this.query<Users>(
+      `SELECT *
+     FROM ${this.tableName}
+     ${whereSql}
+     ORDER BY created_at DESC
+     LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
+      [...params, p.limit, offset]
+    );
+
+    return buildPaginatedResult(dataRes.rows, total, p);
   }
+
+
 
   async create(input: CreateUserInput): Promise<Users> {
+    const values = [
+      input.username,
+      input.password,
+      input.last_name,
+      input.primary_email,
+      input.status ?? null,
+      input.first_name ?? null,
+      input.title ?? null,
+      input.department ?? null,
+      input.reports_to_user_id ?? null,
+      input.secondary_email ?? null,
+      input.other_email ?? null,
+      input.office_phone ?? null,
+      input.mobile_phone ?? null,
+      input.home_phone ?? null,
+      input.secondary_phone ?? null,
+      input.fax ?? null,
+      input.street ?? null,
+      input.city ?? null,
+      input.state ?? null,
+      input.country ?? null,
+      input.postal_code ?? null,
+      input.default_landing_page ?? null,
+      input.name_format ?? null,
+      input.phone_country_code ?? null,
+      input.full_screen_preview ?? null,
+      input.preferred_currency ?? null,
+      input.digit_grouping_pattern ?? null,
+      input.decimal_separator ?? null,
+      input.decimal_precision ?? null,
+      input.symbol_placement ?? null,
+      input.time_zone ?? null,
+      input.business_hours ?? null,
+      input.trailing_zero_handling ?? null,
+      input.aggregation_format ?? null,
+      input.signature ?? null,
+      input.created_by ?? null,
+    ]
     const res = await this.query<Users>(
       `INSERT INTO ${this.tableName} (
         username, password, last_name, primary_email,
@@ -277,217 +304,95 @@ export class UsersRepository implements IUsersRepository {
         $30, $31, $32, $33,
         $34, $35, $36
       ) RETURNING *`,
-      [
-        input.username,
-        input.password,
-        input.last_name,
-        input.primary_email,
-        input.status ?? null,
-        input.first_name ?? null,
-        input.title ?? null,
-        input.department ?? null,
-        input.reports_to_user_id ?? null,
-        input.secondary_email ?? null,
-        input.other_email ?? null,
-        input.office_phone ?? null,
-        input.mobile_phone ?? null,
-        input.home_phone ?? null,
-        input.secondary_phone ?? null,
-        input.fax ?? null,
-        input.street ?? null,
-        input.city ?? null,
-        input.state ?? null,
-        input.country ?? null,
-        input.postal_code ?? null,
-        input.default_landing_page ?? null,
-        input.name_format ?? null,
-        input.phone_country_code ?? null,
-        input.full_screen_preview ?? null,
-        input.preferred_currency ?? null,
-        input.digit_grouping_pattern ?? null,
-        input.decimal_separator ?? null,
-        input.decimal_precision ?? null,
-        input.symbol_placement ?? null,
-        input.time_zone ?? null,
-        input.business_hours ? JSON.stringify(input.business_hours) : null,
-        input.trailing_zero_handling ?? null,
-        input.aggregation_format ?? null,
-        input.signature ?? null,
-        input.created_by ?? null
-      ]
+      values
     );
 
     if (!res.rows[0]) throw new Error('User creation failed');
     return res.rows[0];
   }
 
-  async update(userId: string, input: UpdateUserInput): Promise<Users> {
-    // Build SET clause only for provided fields
-    const updates: string[] = [];
-    const values: unknown[] = [userId];
-    let paramIdx = 2;
-
-    if (input.password !== undefined) {
-      updates.push(`password = $${paramIdx++}`);
-      values.push(input.password);
-    }
-    if (input.status !== undefined) {
-      updates.push(`status = $${paramIdx++}`);
-      values.push(input.status);
-    }
-    if (input.first_name !== undefined) {
-      updates.push(`first_name = $${paramIdx++}`);
-      values.push(input.first_name);
-    }
-    if (input.last_name !== undefined) {
-      updates.push(`last_name = $${paramIdx++}`);
-      values.push(input.last_name);
-    }
-    if (input.title !== undefined) {
-      updates.push(`title = $${paramIdx++}`);
-      values.push(input.title);
-    }
-    if (input.department !== undefined) {
-      updates.push(`department = $${paramIdx++}`);
-      values.push(input.department);
-    }
-    if (input.reports_to_user_id !== undefined) {
-      updates.push(`reports_to_user_id = $${paramIdx++}`);
-      values.push(input.reports_to_user_id);
-    }
-    if (input.primary_email !== undefined) {
-      updates.push(`primary_email = $${paramIdx++}`);
-      values.push(input.primary_email);
-    }
-    if (input.secondary_email !== undefined) {
-      updates.push(`secondary_email = $${paramIdx++}`);
-      values.push(input.secondary_email);
-    }
-    if (input.other_email !== undefined) {
-      updates.push(`other_email = $${paramIdx++}`);
-      values.push(input.other_email);
-    }
-    if (input.office_phone !== undefined) {
-      updates.push(`office_phone = $${paramIdx++}`);
-      values.push(input.office_phone);
-    }
-    if (input.mobile_phone !== undefined) {
-      updates.push(`mobile_phone = $${paramIdx++}`);
-      values.push(input.mobile_phone);
-    }
-    if (input.home_phone !== undefined) {
-      updates.push(`home_phone = $${paramIdx++}`);
-      values.push(input.home_phone);
-    }
-    if (input.secondary_phone !== undefined) {
-      updates.push(`secondary_phone = $${paramIdx++}`);
-      values.push(input.secondary_phone);
-    }
-    if (input.fax !== undefined) {
-      updates.push(`fax = $${paramIdx++}`);
-      values.push(input.fax);
-    }
-    if (input.street !== undefined) {
-      updates.push(`street = $${paramIdx++}`);
-      values.push(input.street);
-    }
-    if (input.city !== undefined) {
-      updates.push(`city = $${paramIdx++}`);
-      values.push(input.city);
-    }
-    if (input.state !== undefined) {
-      updates.push(`state = $${paramIdx++}`);
-      values.push(input.state);
-    }
-    if (input.country !== undefined) {
-      updates.push(`country = $${paramIdx++}`);
-      values.push(input.country);
-    }
-    if (input.postal_code !== undefined) {
-      updates.push(`postal_code = $${paramIdx++}`);
-      values.push(input.postal_code);
-    }
-    if (input.default_landing_page !== undefined) {
-      updates.push(`default_landing_page = $${paramIdx++}`);
-      values.push(input.default_landing_page);
-    }
-    if (input.name_format !== undefined) {
-      updates.push(`name_format = $${paramIdx++}`);
-      values.push(input.name_format);
-    }
-    if (input.phone_country_code !== undefined) {
-      updates.push(`phone_country_code = $${paramIdx++}`);
-      values.push(input.phone_country_code);
-    }
-    if (input.full_screen_preview !== undefined) {
-      updates.push(`full_screen_preview = $${paramIdx++}`);
-      values.push(input.full_screen_preview);
-    }
-    if (input.preferred_currency !== undefined) {
-      updates.push(`preferred_currency = $${paramIdx++}`);
-      values.push(input.preferred_currency);
-    }
-    if (input.digit_grouping_pattern !== undefined) {
-      updates.push(`digit_grouping_pattern = $${paramIdx++}`);
-      values.push(input.digit_grouping_pattern);
-    }
-    if (input.decimal_separator !== undefined) {
-      updates.push(`decimal_separator = $${paramIdx++}`);
-      values.push(input.decimal_separator);
-    }
-    if (input.decimal_precision !== undefined) {
-      updates.push(`decimal_precision = $${paramIdx++}`);
-      values.push(input.decimal_precision);
-    }
-    if (input.symbol_placement !== undefined) {
-      updates.push(`symbol_placement = $${paramIdx++}`);
-      values.push(input.symbol_placement);
-    }
-    if (input.time_zone !== undefined) {
-      updates.push(`time_zone = $${paramIdx++}`);
-      values.push(input.time_zone);
-    }
-    if (input.business_hours !== undefined) {
-      updates.push(`business_hours = $${paramIdx++}`);
-      values.push(input.business_hours ? JSON.stringify(input.business_hours) : null);
-    }
-    if (input.trailing_zero_handling !== undefined) {
-      updates.push(`trailing_zero_handling = $${paramIdx++}`);
-      values.push(input.trailing_zero_handling);
-    }
-    if (input.aggregation_format !== undefined) {
-      updates.push(`aggregation_format = $${paramIdx++}`);
-      values.push(input.aggregation_format);
-    }
-    if (input.signature !== undefined) {
-      updates.push(`signature = $${paramIdx++}`);
-      values.push(input.signature);
-    }
-    if (input.last_login_at !== undefined) {
-      updates.push(`last_login_at = $${paramIdx++}`);
-      values.push(input.last_login_at);
-    }
-    if (input.password_changed_at !== undefined) {
-      updates.push(`password_changed_at = $${paramIdx++}`);
-      values.push(input.password_changed_at);
-    }
-
-    if (updates.length === 0) {
-      const user = await this.findById(userId);
-      if (!user) throw new Error('User not found');
-      return user;
-    }
-
-    updates.push('updated_at = NOW()');
-
+  async update(input: Users): Promise<Users> {
+    const values = [
+      input.username,
+      input.password,
+      input.last_name,
+      input.primary_email,
+      input.status ?? null,
+      input.first_name ?? null,
+      input.title ?? null,
+      input.department ?? null,
+      input.reports_to_user_id ?? null,
+      input.secondary_email ?? null,
+      input.other_email ?? null,
+      input.office_phone ?? null,
+      input.mobile_phone ?? null,
+      input.home_phone ?? null,
+      input.secondary_phone ?? null,
+      input.fax ?? null,
+      input.street ?? null,
+      input.city ?? null,
+      input.state ?? null,
+      input.country ?? null,
+      input.postal_code ?? null,
+      input.default_landing_page ?? null,
+      input.name_format ?? null,
+      input.phone_country_code ?? null,
+      input.full_screen_preview ?? null,
+      input.preferred_currency ?? null,
+      input.digit_grouping_pattern ?? null,
+      input.decimal_separator ?? null,
+      input.decimal_precision ?? null,
+      input.symbol_placement ?? null,
+      input.time_zone ?? null,
+      input.business_hours ?? null,
+      input.trailing_zero_handling ?? null,
+      input.aggregation_format ?? null,
+      input.signature ?? null,
+      input.created_by ?? null,
+      input.id
+    ]
     const res = await this.query<Users>(
       `UPDATE ${this.tableName}
-       SET ${updates.join(', ')}
-       WHERE id = $1 AND ${ACTIVE_USER_FILTER}
+       SET username = $1,
+       password = $2,
+       last_name = $3,
+       primary_email = $4,
+       status = $5,
+       first_name = $6,
+       title = $7,
+       department = $8,
+       reports_to_user_id = $9,
+       secondary_email = $10,
+       other_email = $11,
+       office_phone = $12,
+       mobile_phone = $13,
+       home_phone = $14,
+       secondary_phone = $15,
+       fax = $16,
+       street = $17,
+       city = $18,
+       state = $19,
+       country = $20,
+       postal_code = $21,
+       default_landing_page = $22,
+       name_format = $23,
+       phone_country_code = $24,
+       full_screen_preview = $25,
+       preferred_currency = $26,
+       digit_grouping_pattern = $27,
+       decimal_separator = $28,
+       decimal_precision = $29,
+       symbol_placement = $30,
+       time_zone = $31,
+       business_hours = $32,
+       trailing_zero_handling = $33,
+       aggregation_format = $34,
+       signature = $35,
+       created_by = $36
+       WHERE id = $37
        RETURNING *`,
       values
     );
-
     if (!res.rows[0]) throw new Error('User not found for update');
     return res.rows[0];
   }

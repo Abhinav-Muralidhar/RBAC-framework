@@ -150,13 +150,6 @@ export interface CreateProfileInput {
     created_by?: string | null;
 }
 
-/** Fields that can be updated on a profile */
-export interface UpdateProfileInput {
-    name?: string;
-    code?: string;
-    description?: string | null;
-    is_active?: boolean;
-}
 
 // ============================================================
 // GROUPS
@@ -197,11 +190,6 @@ export interface CreatePermissionInput {
     description?: string | null;
 }
 
-/** Fields that can be updated on a permission */
-export interface UpdatePermissionInput {
-    action?: 'create' | 'read' | 'update' | 'delete' | 'export';
-    description?: string | null;
-}
 
 // ============================================================
 // SHARING RULES
@@ -237,20 +225,6 @@ export interface CreateSmtpConfigInput {
     from_email: string;
     from_name: string;
     // Optional fields
-    is_active?: boolean;
-    reply_to_email?: string | null;
-}
-
-/** Fields that can be updated on SMTP config */
-export interface UpdateSmtpConfigInput {
-    name?: string;
-    host?: string;
-    port?: number;
-    username?: string;
-    password?: string;
-    encryption?: 'none' | 'ssl' | 'tls';
-    from_email?: string;
-    from_name?: string;
     is_active?: boolean;
     reply_to_email?: string | null;
 }

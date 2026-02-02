@@ -1,6 +1,5 @@
 import { Pool, QueryResultRow } from 'pg';
 import { Roles } from '../models/roles.model';
-import { RoleListFilterDto, RoleResponseDto } from '../dto/role.dto';
 import {
   PaginationParams,
   PaginatedResult,
@@ -10,24 +9,43 @@ import {
 } from '../utils/pagination.utils';
 import { CreateRoleInput, UpdateRoleInput } from '../types/repository.types';
 
+export interface RoleDetail {
+  id: string;
+  name: string;
+  code: string;
+  description: string | null;
+  is_active: boolean;
+  parent_role_id: string | null;
+  parent_role: {
+    name: string;
+    code: string;
+  } | null;
+
+  // Assigned profiles (JOINed with names)
+  profiles: Array<{
+    id: string;
+    name: string;
+    code: string;
+  }>;
+  user_count?: number;
+  child_role_count?: number;
+  created_at: Date;
+  created_by: string | null;
+  created_by_name: string | null;
+}
+
 export interface IRoleRepository {
   create(input: CreateRoleInput): Promise<Roles>;
   update(id: string, input: UpdateRoleInput): Promise<Roles>;
   delete(id: string): Promise<void>;
-  findById(id: string): Promise<Roles | null>;
-  findByIdWithDetails(id: string): Promise<RoleResponseDto | null>;
-  findByIdIncludingInactive(id: string): Promise<Roles | null>;
-  findByCode(code: string): Promise<Roles | null>;
-  findAll(filters?: RoleListFilterDto): Promise<Roles[]>;
-  findAllPaginated(filters?: RoleListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Roles>>;
+  findById(id: string, isActive?: boolean): Promise<Roles | null>;
+  findByIdWithDetails(id: string): Promise<RoleDetail | null>;
+  findByCode(code: string, isActive?: boolean): Promise<Roles | null>;
+  findAllPaginated(filters?: { parent_role_id?: string, is_active?: boolean, search?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Roles>>;
   findAncestors(roleId: string): Promise<Roles[]>;
   findChildRoles(roleId: string): Promise<Roles[]>;
   findRoleTree(): Promise<Roles[]>;
-  count(filters?: RoleListFilterDto): Promise<number>;
 }
-
-// Active role filter
-const ACTIVE_FILTER = `is_active = true`;
 
 export class RoleRepository implements IRoleRepository {
   private tableName = 'roles';
@@ -41,10 +59,10 @@ export class RoleRepository implements IRoleRepository {
     return this.pool.query<T>(text, params);
   }
 
-  async findById(id: string): Promise<Roles | null> {
+  async findById(id: string, isActive?: boolean): Promise<Roles | null> {
     const res = await this.query<Roles>(
-      `SELECT * FROM ${this.tableName} WHERE id = $1 AND ${ACTIVE_FILTER}`,
-      [id]
+      `SELECT * FROM ${this.tableName} WHERE id = $1 AND is_active = $2`,
+      [id, isActive]
     );
     return res.rows[0] ?? null;
   }
@@ -52,7 +70,7 @@ export class RoleRepository implements IRoleRepository {
   /**
    * Find role by ID with JOINed parent role, profiles, user count, and creator name
    */
-  async findByIdWithDetails(id: string): Promise<RoleResponseDto | null> {
+  async findByIdWithDetails(id: string): Promise<RoleDetail | null> {
     // Get the role with parent role and creator names
     const roleRes = await this.query<Roles & {
       parent_role_name: string | null;
@@ -74,7 +92,7 @@ export class RoleRepository implements IRoleRepository {
       FROM ${this.tableName} r
       LEFT JOIN ${this.tableName} pr ON r.parent_role_id = pr.id
       LEFT JOIN users u ON r.created_by = u.id
-      WHERE r.id = $1 AND r.${ACTIVE_FILTER}`,
+      WHERE r.id = $1`,
       [id]
     );
 
@@ -98,7 +116,6 @@ export class RoleRepository implements IRoleRepository {
       is_active: role.is_active,
       parent_role_id: role.parent_role_id ?? null,
       parent_role: role.parent_role_id ? {
-        id: role.parent_role_id,
         name: role.parent_role_name!,
         code: role.parent_role_code!
       } : null,
@@ -111,81 +128,56 @@ export class RoleRepository implements IRoleRepository {
     };
   }
 
-  async findByIdIncludingInactive(id: string): Promise<Roles | null> {
+  async findByCode(code: string, is_active?: boolean): Promise<Roles | null> {
     const res = await this.query<Roles>(
-      `SELECT * FROM ${this.tableName} WHERE id = $1`,
-      [id]
+      `SELECT * FROM ${this.tableName} WHERE code = $1 AND is_active = $2`,
+      [code, is_active]
     );
     return res.rows[0] ?? null;
-  }
-
-  async findByCode(code: string): Promise<Roles | null> {
-    const res = await this.query<Roles>(
-      `SELECT * FROM ${this.tableName} WHERE code = $1 AND ${ACTIVE_FILTER}`,
-      [code]
-    );
-    return res.rows[0] ?? null;
-  }
-
-  async findAll(filters?: RoleListFilterDto): Promise<Roles[]> {
-    let sql = `SELECT * FROM ${this.tableName} WHERE ${ACTIVE_FILTER}`;
-    const params: unknown[] = [];
-    let paramIndex = 1;
-
-    if (filters) {
-      if (filters.parent_role_id) {
-        params.push(filters.parent_role_id);
-        sql += ` AND parent_role_id = $${paramIndex++}`;
-      }
-    }
-
-    sql += ` ORDER BY created_at DESC`;
-    const res = await this.query<Roles>(sql, params);
-    return res.rows;
   }
 
   async findAllPaginated(
-    filters?: RoleListFilterDto,
+    filters?: { parent_role_id?: string; is_active?: boolean; search?: string },
     pagination?: Partial<PaginationParams>
   ): Promise<PaginatedResult<Roles>> {
-    const normalizedPagination = normalizePaginationParams(pagination);
-    const offset = getPaginationOffset(normalizedPagination.page, normalizedPagination.limit);
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
 
-    const total = await this.count(filters);
-
-    let sql = `SELECT * FROM ${this.tableName} WHERE ${ACTIVE_FILTER}`;
-    const params: unknown[] = [];
-    let paramIndex = 1;
+    const conditions: string[] = [];
+    const values: unknown[] = [];
+    let idx = 1;
 
     if (filters?.parent_role_id) {
-      params.push(filters.parent_role_id);
-      sql += ` AND parent_role_id = $${paramIndex++}`;
+      conditions.push(`parent_role_id = $${idx++}`);
+      values.push(filters.parent_role_id);
     }
-
-    sql += ` ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
-    params.push(normalizedPagination.limit, offset);
-
-    const res = await this.query<Roles>(sql, params);
-    return buildPaginatedResult(res.rows, total, normalizedPagination);
-  }
-
-  async count(filters?: RoleListFilterDto): Promise<number> {
-    let sql = `SELECT COUNT(*) as count FROM ${this.tableName} WHERE ${ACTIVE_FILTER}`;
-    const params: unknown[] = [];
-    let paramIndex = 1;
-
-    if (filters?.parent_role_id) {
-      params.push(filters.parent_role_id);
-      sql += ` AND parent_role_id = $${paramIndex++}`;
+    if (filters?.is_active !== undefined) {
+      conditions.push(`is_active = $${idx++}`);
+      values.push(filters.is_active);
     }
+    if (filters?.search) {
+      conditions.push(`(name ILIKE $${idx} OR code ILIKE $${idx})`);
+      values.push(`%${filters.search}%`);
+      idx++;
+    }
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const totalRes = await this.query<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName} ${whereClause}`,
+      values
+    );
+    const total = parseInt(totalRes.rows[0]?.count ?? '0', 10);
 
-    const res = await this.query<{ count: string }>(sql, params);
-    return parseInt(res.rows[0]?.count ?? '0', 10);
+    const res = await this.query<Roles>(
+      `SELECT * FROM ${this.tableName} ${whereClause} ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...values, p.limit, offset]
+    );
+
+    return buildPaginatedResult(res.rows, total, p);
   }
 
   async findChildRoles(roleId: string): Promise<Roles[]> {
     const res = await this.query<Roles>(
-      `SELECT * FROM ${this.tableName} WHERE parent_role_id = $1 AND ${ACTIVE_FILTER}`,
+      `SELECT * FROM ${this.tableName} WHERE parent_role_id = $1 AND is_active = true`,
       [roleId]
     );
     return res.rows;
@@ -194,7 +186,7 @@ export class RoleRepository implements IRoleRepository {
   async findAncestors(roleId: string): Promise<Roles[]> {
     const query = `
             WITH RECURSIVE ancestors AS (
-                SELECT * FROM ${this.tableName} WHERE id = $1 AND ${ACTIVE_FILTER}
+                SELECT * FROM ${this.tableName} WHERE id = $1 AND is_active = true
                 UNION ALL
                 SELECT r.* FROM ${this.tableName} r
                 INNER JOIN ancestors a ON a.parent_role_id = r.id
@@ -224,41 +216,18 @@ export class RoleRepository implements IRoleRepository {
     return res.rows[0];
   }
 
-  async update(id: string, input: UpdateRoleInput): Promise<Roles> {
-    const updates: string[] = [];
-    const values: unknown[] = [id];
-    let paramIdx = 2;
-
-    if (input.name !== undefined) {
-      updates.push(`name = $${paramIdx++}`);
-      values.push(input.name);
-    }
-    if (input.code !== undefined) {
-      updates.push(`code = $${paramIdx++}`);
-      values.push(input.code);
-    }
-    if (input.description !== undefined) {
-      updates.push(`description = $${paramIdx++}`);
-      values.push(input.description);
-    }
-    if (input.parent_role_id !== undefined) {
-      updates.push(`parent_role_id = $${paramIdx++}`);
-      values.push(input.parent_role_id);
-    }
-    if (input.is_active !== undefined) {
-      updates.push(`is_active = $${paramIdx++}`);
-      values.push(input.is_active);
-    }
-
-    if (updates.length === 0) {
-      const existing = await this.findById(id);
-      if (!existing) throw new Error(`Role ${id} not found`);
-      return existing;
-    }
+  async update(id: string, input: Roles): Promise<Roles> {
 
     const res = await this.query<Roles>(
-      `UPDATE ${this.tableName} SET ${updates.join(', ')} WHERE id = $1 AND ${ACTIVE_FILTER} RETURNING *`,
-      values
+      `UPDATE ${this.tableName} SET name = $2, code = $3, description = $4, parent_role_id = $5, is_active = $6 WHERE id = $1 RETURNING *`,
+      [
+        id,
+        input.name,
+        input.code,
+        input.description ?? null,
+        input.parent_role_id ?? null,
+        input.is_active ?? null,
+      ]
     );
 
     if (!res.rows[0]) throw new Error(`Role ${id} not found`);
@@ -276,7 +245,7 @@ export class RoleRepository implements IRoleRepository {
     const query = `
             WITH RECURSIVE role_tree AS (
                 SELECT * FROM ${this.tableName}
-                WHERE parent_role_id IS NULL AND ${ACTIVE_FILTER}
+                WHERE parent_role_id IS NULL AND is_active = true
                 UNION ALL
                 SELECT r.* FROM ${this.tableName} r
                 INNER JOIN role_tree rt ON r.parent_role_id = rt.id
