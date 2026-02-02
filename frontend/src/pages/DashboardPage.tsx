@@ -4,17 +4,20 @@
 
 import { useAuth } from '../core/contexts/AuthContext';
 import { Users, Shield, Key, FolderTree } from 'lucide-react';
+import { SETTINGS_SECTIONS } from '../routes/routes';
 import { Link } from 'react-router-dom';
 import './DashboardPage.css';
+import { useAdminSettings } from '../core/contexts/AdminSettingsContext';
 
 export function DashboardPage() {
     const { user, hasPermission } = useAuth();
+    const { openSettings } = useAdminSettings();
 
     const quickLinks = [
-        { to: '/settings/users', label: 'Manage Users', icon: <Users size={24} />, color: '#3b82f6' },
-        { to: '/settings/roles', label: 'Manage Roles', icon: <Shield size={24} />, color: '#8b5cf6' },
-        { to: '/settings/profiles', label: 'Manage Profiles', icon: <Key size={24} />, color: '#10b981' },
-        { to: '/settings/groups', label: 'Manage Groups', icon: <FolderTree size={24} />, color: '#f59e0b' },
+        { section: SETTINGS_SECTIONS.USERS, label: 'Manage Users', icon: <Users size={24} />, color: '#3b82f6' },
+        { section: SETTINGS_SECTIONS.ROLES, label: 'Manage Roles', icon: <Shield size={24} />, color: '#8b5cf6' },
+        { section: SETTINGS_SECTIONS.PROFILES, label: 'Manage Profiles', icon: <Key size={24} />, color: '#10b981' },
+        { section: SETTINGS_SECTIONS.GROUPS, label: 'Manage Groups', icon: <FolderTree size={24} />, color: '#f59e0b' },
     ];
 
     return (
@@ -29,10 +32,15 @@ export function DashboardPage() {
                     <h2>Quick Actions</h2>
                     <div className="quick-links-grid">
                         {quickLinks.map(link => (
-                            <Link key={link.to} to={link.to} className="quick-link-card" style={{ '--accent-color': link.color } as React.CSSProperties}>
+                            <button
+                                key={link.section}
+                                className="quick-link-card"
+                                style={{ '--accent-color': link.color } as React.CSSProperties}
+                                onClick={() => openSettings(link.section)} // open modal at section
+                            >
                                 <div className="quick-link-icon">{link.icon}</div>
                                 <span>{link.label}</span>
-                            </Link>
+                            </button>
                         ))}
                     </div>
                 </section>

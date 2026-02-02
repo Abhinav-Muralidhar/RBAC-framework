@@ -194,3 +194,49 @@ export const sessionsApi = {
         await del(`/rbac/sessions/user/${userId}/all`);
     },
 };
+
+// ============================================================================
+// SMTP Config
+// ============================================================================
+
+import type { SmtpConfig, CreateSmtpConfigDto, UpdateSmtpConfigDto } from '../types/smtp.types';
+
+export const smtpApi = {
+    list: async (): Promise<SmtpConfig[]> => {
+        const response = await get<ApiResponse<SmtpConfig[]>>('/rbac/smtp-configs');
+        return response.data;
+    },
+
+    getById: async (id: string): Promise<SmtpConfig> => {
+        const response = await get<ApiResponse<SmtpConfig>>(`/rbac/smtp-configs/${id}`);
+        return response.data;
+    },
+
+    getActive: async (): Promise<SmtpConfig | null> => {
+        try {
+            const response = await get<ApiResponse<SmtpConfig>>('/rbac/smtp-configs/active');
+            return response.data;
+        } catch {
+            return null;
+        }
+    },
+
+    create: async (data: CreateSmtpConfigDto): Promise<SmtpConfig> => {
+        const response = await post<ApiResponse<SmtpConfig>>('/rbac/smtp-configs', data);
+        return response.data;
+    },
+
+    update: async (id: string, data: UpdateSmtpConfigDto): Promise<SmtpConfig> => {
+        const response = await patch<ApiResponse<SmtpConfig>>(`/rbac/smtp-configs/${id}`, data);
+        return response.data;
+    },
+
+    delete: async (id: string): Promise<void> => {
+        await del(`/rbac/smtp-configs/${id}`);
+    },
+
+    activate: async (id: string): Promise<void> => {
+        await post(`/rbac/smtp-configs/${id}/activate`);
+    },
+};
+

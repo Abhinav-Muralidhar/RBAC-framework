@@ -1,11 +1,16 @@
 /**
  * Users Page
+ * 
+ * Manage user accounts with forms and confirmation modals.
  */
 
 import { useState, useEffect } from 'react';
 import { usersApi } from '../../../core/api/rbac.api';
 import type { User } from '../../../core/types/user.types';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
+import { ConfirmModal } from '../../../core/components/ConfirmModal';
+import { FormModal } from '../../../core/components/FormModal';
+import { UserForm, submitUserForm } from '../components';
 import './SettingsPage.css';
 
 export function UsersPage() {
@@ -15,6 +20,15 @@ export function UsersPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+
+    // Modal states
+    const [showFormModal, setShowFormModal] = useState(false);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [formLoading, setFormLoading] = useState(false);
+
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deletingUser, setDeletingUser] = useState<User | null>(null);
+    const [deleteLoading, setDeleteLoading] = useState(false);
 
     useEffect(() => {
         loadUsers();
@@ -39,14 +53,45 @@ export function UsersPage() {
         user.last_name.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this user?')) return;
+    const handleCreate = () => {
+        setEditingUser(null);
+        setShowFormModal(true);
+    };
+
+    const handleEdit = (user: User) => {
+        setEditingUser(user);
+        setShowFormModal(true);
+    };
+
+    const handleDelete = (user: User) => {
+        setDeletingUser(user);
+        setShowDeleteModal(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!deletingUser) return;
+
+        setDeleteLoading(true);
         try {
-            await usersApi.delete(id);
+            await usersApi.delete(deletingUser.id);
+            setShowDeleteModal(false);
+            setDeletingUser(null);
             loadUsers();
         } catch (err) {
-            alert(err instanceof Error ? err.message : 'Failed to delete user');
+            setError(err instanceof Error ? err.message : 'Failed to delete user');
+        } finally {
+            setDeleteLoading(false);
         }
+    };
+
+    const handleFormSuccess = () => {
+        setShowFormModal(false);
+        setEditingUser(null);
+        loadUsers();
+    };
+
+    const handleFormError = (err: string) => {
+        setError(err);
     };
 
     return (
@@ -56,7 +101,7 @@ export function UsersPage() {
                     <h1>Users</h1>
                     <p>Manage user accounts and their access</p>
                 </div>
-                <button className="btn btn-primary">
+                <button className="btn btn-primary" onClick={handleCreate}>
                     <Plus size={18} />
                     Add User
                 </button>
@@ -74,7 +119,12 @@ export function UsersPage() {
                 </div>
             </div>
 
-            {error && <div className="error-message">{error}</div>}
+            {error && (
+                <div className="error-banner">
+                    {error}
+                    <button onClick={() => setError('')}>×</button>
+                </div>
+            )}
 
             {isLoading ? (
                 <div className="loading-state">Loading users...</div>
@@ -86,9 +136,9 @@ export function UsersPage() {
                                 <tr>
                                     <th>Username</th>
                                     <th>Name</th>
-                                    <th>Email</th>
+                                    <th className="hide-mobile">Email</th>
                                     <th>Status</th>
-                                    <th>Roles</th>
+                                    <th className="hide-mobile">Roles</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -97,19 +147,27 @@ export function UsersPage() {
                                     <tr key={user.id}>
                                         <td className="font-medium">{user.username}</td>
                                         <td>{user.first_name} {user.last_name}</td>
-                                        <td>{user.primary_email}</td>
+                                        <td className="hide-mobile">{user.primary_email}</td>
                                         <td>
-                                            <span className={`status-badge status-${user.status}`}>
+                                            <span className={`status-badge status-${user.status.toLowerCase()}`}>
                                                 {user.status}
                                             </span>
                                         </td>
-                                        <td>{user.roles?.map(r => r.name).join(', ') || '-'}</td>
+                                        <td className="hide-mobile">{user.roles?.map(r => r.name).join(', ') || '-'}</td>
                                         <td>
                                             <div className="action-buttons">
-                                                <button className="btn-icon" title="Edit">
+                                                <button
+                                                    className="btn-icon"
+                                                    title="Edit"
+                                                    onClick={() => handleEdit(user)}
+                                                >
                                                     <Edit2 size={16} />
                                                 </button>
-                                                <button className="btn-icon btn-danger" title="Delete" onClick={() => handleDelete(user.id)}>
+                                                <button
+                                                    className="btn-icon btn-danger"
+                                                    title="Delete"
+                                                    onClick={() => handleDelete(user)}
+                                                >
                                                     <Trash2 size={16} />
                                                 </button>
                                             </div>
@@ -132,6 +190,42 @@ export function UsersPage() {
                     </div>
                 </>
             )}
+
+            {/* Create/Edit Modal */}
+            <FormModal
+                isOpen={showFormModal}
+                title={editingUser ? 'Edit User' : 'Add New User'}
+                isLoading={formLoading}
+                onSubmit={() => submitUserForm()}
+                onCancel={() => {
+                    setShowFormModal(false);
+                    setEditingUser(null);
+                }}
+                size="md"
+            >
+                <UserForm
+                    user={editingUser}
+                    onSuccess={handleFormSuccess}
+                    onError={handleFormError}
+                    setLoading={setFormLoading}
+                />
+            </FormModal>
+
+            {/* Delete Confirmation */}
+            <ConfirmModal
+                isOpen={showDeleteModal}
+                title="Delete User"
+                message="Are you sure you want to delete this user? This action cannot be undone."
+                itemName={deletingUser?.username}
+                confirmLabel="Delete"
+                variant="danger"
+                isLoading={deleteLoading}
+                onConfirm={confirmDelete}
+                onCancel={() => {
+                    setShowDeleteModal(false);
+                    setDeletingUser(null);
+                }}
+            />
         </div>
     );
 }

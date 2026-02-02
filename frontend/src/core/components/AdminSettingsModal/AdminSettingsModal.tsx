@@ -14,9 +14,10 @@ import {
     Key,
     FolderTree,
     FileText,
+    Mail,
     X,
 } from 'lucide-react';
-import { UsersPage, RolesPage, ProfilesPage, GroupsPage, AuditLogsPage } from '../../../plugins/rbac-settings/pages';
+import { UsersPage, RolesPage, ProfilesPage, GroupsPage, AuditLogsPage, SmtpPage } from '../../../plugins/rbac-settings/pages';
 import './AdminSettingsModal.css';
 
 interface SectionConfig {
@@ -32,6 +33,7 @@ const sections: SectionConfig[] = [
     { id: SETTINGS_SECTIONS.PROFILES, label: 'Profiles', icon: <Key size={18} />, component: ProfilesPage },
     { id: SETTINGS_SECTIONS.GROUPS, label: 'Groups', icon: <FolderTree size={18} />, component: GroupsPage },
     { id: SETTINGS_SECTIONS.AUDIT_LOGS, label: 'Audit Logs', icon: <FileText size={18} />, component: AuditLogsPage },
+    { id: SETTINGS_SECTIONS.SMTP, label: 'SMTP Config', icon: <Mail size={18} />, component: SmtpPage },
 ];
 
 export function AdminSettingsModal() {

@@ -1,11 +1,16 @@
 /**
  * Roles Page
+ * 
+ * Manage user roles with forms and confirmation modals.
  */
 
 import { useState, useEffect } from 'react';
 import { rolesApi } from '../../../core/api/rbac.api';
 import type { Role } from '../../../core/types/role.types';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
+import { ConfirmModal } from '../../../core/components/ConfirmModal';
+import { FormModal } from '../../../core/components/FormModal';
+import { RoleForm, submitRoleForm } from '../components';
 import './SettingsPage.css';
 
 export function RolesPage() {
@@ -13,6 +18,15 @@ export function RolesPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Modal states
+    const [showFormModal, setShowFormModal] = useState(false);
+    const [editingRole, setEditingRole] = useState<Role | null>(null);
+    const [formLoading, setFormLoading] = useState(false);
+
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deletingRole, setDeletingRole] = useState<Role | null>(null);
+    const [deleteLoading, setDeleteLoading] = useState(false);
 
     useEffect(() => {
         loadRoles();
@@ -35,14 +49,45 @@ export function RolesPage() {
         role.code.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this role?')) return;
+    const handleCreate = () => {
+        setEditingRole(null);
+        setShowFormModal(true);
+    };
+
+    const handleEdit = (role: Role) => {
+        setEditingRole(role);
+        setShowFormModal(true);
+    };
+
+    const handleDelete = (role: Role) => {
+        setDeletingRole(role);
+        setShowDeleteModal(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!deletingRole) return;
+
+        setDeleteLoading(true);
         try {
-            await rolesApi.delete(id);
+            await rolesApi.delete(deletingRole.id);
+            setShowDeleteModal(false);
+            setDeletingRole(null);
             loadRoles();
         } catch (err) {
-            alert(err instanceof Error ? err.message : 'Failed to delete role');
+            setError(err instanceof Error ? err.message : 'Failed to delete role');
+        } finally {
+            setDeleteLoading(false);
         }
+    };
+
+    const handleFormSuccess = () => {
+        setShowFormModal(false);
+        setEditingRole(null);
+        loadRoles();
+    };
+
+    const handleFormError = (err: string) => {
+        setError(err);
     };
 
     return (
@@ -52,7 +97,7 @@ export function RolesPage() {
                     <h1>Roles</h1>
                     <p>Manage user roles and hierarchies</p>
                 </div>
-                <button className="btn btn-primary">
+                <button className="btn btn-primary" onClick={handleCreate}>
                     <Plus size={18} />
                     Add Role
                 </button>
@@ -70,7 +115,12 @@ export function RolesPage() {
                 </div>
             </div>
 
-            {error && <div className="error-message">{error}</div>}
+            {error && (
+                <div className="error-banner">
+                    {error}
+                    <button onClick={() => setError('')}>×</button>
+                </div>
+            )}
 
             {isLoading ? (
                 <div className="loading-state">Loading roles...</div>
@@ -81,8 +131,8 @@ export function RolesPage() {
                             <tr>
                                 <th>Name</th>
                                 <th>Code</th>
-                                <th>Description</th>
-                                <th>Profiles</th>
+                                <th className="hide-mobile">Description</th>
+                                <th className="hide-mobile">Profiles</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
@@ -92,8 +142,8 @@ export function RolesPage() {
                                 <tr key={role.id}>
                                     <td className="font-medium">{role.name}</td>
                                     <td><code>{role.code}</code></td>
-                                    <td>{role.description || '-'}</td>
-                                    <td>{role.profiles?.length || 0}</td>
+                                    <td className="hide-mobile">{role.description || '-'}</td>
+                                    <td className="hide-mobile">{role.profiles?.length || 0}</td>
                                     <td>
                                         <span className={`status-badge status-${role.is_active ? 'active' : 'inactive'}`}>
                                             {role.is_active ? 'Active' : 'Inactive'}
@@ -101,10 +151,18 @@ export function RolesPage() {
                                     </td>
                                     <td>
                                         <div className="action-buttons">
-                                            <button className="btn-icon" title="Edit">
+                                            <button
+                                                className="btn-icon"
+                                                title="Edit"
+                                                onClick={() => handleEdit(role)}
+                                            >
                                                 <Edit2 size={16} />
                                             </button>
-                                            <button className="btn-icon btn-danger" title="Delete" onClick={() => handleDelete(role.id)}>
+                                            <button
+                                                className="btn-icon btn-danger"
+                                                title="Delete"
+                                                onClick={() => handleDelete(role)}
+                                            >
                                                 <Trash2 size={16} />
                                             </button>
                                         </div>
@@ -120,6 +178,42 @@ export function RolesPage() {
                     </table>
                 </div>
             )}
+
+            {/* Create/Edit Modal */}
+            <FormModal
+                isOpen={showFormModal}
+                title={editingRole ? 'Edit Role' : 'Add New Role'}
+                isLoading={formLoading}
+                onSubmit={() => submitRoleForm()}
+                onCancel={() => {
+                    setShowFormModal(false);
+                    setEditingRole(null);
+                }}
+                size="md"
+            >
+                <RoleForm
+                    role={editingRole}
+                    onSuccess={handleFormSuccess}
+                    onError={handleFormError}
+                    setLoading={setFormLoading}
+                />
+            </FormModal>
+
+            {/* Delete Confirmation */}
+            <ConfirmModal
+                isOpen={showDeleteModal}
+                title="Delete Role"
+                message="Are you sure you want to delete this role? Users assigned this role will lose associated permissions."
+                itemName={deletingRole?.name}
+                confirmLabel="Delete"
+                variant="danger"
+                isLoading={deleteLoading}
+                onConfirm={confirmDelete}
+                onCancel={() => {
+                    setShowDeleteModal(false);
+                    setDeletingRole(null);
+                }}
+            />
         </div>
     );
 }

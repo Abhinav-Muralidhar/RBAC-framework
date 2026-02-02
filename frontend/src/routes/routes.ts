@@ -31,6 +31,7 @@ export const SETTINGS_SECTIONS = {
     PROFILES: 'profiles',
     GROUPS: 'groups',
     AUDIT_LOGS: 'audit-logs',
+    SMTP: 'smtp',
 } as const;
 
 export type SettingsSection = typeof SETTINGS_SECTIONS[keyof typeof SETTINGS_SECTIONS];
