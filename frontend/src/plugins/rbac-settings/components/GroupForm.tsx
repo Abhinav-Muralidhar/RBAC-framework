@@ -1,11 +1,11 @@
 /**
  * Group Form Component
- * 
+ *
  * Create/Edit group form used in FormModal.
  */
 
 import { useState, useEffect } from 'react';
-import { FormInput, FormSelect } from '../../../core/components/FormElements';
+import { FormInput } from '../../../core/components/FormElements';
 import type { Group, CreateGroupDto, UpdateGroupDto } from '../../../core/types/group.types';
 import type { Role } from '../../../core/types/role.types';
 import { groupsApi, rolesApi } from '../../../core/api/rbac.api';
@@ -22,34 +22,26 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
 
     const [formData, setFormData] = useState({
         name: group?.name || '',
-        description: group?.description || '',
         code: group?.code || '',
+        description: group?.description || '',
     });
 
     const [selectedRoles, setSelectedRoles] = useState<string[]>(
         group?.roles?.map(r => r.id) || []
     );
     const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
-    const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     useEffect(() => {
-        loadData();
+        loadRoles();
     }, []);
 
-    const loadData = async () => {
+    const loadRoles = async () => {
         try {
-            const [rolesResponse, groupsResponse] = await Promise.all([
-                rolesApi.list({ limit: 100 }),
-                groupsApi.list({ limit: 100 }),
-            ]);
-            setAvailableRoles(rolesResponse.data);
-            // Filter out current group to prevent self-reference
-            setAvailableGroups(
-                groupsResponse.data.filter(g => g.id !== group?.id)
-            );
+            const response = await rolesApi.list({ limit: 100 });
+            setAvailableRoles(response.data);
         } catch (err) {
-            console.error('Failed to load data', err);
+            console.error('Failed to load roles', err);
         }
     };
 
@@ -75,6 +67,12 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
             newErrors.name = 'Name is required';
         }
 
+        if (!formData.code.trim()) {
+            newErrors.code = 'Code is required';
+        } else if (!/^[A-Z_]+$/.test(formData.code)) {
+            newErrors.code = 'Code must be uppercase letters and underscores only';
+        }
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -93,11 +91,12 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
             } else {
                 const createData: CreateGroupDto = {
                     name: formData.name,
+                    code: formData.code,
                     description: formData.description || undefined,
-                    code: formData.code || undefined,
                 };
                 await groupsApi.create(createData);
             }
+
             onSuccess();
         } catch (err) {
             onError(err instanceof Error ? err.message : 'Failed to save group');
@@ -115,6 +114,17 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
                 error={errors.name}
                 required
                 placeholder="e.g., Engineering Team"
+            />
+
+            <FormInput
+                label="Code"
+                value={formData.code}
+                onChange={e => handleChange('code', e.target.value.toUpperCase())}
+                error={errors.code}
+                disabled={isEditing}
+                required
+                placeholder="e.g., ENGINEERING"
+                hint="Uppercase letters and underscores only"
             />
 
             <div className="form-field">

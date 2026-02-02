@@ -7,12 +7,19 @@ import { profilesApi } from '../../../core/api/rbac.api';
 import type { Profile } from '../../../core/types/profile.types';
 import { Plus, Edit2, Trash2, Search, Key } from 'lucide-react';
 import './SettingsPage.css';
+import { FormModal } from '../../../core/components/FormModal';
+import { ProfileForm, submitProfileForm } from '../components/ProfileForm';
 
 export function ProfilesPage() {
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
+    // Add these lines in ProfilesPage component
+    const [showFormModal, setShowFormModal] = useState(false);
+    const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
+    const [formLoading, setFormLoading] = useState(false);
+
 
     useEffect(() => {
         loadProfiles();
@@ -35,6 +42,27 @@ export function ProfilesPage() {
         profile.code.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
+    const handleCreate = () => {
+        setEditingProfile(null);
+        setShowFormModal(true);
+    };
+
+    const handleEdit = (profile: Profile) => {
+        setEditingProfile(profile);
+        setShowFormModal(true);
+    };
+
+    const handleFormSuccess = () => {
+        setShowFormModal(false);
+        setEditingProfile(null);
+        loadProfiles();
+    };
+
+    const handleFormError = (err: string) => {
+        setError(err);
+    };
+
+
     const handleDelete = async (id: string) => {
         if (!confirm('Are you sure you want to delete this profile?')) return;
         try {
@@ -52,10 +80,11 @@ export function ProfilesPage() {
                     <h1>Profiles</h1>
                     <p>Manage permission profiles</p>
                 </div>
-                <button className="btn btn-primary">
+                <button className="btn btn-primary" onClick={handleCreate}>
                     <Plus size={18} />
                     Add Profile
                 </button>
+
             </header>
 
             <div className="page-toolbar">
@@ -106,9 +135,10 @@ export function ProfilesPage() {
                                     </td>
                                     <td>
                                         <div className="action-buttons">
-                                            <button className="btn-icon" title="Edit">
+                                            <button className="btn-icon" title="Edit" onClick={() => handleEdit(profile)}>
                                                 <Edit2 size={16} />
                                             </button>
+
                                             <button className="btn-icon btn-danger" title="Delete" onClick={() => handleDelete(profile.id)}>
                                                 <Trash2 size={16} />
                                             </button>
@@ -125,6 +155,26 @@ export function ProfilesPage() {
                     </table>
                 </div>
             )}
+
+            <FormModal
+                isOpen={showFormModal}
+                title={editingProfile ? 'Edit Profile' : 'Add New Profile'}
+                isLoading={formLoading}
+                onSubmit={() => submitProfileForm()} // replace with actual submit function
+                onCancel={() => {
+                    setShowFormModal(false);
+                    setEditingProfile(null);
+                }}
+                size="md"
+            >
+                <ProfileForm
+                    profile={editingProfile}
+                    onSuccess={handleFormSuccess}
+                    onError={handleFormError}
+                    setLoading={setFormLoading}
+                />
+            </FormModal>
+
         </div>
     );
 }
