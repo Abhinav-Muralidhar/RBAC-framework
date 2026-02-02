@@ -52,7 +52,7 @@ export const authApi = {
      * Get current user info
      */
     getCurrentUser: async (): Promise<User> => {
-        const response = await apiClient.get('/rbac/users/me');
+        const response = await apiClient.get('/auth/users/me');
         return response.data;
     },
 };

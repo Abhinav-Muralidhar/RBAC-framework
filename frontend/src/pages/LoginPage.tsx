@@ -2,9 +2,10 @@
  * Login Page
  */
 
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../core/contexts/AuthContext';
+import { ROUTES } from '../routes/routes';
 import { Shield } from 'lucide-react';
 import './LoginPage.css';
 
@@ -13,12 +14,27 @@ export function LoginPage() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const { login, isAuthenticated } = useAuth();
+    const { login, isAuthenticated, isLoading: authLoading } = useAuth();
     const navigate = useNavigate();
 
-    // Redirect if already logged in
+    // Redirect after auth state resolves (not during render)
+    useEffect(() => {
+        if (!authLoading && isAuthenticated) {
+            navigate(ROUTES.DASHBOARD, { replace: true });
+        }
+    }, [authLoading, isAuthenticated, navigate]);
+
+    // Show loading while checking auth
+    if (authLoading) {
+        return (
+            <div className="login-page">
+                <div className="login-loading">Checking session...</div>
+            </div>
+        );
+    }
+
+    // Don't render form if already authenticated (redirect pending)
     if (isAuthenticated) {
-        navigate('/dashboard', { replace: true });
         return null;
     }
 
@@ -29,7 +45,7 @@ export function LoginPage() {
 
         try {
             await login(username, password);
-            navigate('/dashboard', { replace: true });
+            navigate(ROUTES.DASHBOARD, { replace: true });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Login failed');
         } finally {
