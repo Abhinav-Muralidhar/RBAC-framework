@@ -1,6 +1,5 @@
 import { Pool, QueryResultRow } from 'pg';
 import { AuditLogs, AuditAction, AuditStatus } from '../models/audit_logs.model';
-import { AuditLogResponseDto } from '../dto/audit-log.dto';
 import { CreateAuditLogInput } from '../types/repository.types';
 
 /**
@@ -30,13 +29,13 @@ interface AuditLogWithDetailsRow extends QueryResultRow {
 export interface IAuditLogsRepository {
   create(input: CreateAuditLogInput): Promise<AuditLogs>;
   findById(id: string): Promise<AuditLogs | null>;
-  findByIdWithDetails(id: string): Promise<AuditLogResponseDto | null>;
+  findByIdWithDetails(id: string): Promise<AuditLogWithDetailsRow | null>;
   findByUser(userId: string, limit?: number, offset?: number): Promise<AuditLogs[]>;
   findByEntity(entityType: string, entityId: string, limit?: number, offset?: number): Promise<AuditLogs[]>;
   findByAction(action: AuditAction, limit?: number, offset?: number): Promise<AuditLogs[]>;
   findByDateRange(startDate: Date, endDate: Date, limit?: number, offset?: number): Promise<AuditLogs[]>;
   findAll(limit?: number, offset?: number): Promise<AuditLogs[]>;
-  findAllWithDetails(limit?: number, offset?: number): Promise<AuditLogResponseDto[]>;
+  findAllWithDetails(limit?: number, offset?: number): Promise<AuditLogWithDetailsRow[]>;
 }
 
 export class AuditLogsRepository implements IAuditLogsRepository {
@@ -96,7 +95,7 @@ export class AuditLogsRepository implements IAuditLogsRepository {
   /**
    * Find audit log by ID with JOINed user, role, and module data
    */
-  async findByIdWithDetails(id: string): Promise<AuditLogResponseDto | null> {
+  async findByIdWithDetails(id: string): Promise<AuditLogWithDetailsRow | null> {
     const res = await this.query<AuditLogWithDetailsRow>(
       `${this.selectWithJoinsQuery}
        WHERE al.id = $1`,
@@ -163,7 +162,7 @@ export class AuditLogsRepository implements IAuditLogsRepository {
    * Find all audit logs with JOINed user, role, and module data
    * Returns human-readable names alongside IDs
    */
-  async findAllWithDetails(limit: number = 50, offset: number = 0): Promise<AuditLogResponseDto[]> {
+  async findAllWithDetails(limit: number = 50, offset: number = 0): Promise<AuditLogWithDetailsRow[]> {
     const res = await this.query<AuditLogWithDetailsRow>(
       `${this.selectWithJoinsQuery}
        ORDER BY al.created_at DESC

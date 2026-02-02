@@ -4,16 +4,16 @@ export type AuditStatus = 'success' | 'failure';
 export interface AuditLogs {
   id: string;
 
-  user_id?: string;
-  role_id?: string;
+  user_id: string | null;
+  role_id: string | null;
 
   action: AuditAction;
   entity_type: string;
   entity_id: string;
   module_id: string;
 
-  old_values?: Record<string, unknown> | null;
-  new_values?: Record<string, unknown> | null;
+  old_values: unknown | null;
+  new_values: unknown | null;
 
   ip_address: string;
   user_agent: string;

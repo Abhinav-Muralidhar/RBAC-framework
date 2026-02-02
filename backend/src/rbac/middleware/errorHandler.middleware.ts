@@ -6,8 +6,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { PermissionDeniedError, RBACError } from '../errors/rbac.errors';
-import { SessionNotFoundError, ConcurrentSessionLimitError } from '../services/authSession.service';
-
+import { ConcurrentSessionLimitError, SessionNotFoundError } from '../errors/rbac.errors';
 /**
  * Standard error response
  */

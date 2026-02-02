@@ -67,14 +67,6 @@ export interface ProfileResponseDto {
     created_by_name: string | null;  // JOINed: creator's name
 }
 
-/**
- * Legacy permission flag format (for backwards compatibility)
- */
-export interface ProfilePermissionFlagDto {
-    permissionId: string;
-    allowed: boolean;
-}
-
 export interface ProfileSummaryDto {
     id: string;
     name: string;

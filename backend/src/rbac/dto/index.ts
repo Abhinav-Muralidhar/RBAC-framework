@@ -34,5 +34,3 @@ export * from './auth-session.dto';
 // Audit Log DTOs
 export * from './audit-log.dto';
 
-// Legacy DTOs (keeping for backwards compatibility)
-export * from './access.dto';

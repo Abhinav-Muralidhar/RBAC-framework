@@ -233,3 +233,14 @@ export class SoftDeletedEntityError extends RBACError {
     }
 }
 
+export class ConcurrentSessionLimitError extends RBACInternalError {
+    constructor(userId: string) {
+        super(`Concurrent session limit exceeded for user ${userId}`);
+    }
+}
+
+export class SessionNotFoundError extends RBACInternalError {
+    constructor(sessionId: string) {
+        super(`Session not found: ${sessionId}`);
+    }
+}

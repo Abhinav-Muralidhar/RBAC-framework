@@ -19,6 +19,7 @@ if (!process.env.COOKIE_SECRET) {
   console.error('FATAL: COOKIE_SECRET environment variable is not set');
   process.exit(1);
 }
+app.set('trust proxy', true);
 
 // Database connection pool
 const pool = new Pool({

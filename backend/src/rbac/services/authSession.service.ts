@@ -12,22 +12,13 @@ import { IAuthSessionsRepository } from '../repositories/auth_sessions.repositor
 import { IAuditService } from './audit.service';
 import { RBACInternalError } from '../errors/rbac.errors';
 import crypto from 'node:crypto';
+import { ConcurrentSessionLimitError, SessionNotFoundError } from '../errors/rbac.errors';
 
 // CONSTANTS
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 Hours
 const MAX_CONCURRENT_SESSIONS_PER_USER = 5;
 
-export class ConcurrentSessionLimitError extends RBACInternalError {
-    constructor(userId: string) {
-        super(`Concurrent session limit exceeded for user ${userId}`);
-    }
-}
 
-export class SessionNotFoundError extends RBACInternalError {
-    constructor(sessionId: string) {
-        super(`Session not found: ${sessionId}`);
-    }
-}
 
 export interface IAuthSessionService {
     /**

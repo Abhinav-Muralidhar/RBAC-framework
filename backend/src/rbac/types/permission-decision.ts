@@ -2,7 +2,6 @@
  * PermissionDecision
  * 
  * Result of permission evaluation.
- * CRITICAL: This is the authoritative permission decision type.
  */
 
 export interface PermissionDecision {

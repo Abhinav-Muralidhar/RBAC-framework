@@ -7,24 +7,6 @@
 import { AuditAction, AuditStatus } from '../models/audit_logs.model';
 
 // ============================================================================
-// REQUEST DTOs
-// ============================================================================
-
-export interface CreateAuditLogRequestDto {
-    user_id?: string;
-    role_id?: string;
-    action: AuditAction;
-    module_id?: string;
-    entity_type?: string;
-    entity_id?: string;
-    old_values?: Record<string, unknown> | null;
-    new_values?: Record<string, unknown>;
-    ip_address?: string;
-    user_agent?: string;
-    status: AuditStatus;
-}
-
-// ============================================================================
 // FILTER DTOs
 // ============================================================================
 

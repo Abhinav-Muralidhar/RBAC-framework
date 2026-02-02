@@ -13,6 +13,8 @@ import { AuditLogsRepository } from '../repositories/audit_logs.repository';
 import { AuthSessionService } from '../services/authSession.service';
 import { AuditService } from '../services/audit.service';
 import { authLimiter } from '../middleware/rateLimit.middleware';
+import { verifyPassword } from '../utils/crypto.utils';
+import { createAuthenticateMiddleware } from '../middleware/authenticate.middleware';
 
 // Cookie configuration
 const COOKIE_OPTIONS = {
@@ -34,6 +36,7 @@ export function createAuthRouter(pool: Pool): Router {
     // Services
     const auditService = new AuditService(auditLogsRepo);
     const authSessionService = new AuthSessionService(sessionsRepo, auditService);
+    const requireAuth = createAuthenticateMiddleware(authSessionService);
 
     /**
      * POST /auth/login
@@ -74,10 +77,7 @@ export function createAuthRouter(pool: Pool): Router {
                 });
                 return;
             }
-
-            // Verify password (assuming plain text comparison for now - should use bcrypt in production)
-            // TODO: Replace with bcrypt.compare(password, user.password)
-            const isValidPassword = password === user.password;
+            const isValidPassword = await verifyPassword(password, user.password);
             if (!isValidPassword) {
                 res.status(401).json({
                     data: null,
@@ -163,8 +163,11 @@ export function createAuthRouter(pool: Pool): Router {
 
         } catch (error) {
             console.error('Logout error:', error);
-            // Still clear cookie even on error
-            res.clearCookie('sessionToken');
+            res.clearCookie('sessionToken', {
+                ...COOKIE_OPTIONS,
+                maxAge: undefined
+            });
+
             res.status(200).json({
                 data: { message: 'Logged out' },
                 error: null,
@@ -172,6 +175,20 @@ export function createAuthRouter(pool: Pool): Router {
             });
         }
     });
+
+    // GET /rbac/users/me
+    router.get('/users/me', requireAuth, async (req, res) => {
+        const userId = req.user!.id; // from session middleware
+
+        const user = await usersRepo.findById(userId);
+
+        res.json({
+            data: user,
+            error: null,
+            meta: { timestamp: new Date().toISOString() },
+        });
+    });
+
 
     return router;
 }
