@@ -7,6 +7,26 @@
  */
 
 // ============================================================
+// AUTH SESSIONS
+// ============================================================
+/**
+ * Strict input type for updating a session.
+ * Only these fields can be updated.
+ */
+export interface UpdateAuthSessionInput {
+    expires_at?: Date;
+    logout_at?: Date | null;
+}
+export interface CreateAuthSessionInput {
+    user_id: string;
+    session_token: string;
+    ip_address: string;
+    user_agent: string;
+    login_at: Date;
+    expires_at: Date;
+    logout_at: Date | null;
+}
+// ============================================================
 // USERS
 // ============================================================
 
@@ -152,14 +172,6 @@ export interface CreateGroupInput {
     created_by?: string | null;
 }
 
-/** Fields that can be updated on a group */
-export interface UpdateGroupInput {
-    name?: string;
-    code?: string;
-    description?: string | null;
-    is_active?: boolean;
-}
-
 // ============================================================
 // MODULES
 // ============================================================
@@ -169,14 +181,6 @@ export interface CreateModuleInput {
     name: string;
     code: string;
     // Optional fields
-    description?: string | null;
-    is_active?: boolean;
-}
-
-/** Fields that can be updated on a module */
-export interface UpdateModuleInput {
-    name?: string;
-    code?: string;
     description?: string | null;
     is_active?: boolean;
 }
@@ -265,10 +269,10 @@ export interface CreateAuditLogInput {
     user_agent: string;
     status: 'success' | 'failure';
     // Optional fields
-    user_id?: string | null;
-    role_id?: string | null;
-    old_values?: Record<string, unknown> | null;
-    new_values?: Record<string, unknown> | null;
+    user_id: string | null;
+    role_id: string | null;
+    old_values: Record<string, unknown> | null;
+    new_values: Record<string, unknown> | null;
 }
 
 // ============================================================
@@ -287,27 +291,3 @@ export interface CreateOtpTokenInput {
     attempt_count?: number;
 }
 
-// ============================================================
-// ORGANIZATIONS
-// ============================================================
-
-/** Fields that can be updated on an organization (from 01_organizations.js migration) */
-export interface UpdateOrganizationInput {
-    company_name?: string;
-    company_logo?: string;
-    address?: string;
-    city?: string;
-    state?: string;
-    postal_code?: string;
-    country?: string;
-    country_code?: string;
-    phone?: string | null;
-    fax?: string | null;
-    website?: string | null;
-    facebook?: string | null;
-    twitter?: string | null;
-    linkedin?: string | null;
-    financial_year_start_month?: number | null;
-    gstin?: string;
-    is_active?: boolean;
-}

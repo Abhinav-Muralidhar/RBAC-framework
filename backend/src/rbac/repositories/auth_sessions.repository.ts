@@ -1,28 +1,13 @@
 import { Pool, QueryResultRow } from 'pg';
 import { AuthSessions } from '../models/auth_sessions.model';
-
-/**
- * Strict input type for creating a session.
- * DB auto-generates `id`, so it's not required here.
- */
-export interface CreateAuthSessionInput {
-  user_id: string;
-  session_token: string;
-  ip_address: string;
-  user_agent: string;
-  login_at: Date;
-  expires_at: Date;
-  logout_at: Date | null;
-}
-
-/**
- * Strict input type for updating a session.
- * Only these fields can be updated.
- */
-export interface UpdateAuthSessionInput {
-  expires_at?: Date;
-  logout_at?: Date | null;
-}
+import { UpdateAuthSessionInput, CreateAuthSessionInput } from '../types/repository.types';
+import {
+  PaginationParams,
+  PaginatedResult,
+  normalizePaginationParams,
+  getPaginationOffset,
+  buildPaginatedResult
+} from '../utils/pagination.utils';
 
 export interface IAuthSessionsRepository {
   create(data: CreateAuthSessionInput): Promise<AuthSessions>;
@@ -30,8 +15,8 @@ export interface IAuthSessionsRepository {
   findBySessionToken(sessionToken: string): Promise<AuthSessions | null>;
   update(sessionId: string, data: UpdateAuthSessionInput): Promise<AuthSessions>;
   delete(sessionId: string, actingUserId: string): Promise<void>;
-  findAllByUser(userId: string): Promise<AuthSessions[]>;
-  findActiveByUser(userId: string): Promise<AuthSessions[]>;
+  findAllByUser(userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
+  findActiveByUser(userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
   deleteAllByUser(userId: string): Promise<void>;
 }
 
@@ -67,25 +52,55 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     return res.rows[0] ?? null;
   }
 
-  async findAllByUser(userId: string): Promise<AuthSessions[]> {
-    const res = await this.query<AuthSessions>(
-      `SELECT * FROM ${this.tableName} WHERE user_id = $1`,
+  async findAllByUser(userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>> {
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
+    const totalRes = await this.query<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName} WHERE user_id = $1`,
       [userId]
     );
-    return res.rows;
+    const res = await this.query<AuthSessions>(
+      `SELECT * FROM ${this.tableName}
+       WHERE user_id = $1
+       ORDER BY login_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, p.limit, offset]
+    );
+    return buildPaginatedResult(
+      res.rows,
+      parseInt(totalRes.rows[0]?.count ?? '0', 10),
+      p
+    );
   }
 
-  async findActiveByUser(userId: string): Promise<AuthSessions[]> {
-    const res = await this.query<AuthSessions>(
-      `SELECT * FROM ${this.tableName} WHERE user_id = $1 AND logout_at IS NULL AND expires_at > NOW()`,
+  async findActiveByUser(userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>> {
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
+    const totalRes = await this.query<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName}
+       WHERE user_id = $1
+         AND logout_at IS NULL
+         AND expires_at > NOW()`,
       [userId]
     );
-    return res.rows;
+    const res = await this.query<AuthSessions>(
+      `SELECT * FROM ${this.tableName}
+       WHERE user_id = $1
+         AND logout_at IS NULL
+         AND expires_at > NOW()
+       ORDER BY login_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, p.limit, offset]
+    );
+    return buildPaginatedResult(
+      res.rows,
+      parseInt(totalRes.rows[0]?.count ?? '0', 10),
+      p
+    );
   }
-
   async deleteAllByUser(userId: string): Promise<void> {
     await this.query(
-      `DELETE FROM ${this.tableName} WHERE user_id = $1`,
+      `Update ${this.tableName} set logout_at = NOW() and expires_at = NOW() WHERE user_id = $1`,
       [userId]
     );
   }
@@ -138,7 +153,7 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
 
   async delete(sessionId: string, actingUserId: string): Promise<void> {
     await this.query(
-      `DELETE FROM ${this.tableName} WHERE id = $1 AND user_id = $2`,
+      `Update ${this.tableName} set logout_at = NOW() and expires_at = NOW() where id = $1 and user_id = $2`,
       [sessionId, actingUserId]
     );
   }

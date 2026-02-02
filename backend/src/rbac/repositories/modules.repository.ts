@@ -1,17 +1,14 @@
 import { Pool, QueryResultRow } from 'pg';
 import { Modules } from '../models/modules.model';
-import { CreateModuleInput, UpdateModuleInput } from '../types/repository.types';
+import { CreateModuleInput } from '../types/repository.types';
 
-export interface ModuleListFilterDto {
-  is_active?: boolean;
-}
 
 export interface IModuleRepository {
-  findAll(filters?: ModuleListFilterDto): Promise<Modules[]>;
+  findAll(): Promise<Modules[]>;
   findByCode(code: string): Promise<Modules | null>;
   findById(id: string): Promise<Modules | null>;
   create(input: CreateModuleInput): Promise<Modules>;
-  update(id: string, input: UpdateModuleInput): Promise<Modules>;
+  update(id: string, input: Modules): Promise<Modules>;
 }
 
 export class ModuleRepository implements IModuleRepository {
@@ -42,17 +39,10 @@ export class ModuleRepository implements IModuleRepository {
     return res.rows[0] ?? null;
   }
 
-  async findAll(filters?: ModuleListFilterDto): Promise<Modules[]> {
-    let query = `SELECT * FROM ${this.tableName}`;
-    const params: unknown[] = [];
-    let paramIdx = 1;
-
-    if (filters?.is_active !== undefined) {
-      query += ` WHERE is_active = $${paramIdx++}`;
-      params.push(filters.is_active);
-    }
-
-    const res = await this.query<Modules>(query, params);
+  async findAll(): Promise<Modules[]> {
+    const res = await this.query<Modules>(
+      `SELECT * FROM ${this.tableName}`
+    );
     return res.rows;
   }
 
@@ -72,7 +62,7 @@ export class ModuleRepository implements IModuleRepository {
     return res.rows[0];
   }
 
-  async update(id: string, input: UpdateModuleInput): Promise<Modules> {
+  async update(id: string, input: Modules): Promise<Modules> {
     const updates: string[] = [];
     const values: unknown[] = [id];
     let paramIdx = 2;

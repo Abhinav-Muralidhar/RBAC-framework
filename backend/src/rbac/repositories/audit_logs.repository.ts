@@ -1,6 +1,13 @@
 import { Pool, QueryResultRow } from 'pg';
 import { AuditLogs, AuditAction, AuditStatus } from '../models/audit_logs.model';
 import { CreateAuditLogInput } from '../types/repository.types';
+import {
+  PaginationParams,
+  PaginatedResult,
+  normalizePaginationParams,
+  getPaginationOffset,
+  buildPaginatedResult
+} from '../utils/pagination.utils';
 
 /**
  * Raw row type from JOIN query
@@ -30,12 +37,12 @@ export interface IAuditLogsRepository {
   create(input: CreateAuditLogInput): Promise<AuditLogs>;
   findById(id: string): Promise<AuditLogs | null>;
   findByIdWithDetails(id: string): Promise<AuditLogWithDetailsRow | null>;
-  findByUser(userId: string, limit?: number, offset?: number): Promise<AuditLogs[]>;
-  findByEntity(entityType: string, entityId: string, limit?: number, offset?: number): Promise<AuditLogs[]>;
-  findByAction(action: AuditAction, limit?: number, offset?: number): Promise<AuditLogs[]>;
-  findByDateRange(startDate: Date, endDate: Date, limit?: number, offset?: number): Promise<AuditLogs[]>;
-  findAll(limit?: number, offset?: number): Promise<AuditLogs[]>;
-  findAllWithDetails(limit?: number, offset?: number): Promise<AuditLogWithDetailsRow[]>;
+  findByUser(userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogs>>;
+  findByEntity(entityType: string, entityId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogs>>;
+  findByAction(action: AuditAction, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogs>>;
+  findByDateRange(startDate: Date, endDate: Date, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogs>>;
+  findAll(pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogs>>;
+  findAllWithDetails(pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogWithDetailsRow>>;
 }
 
 export class AuditLogsRepository implements IAuditLogsRepository {
@@ -104,72 +111,146 @@ export class AuditLogsRepository implements IAuditLogsRepository {
     return res.rows[0] ?? null;
   }
 
-  async findByUser(userId: string, limit: number = 50, offset: number = 0): Promise<AuditLogs[]> {
+  async findByUser(userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogs>> {
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
+
+    const totalRes = await this.query<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName} WHERE user_id = $1`,
+      [userId]
+    );
+
     const res = await this.query<AuditLogs>(
       `SELECT * FROM ${this.tableName}
        WHERE user_id = $1
        ORDER BY created_at DESC
        LIMIT $2 OFFSET $3`,
-      [userId, limit, offset]
+      [userId, p.limit, offset]
     );
-    return res.rows;
+
+    return buildPaginatedResult(
+      res.rows,
+      parseInt(totalRes.rows[0]?.count ?? '0', 10),
+      p
+    );
   }
 
-  async findByEntity(entityType: string, entityId: string, limit: number = 50, offset: number = 0): Promise<AuditLogs[]> {
+  async findByEntity(entityType: string, entityId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogs>> {
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
+
+    const totalRes = await this.query<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName}
+       WHERE entity_type = $1 AND entity_id = $2`,
+      [entityType, entityId]
+    );
+
     const res = await this.query<AuditLogs>(
       `SELECT * FROM ${this.tableName}
        WHERE entity_type = $1 AND entity_id = $2
        ORDER BY created_at DESC
        LIMIT $3 OFFSET $4`,
-      [entityType, entityId, limit, offset]
+      [entityType, entityId, p.limit, offset]
     );
-    return res.rows;
+
+    return buildPaginatedResult(
+      res.rows,
+      parseInt(totalRes.rows[0]?.count ?? '0', 10),
+      p
+    );
   }
 
-  async findByAction(action: AuditAction, limit: number = 50, offset: number = 0): Promise<AuditLogs[]> {
+  async findByAction(action: AuditAction, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogs>> {
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
+
+    const totalRes = await this.query<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName} WHERE action = $1`,
+      [action]
+    );
+
     const res = await this.query<AuditLogs>(
       `SELECT * FROM ${this.tableName}
        WHERE action = $1
        ORDER BY created_at DESC
        LIMIT $2 OFFSET $3`,
-      [action, limit, offset]
+      [action, p.limit, offset]
     );
-    return res.rows;
+
+    return buildPaginatedResult(
+      res.rows,
+      parseInt(totalRes.rows[0]?.count ?? '0', 10),
+      p
+    );
   }
 
-  async findByDateRange(startDate: Date, endDate: Date, limit: number = 50, offset: number = 0): Promise<AuditLogs[]> {
+  async findByDateRange(startDate: Date, endDate: Date, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogs>> {
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
+
+    const totalRes = await this.query<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName}
+       WHERE created_at BETWEEN $1 AND $2`,
+      [startDate, endDate]
+    );
+
     const res = await this.query<AuditLogs>(
       `SELECT * FROM ${this.tableName}
        WHERE created_at BETWEEN $1 AND $2
        ORDER BY created_at DESC
        LIMIT $3 OFFSET $4`,
-      [startDate, endDate, limit, offset]
+      [startDate, endDate, p.limit, offset]
     );
-    return res.rows;
+
+    return buildPaginatedResult(
+      res.rows,
+      parseInt(totalRes.rows[0]?.count ?? '0', 10),
+      p
+    );
   }
 
-  async findAll(limit: number = 50, offset: number = 0): Promise<AuditLogs[]> {
+  async findAll(pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogs>> {
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
+
+    const totalRes = await this.query<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName}`
+    );
+
     const res = await this.query<AuditLogs>(
       `SELECT * FROM ${this.tableName}
        ORDER BY created_at DESC
        LIMIT $1 OFFSET $2`,
-      [limit, offset]
+      [p.limit, offset]
     );
-    return res.rows;
+
+    return buildPaginatedResult(
+      res.rows,
+      parseInt(totalRes.rows[0]?.count ?? '0', 10),
+      p
+    );
   }
 
-  /**
-   * Find all audit logs with JOINed user, role, and module data
-   * Returns human-readable names alongside IDs
-   */
-  async findAllWithDetails(limit: number = 50, offset: number = 0): Promise<AuditLogWithDetailsRow[]> {
+  async findAllWithDetails(pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogWithDetailsRow>> {
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
+
+    const totalRes = await this.query<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName}`
+    );
+
     const res = await this.query<AuditLogWithDetailsRow>(
       `${this.selectWithJoinsQuery}
        ORDER BY al.created_at DESC
        LIMIT $1 OFFSET $2`,
-      [limit, offset]
+      [p.limit, offset]
     );
-    return res.rows;
+
+    return buildPaginatedResult(
+      res.rows,
+      parseInt(totalRes.rows[0]?.count ?? '0', 10),
+      p
+    );
   }
 
   async create(input: CreateAuditLogInput): Promise<AuditLogs> {
@@ -177,7 +258,7 @@ export class AuditLogsRepository implements IAuditLogsRepository {
       `INSERT INTO ${this.tableName} (
         action, module_id, entity_type, entity_id, ip_address, user_agent, status,
         user_id, role_id, old_values, new_values
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       RETURNING *`,
       [
         input.action,
@@ -197,4 +278,3 @@ export class AuditLogsRepository implements IAuditLogsRepository {
     return res.rows[0];
   }
 }
-
