@@ -1,4 +1,5 @@
 import { Pool, QueryResultRow } from 'pg';
+import { IDatabase, ITask } from 'pg-promise';
 
 export interface IGroupRoleRepository {
   assignRole(groupId: string, roleId: string, assignedBy?: string | null): Promise<void>;
@@ -11,7 +12,7 @@ export interface IGroupRoleRepository {
 export class GroupRoleRepository implements IGroupRoleRepository {
   private tableName = 'group_roles';
 
-  constructor(private pool: InstanceType<typeof Pool>) {}
+  constructor(private pool: InstanceType<typeof Pool>) { }
 
   protected async query<T extends QueryResultRow>(
     text: string,

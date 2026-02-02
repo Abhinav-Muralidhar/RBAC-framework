@@ -6,6 +6,8 @@
  * Based on database migrations.
  */
 
+import { AuditAction, AuditStatus } from "../models/audit_logs.model";
+
 // ============================================================
 // AUTH SESSIONS
 // ============================================================
@@ -13,10 +15,6 @@
  * Strict input type for updating a session.
  * Only these fields can be updated.
  */
-export interface UpdateAuthSessionInput {
-    expires_at?: Date;
-    logout_at?: Date | null;
-}
 export interface CreateAuthSessionInput {
     user_id: string;
     session_token: string;
@@ -247,6 +245,17 @@ export interface CreateAuditLogInput {
     role_id: string | null;
     old_values: Record<string, unknown> | null;
     new_values: Record<string, unknown> | null;
+}
+
+export interface AuditLogFilters {
+    startDate?: Date;
+    endDate?: Date;
+    user_id?: string;
+    role_id?: string;
+    action?: AuditAction;
+    module_id?: string;
+    entity_type?: string;
+    status?: AuditStatus;
 }
 
 // ============================================================

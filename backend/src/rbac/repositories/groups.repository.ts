@@ -1,4 +1,5 @@
 import { Pool, QueryResultRow } from 'pg';
+import { IDatabase, ITask } from 'pg-promise';
 import { Groups } from '../models/groups.model';
 import {
   PaginationParams,
@@ -15,8 +16,8 @@ export interface IGroupRepository {
   delete(id: string): Promise<void>;
   findById(id: string): Promise<Groups | null>;
   findByIdWithDetails(id: string): Promise<GroupResponse | null>;
-  findByName(name: string, isActive?: boolean, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
-  findAll(isActive?: boolean, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
+  findByName(name: string, isActive?: boolean, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>
+  findAllPaginated(filters?: { isActive?: boolean, name?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
 }
 export interface GroupResponse {
   id: string;
@@ -188,8 +189,8 @@ export class GroupRepository implements IGroupRepository {
     );
   }
 
-  async findAll(
-    isActive?: boolean,
+  async findAllPaginated(
+    filters?: { isActive?: boolean, name?: string },
     pagination?: Partial<PaginationParams>
   ): Promise<PaginatedResult<Groups>> {
     const p = normalizePaginationParams(pagination);
@@ -197,15 +198,20 @@ export class GroupRepository implements IGroupRepository {
 
     const totalRes = await this.query<{ count: string }>(
       `SELECT COUNT(*) FROM ${this.tableName} WHERE is_active = $1`,
-      [isActive ?? true]
+      [filters?.isActive ?? true]
     );
+    let wher = '';
+    if (filters?.name) {
+      wher = `where name like %${filters.name}%`;
+    }
 
     const res = await this.query<Groups>(
       `SELECT * FROM ${this.tableName}
+      ${wher}
      WHERE is_active = $1
      ORDER BY created_at DESC
      LIMIT $2 OFFSET $3`,
-      [isActive ?? true, p.limit, offset]
+      [filters?.isActive ?? true, p.limit, offset]
     );
 
     return buildPaginatedResult(

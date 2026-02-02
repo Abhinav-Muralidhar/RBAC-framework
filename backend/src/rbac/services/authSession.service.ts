@@ -13,6 +13,7 @@ import { IAuditService } from './audit.service';
 import { RBACInternalError } from '../errors/rbac.errors';
 import crypto from 'node:crypto';
 import { ConcurrentSessionLimitError, SessionNotFoundError } from '../errors/rbac.errors';
+import { PaginatedResult } from '../utils/pagination.utils';
 
 // CONSTANTS
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 Hours
@@ -28,17 +29,23 @@ export interface IAuthSessionService {
     getById(sessionId: string): Promise<AuthSessions>;
 
     /**
-     * List all active sessions for a user
+     * List all active sessions for a user with pagination
      */
-    listActiveByUser(userId: string): Promise<AuthSessions[]>;
+    listActiveByUser(
+        userId: string,
+        pagination?: { page?: number; limit?: number }
+    ): Promise<PaginatedResult<AuthSessions[]>>;
 
     /**
-     * List all sessions for a user (active and logged out)
+     * List all sessions for a user (active and logged out) with pagination
      */
-    listAllByUser(userId: string): Promise<AuthSessions[]>;
+    listAllByUser(
+        userId: string,
+        pagination?: { page?: number; limit?: number }
+    ): Promise<PaginatedResult<AuthSessions[]>>;
 
     /**
-     * Create new session
+     * Create a new session
      * @throws ConcurrentSessionLimitError
      */
     create(data: {
@@ -73,7 +80,7 @@ export interface IAuthSessionService {
     /**
      * Cleanup expired sessions
      */
-    cleanupExpired(): Promise<number>;
+    cleanupExpired(): Promise<void>;
 
     /**
      * Validate session is active and not expired
@@ -83,9 +90,11 @@ export interface IAuthSessionService {
     /**
      * Resolve session from session_token (Global Lookup)
      * Used by Authentication Middleware
-     * @throws RBACInternalError (Session Not Found)
+     * @throws RBACInternalError (Session Not Found or Invalid)
      */
     resolveSession(sessionToken: string): Promise<AuthSessions>;
+
+    findAll(pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessions[]>>;
 }
 
 /**
@@ -105,12 +114,17 @@ export class AuthSessionService implements IAuthSessionService {
         return session;
     }
 
-    async listActiveByUser(userId: string): Promise<AuthSessions[]> {
-        return this.authSessionsRepository.findActiveByUser(userId);
+    async findAll(pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessions[]>> {
+        return this.authSessionsRepository.findAll(pagination);
     }
 
-    async listAllByUser(userId: string): Promise<AuthSessions[]> {
-        return this.authSessionsRepository.findAllByUser(userId);
+
+    async listActiveByUser(userId: string, pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessions[]>> {
+        return this.authSessionsRepository.findActiveByUser(userId, pagination);
+    }
+
+    async listAllByUser(userId: string, pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessions[]>> {
+        return this.authSessionsRepository.findAllByUser(userId, pagination);
     }
 
     async create(data: {
@@ -120,7 +134,7 @@ export class AuthSessionService implements IAuthSessionService {
     }): Promise<AuthSessions> {
         // Check concurrent session limit
         const activeSessions = await this.authSessionsRepository.findActiveByUser(data.user_id);
-        if (activeSessions.length >= MAX_CONCURRENT_SESSIONS_PER_USER) {
+        if (activeSessions.data.length >= MAX_CONCURRENT_SESSIONS_PER_USER) {
             throw new ConcurrentSessionLimitError(data.user_id);
         }
 
@@ -159,18 +173,38 @@ export class AuthSessionService implements IAuthSessionService {
 
     async update(sessionId: string, data: Partial<AuthSessions>): Promise<AuthSessions> {
         // Verify session exists
-        await this.getById(sessionId);
-        return this.authSessionsRepository.update(sessionId, data);
+        const existing = await this.getById(sessionId);
+        const updated: AuthSessions = {
+            id: existing.id,
+            user_id: existing.user_id,
+            session_token: existing.session_token,
+            login_at: existing.login_at,
+            expires_at: data.expires_at !== undefined ? data.expires_at : existing.expires_at,
+            logout_at: (data.logout_at !== undefined ? data.logout_at : existing.logout_at) as Date | null,
+            ip_address: data.ip_address !== undefined ? data.ip_address : existing.ip_address,
+            user_agent: data.user_agent !== undefined ? data.user_agent : existing.user_agent,
+        };
+        return this.authSessionsRepository.update(sessionId, updated);
     }
 
     async logout(sessionId: string): Promise<void> {
         // Verify session exists
-        const session = await this.getById(sessionId);
-        await this.authSessionsRepository.update(sessionId, { logout_at: new Date() });
+        const existing = await this.getById(sessionId);
+        const updated: AuthSessions = {
+            id: existing.id,
+            user_id: existing.user_id,
+            session_token: existing.session_token,
+            login_at: existing.login_at,
+            expires_at: new Date(),
+            logout_at: new Date(),
+            ip_address: existing.ip_address,
+            user_agent: existing.user_agent,
+        };
+        await this.authSessionsRepository.update(sessionId, updated);
 
         // AUDIT: Log session logout (fire-and-forget)
         this.auditService.log({
-            user_id: session.user_id,
+            user_id: existing.user_id,
             action: 'update',
             entity_type: 'session',
             entity_id: sessionId,
@@ -199,7 +233,7 @@ export class AuthSessionService implements IAuthSessionService {
     async revokeAllByUser(userId: string, actingUserId: string): Promise<void> {
         // Get session count for audit
         const sessions = await this.authSessionsRepository.findAllByUser(userId);
-        const sessionCount = sessions.length;
+        const sessionCount = sessions.data.length;
 
         await this.authSessionsRepository.deleteAllByUser(userId);
 
@@ -215,13 +249,13 @@ export class AuthSessionService implements IAuthSessionService {
         }).catch(console.error);
     }
 
-    async cleanupExpired(): Promise<number> {
-        // This would require a new repository method to delete expired sessions
-        // For now, return 0 as a placeholder
-        // In production, implement: DELETE FROM auth_sessions WHERE expires_at < NOW() AND logout_at IS NULL
-        return 0;
+    async cleanupExpired(): Promise<void> {
+        await this.authSessionsRepository.deleteExpired();
     }
 
+    /**
+     * Validate session is active and not expired
+     */
     async isValid(sessionId: string): Promise<boolean> {
         try {
             const session = await this.authSessionsRepository.findById(sessionId);

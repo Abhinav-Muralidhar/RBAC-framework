@@ -1,6 +1,6 @@
 import { Pool, QueryResultRow } from 'pg';
 import { AuthSessions } from '../models/auth_sessions.model';
-import { UpdateAuthSessionInput, CreateAuthSessionInput } from '../types/repository.types';
+import { CreateAuthSessionInput } from '../types/repository.types';
 import {
   PaginationParams,
   PaginatedResult,
@@ -13,11 +13,13 @@ export interface IAuthSessionsRepository {
   create(data: CreateAuthSessionInput): Promise<AuthSessions>;
   findById(sessionId: string): Promise<AuthSessions | null>;
   findBySessionToken(sessionToken: string): Promise<AuthSessions | null>;
-  update(sessionId: string, data: UpdateAuthSessionInput): Promise<AuthSessions>;
+  update(sessionId: string, data: AuthSessions): Promise<AuthSessions>;
   delete(sessionId: string, actingUserId: string): Promise<void>;
-  findAllByUser(userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
-  findActiveByUser(userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
+  findAllByUser(userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions[]>>;
+  findActiveByUser(userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions[]>>;
   deleteAllByUser(userId: string): Promise<void>;
+  findAll(pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions[]>>;
+  deleteExpired(): Promise<void>;
 }
 
 export class AuthSessionsRepository implements IAuthSessionsRepository {
@@ -40,6 +42,12 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     return res.rows[0] ?? null;
   }
 
+  async deleteExpired(): Promise<void> {
+    await this.query(
+      `UPDATE ${this.tableName} SET logout_at = NOW(), expires_at = NOW() WHERE expires_at < NOW() AND logout_at IS NULL`
+    );
+  }
+
   /**
    * Find session by session_token (used for authentication).
    * This is the primary lookup method for middleware.
@@ -52,14 +60,14 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     return res.rows[0] ?? null;
   }
 
-  async findAllByUser(userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>> {
+  async findAllByUser(userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions[]>> {
     const p = normalizePaginationParams(pagination);
     const offset = getPaginationOffset(p.page, p.limit);
     const totalRes = await this.query<{ count: string }>(
       `SELECT COUNT(*) FROM ${this.tableName} WHERE user_id = $1`,
       [userId]
     );
-    const res = await this.query<AuthSessions>(
+    const res = await this.query<AuthSessions[]>(
       `SELECT * FROM ${this.tableName}
        WHERE user_id = $1
        ORDER BY login_at DESC
@@ -73,7 +81,7 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     );
   }
 
-  async findActiveByUser(userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>> {
+  async findActiveByUser(userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions[]>> {
     const p = normalizePaginationParams(pagination);
     const offset = getPaginationOffset(p.page, p.limit);
     const totalRes = await this.query<{ count: string }>(
@@ -83,7 +91,7 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
          AND expires_at > NOW()`,
       [userId]
     );
-    const res = await this.query<AuthSessions>(
+    const res = await this.query<AuthSessions[]>(
       `SELECT * FROM ${this.tableName}
        WHERE user_id = $1
          AND logout_at IS NULL
@@ -100,7 +108,7 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
   }
   async deleteAllByUser(userId: string): Promise<void> {
     await this.query(
-      `Update ${this.tableName} set logout_at = NOW() and expires_at = NOW() WHERE user_id = $1`,
+      `Update ${this.tableName} set logout_at = NOW(), expires_at = NOW() WHERE user_id = $1`,
       [userId]
     );
   }
@@ -119,32 +127,13 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     return res.rows[0];
   }
 
-  async update(sessionId: string, data: UpdateAuthSessionInput): Promise<AuthSessions> {
-    const updates: string[] = [];
-    const values: unknown[] = [sessionId];
-    let paramIndex = 2;
-
-    if (data.expires_at !== undefined) {
-      updates.push(`expires_at = $${paramIndex++}`);
-      values.push(data.expires_at);
-    }
-    if (data.logout_at !== undefined) {
-      updates.push(`logout_at = $${paramIndex++}`);
-      values.push(data.logout_at);
-    }
-
-    if (updates.length === 0) {
-      const existing = await this.findById(sessionId);
-      if (!existing) throw new Error(`Session ${sessionId} not found`);
-      return existing;
-    }
-
+  async update(sessionId: string, data: AuthSessions): Promise<AuthSessions> {
     const res = await this.query<AuthSessions>(
       `UPDATE ${this.tableName}
-       SET ${updates.join(', ')}
-       WHERE id = $1
+       SET expires_at = $1, logout_at = $2
+       WHERE id = $3
        RETURNING *`,
-      values
+      [data.expires_at, data.logout_at, sessionId]
     );
 
     if (res.rows.length === 0) throw new Error(`Session ${sessionId} not found for update`);
@@ -153,8 +142,25 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
 
   async delete(sessionId: string, actingUserId: string): Promise<void> {
     await this.query(
-      `Update ${this.tableName} set logout_at = NOW() and expires_at = NOW() where id = $1 and user_id = $2`,
+      `Update ${this.tableName} set logout_at = NOW(), expires_at = NOW() where id = $1 and user_id = $2`,
       [sessionId, actingUserId]
+    );
+  }
+
+  async findAll(pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions[]>> {
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
+    const totalRes = await this.query<{ count: string }>(`SELECT COUNT(*) FROM ${this.tableName}`);
+    const res = await this.query<AuthSessions[]>(
+      `SELECT * FROM ${this.tableName}
+       ORDER BY login_at DESC
+       LIMIT $1 OFFSET $2`,
+      [p.limit, offset]
+    );
+    return buildPaginatedResult(
+      res.rows,
+      parseInt(totalRes.rows[0]?.count ?? '0', 10),
+      p
     );
   }
 }
