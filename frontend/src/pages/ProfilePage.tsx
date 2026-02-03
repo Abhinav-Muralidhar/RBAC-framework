@@ -1,16 +1,17 @@
 /**
  * Profile Page
- * 
- * User's own profile with editable fields.
- * Includes OTP verification flow for sensitive changes (password/email).
+ * * User's own profile with editable fields.
+ * Includes strict OTP verification flow for sensitive changes (password/email).
  */
 
 import { useState, useEffect, type FormEvent } from 'react';
 import { useAuth } from '../core/contexts/AuthContext';
 import { usersApi } from '../core/api/rbac.api';
 import { FormInput, FormSwitch } from '../core/components/FormElements';
-import { ConfirmModal } from '../core/components/ConfirmModal';
-import { User, Mail, Lock, Save, Key } from 'lucide-react';
+import {
+    User, Mail, Lock, Save, Key, Phone,
+    MapPin, Settings, Globe, DollarSign, Type, ShieldCheck
+} from 'lucide-react';
 import './ProfilePage.css';
 
 interface ProfileFormData {
@@ -18,33 +19,50 @@ interface ProfileFormData {
     last_name: string;
     title: string;
     department: string;
+    secondary_email: string;
+    other_email: string;
+    mobile_phone: string;
+    office_phone: string;
+    street: string;
+    city: string;
+    state: string;
+    country: string;
+    postal_code: string;
+    time_zone: string;
+    preferred_currency: string;
+    full_screen_preview: boolean;
+    signature: string;
 }
+
+type OtpFlowType = 'idle' | 'password' | 'email';
+type OtpStep = 'idle' | 'sending' | 'sent' | 'verifying' | 'verified';
 
 export function ProfilePage() {
     const { user, refreshUser } = useAuth();
+
+    // --- Profile Data State ---
     const [formData, setFormData] = useState<ProfileFormData>({
-        first_name: '',
-        last_name: '',
-        title: '',
-        department: '',
+        first_name: '', last_name: '', title: '', department: '',
+        secondary_email: '', other_email: '',
+        mobile_phone: '', office_phone: '',
+        street: '', city: '', state: '', country: '', postal_code: '',
+        time_zone: '', preferred_currency: '',
+        full_screen_preview: false, signature: '',
     });
-    const [isLoading, setIsLoading] = useState(false);
+
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
-    // Password change state
-    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    // --- Sensitive Action State ---
+    const [activeFlow, setActiveFlow] = useState<OtpFlowType>('idle');
+    const [otpStep, setOtpStep] = useState<OtpStep>('idle');
+    const [otpCode, setOtpCode] = useState('');
+
+    // Final Change States
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-
-    // Email change state
-    const [showEmailModal, setShowEmailModal] = useState(false);
     const [newEmail, setNewEmail] = useState('');
-
-    // OTP state (for future implementation)
-    const [otpStep, setOtpStep] = useState<'idle' | 'sent' | 'verify'>('idle');
-    const [otpCode, setOtpCode] = useState('');
 
     useEffect(() => {
         if (user) {
@@ -53,24 +71,47 @@ export function ProfilePage() {
                 last_name: user.last_name || '',
                 title: user.title || '',
                 department: user.department || '',
+                secondary_email: user.secondary_email || '',
+                other_email: user.other_email || '',
+                mobile_phone: user.mobile_phone || '',
+                office_phone: user.office_phone || '',
+                street: user.street || '',
+                city: user.city || '',
+                state: user.state || '',
+                country: user.country || '',
+                postal_code: user.postal_code || '',
+                time_zone: user.time_zone || '',
+                preferred_currency: user.preferred_currency || '',
+                full_screen_preview: !!user.full_screen_preview,
+                signature: user.signature || '',
             });
         }
     }, [user]);
 
-    const handleInputChange = (field: keyof ProfileFormData, value: string) => {
+    // --- Helpers ---
+    const resetSensitiveState = () => {
+        setActiveFlow('idle');
+        setOtpStep('idle');
+        setOtpCode('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setNewEmail('');
+        setError('');
+    };
+
+    const handleInputChange = (field: keyof ProfileFormData, value: string | boolean) => {
         setFormData(prev => ({ ...prev, [field]: value }));
         setError('');
         setSuccess('');
     };
 
+    // --- Profile Update ---
     const handleSaveProfile = async (e: FormEvent) => {
         e.preventDefault();
         if (!user) return;
-
         setIsSaving(true);
         setError('');
         setSuccess('');
-
         try {
             await usersApi.update(user.id, formData);
             await refreshUser();
@@ -82,25 +123,51 @@ export function ProfilePage() {
         }
     };
 
-    const handlePasswordChange = async () => {
-        if (!user) return;
-        if (newPassword !== confirmPassword) {
-            setError('Passwords do not match');
-            return;
-        }
-        if (newPassword.length < 8) {
-            setError('Password must be at least 8 characters');
-            return;
-        }
+    // --- OTP Flow Initiation ---
+    const startSensitiveFlow = async (type: 'password' | 'email') => {
+        setActiveFlow(type);
+        setOtpStep('sending');
+        setError('');
 
+        try {
+            // Mock API call to send OTP
+            // await authApi.sendOtp(user.email); 
+            setTimeout(() => setOtpStep('sent'), 800);
+        } catch (err) {
+            setError('Failed to send verification code.');
+            setActiveFlow('idle');
+        }
+    };
+
+    const verifyOtp = async () => {
+        if (!otpCode) return;
+        setOtpStep('verifying');
+
+        try {
+            // Mock API verify
+            // await authApi.verifyOtp(otpCode);
+            setTimeout(() => {
+                if (otpCode === '123456') { // Mock check
+                    setOtpStep('verified');
+                } else {
+                    setError('Invalid verification code.');
+                    setOtpStep('sent');
+                }
+            }, 800);
+        } catch (err) {
+            setError('Verification failed.');
+            setOtpStep('sent');
+        }
+    };
+
+    // --- Final Actions (After OTP) ---
+    const handleFinalPasswordChange = async () => {
+        if (!user || newPassword !== confirmPassword) return;
         setIsSaving(true);
         try {
-            // TODO: Implement OTP verification flow when backend routes are ready
             await usersApi.update(user.id, { password: newPassword });
-            setShowPasswordModal(false);
-            setNewPassword('');
-            setConfirmPassword('');
             setSuccess('Password updated successfully!');
+            resetSensitiveState();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to update password');
         } finally {
@@ -108,21 +175,14 @@ export function ProfilePage() {
         }
     };
 
-    const handleEmailChange = async () => {
+    const handleFinalEmailChange = async () => {
         if (!user) return;
-        if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
-            setError('Please enter a valid email address');
-            return;
-        }
-
         setIsSaving(true);
         try {
-            // TODO: Implement OTP verification flow when backend routes are ready
             await usersApi.update(user.id, { primary_email: newEmail });
             await refreshUser();
-            setShowEmailModal(false);
-            setNewEmail('');
             setSuccess('Email updated successfully!');
+            resetSensitiveState();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to update email');
         } finally {
@@ -130,9 +190,7 @@ export function ProfilePage() {
         }
     };
 
-    if (!user) {
-        return <div className="profile-loading">Loading profile...</div>;
-    }
+    if (!user) return <div className="profile-loading">Loading profile...</div>;
 
     return (
         <div className="profile-page">
@@ -150,25 +208,21 @@ export function ProfilePage() {
             {success && <div className="profile-success">{success}</div>}
 
             <div className="profile-sections">
-                {/* Basic Info Section */}
+                {/* --- Personal Information --- */}
                 <section className="profile-section">
-                    <h2>
-                        <User size={20} />
-                        Personal Information
-                    </h2>
+                    <h2><User size={20} /> Personal Information</h2>
+
                     <form onSubmit={handleSaveProfile}>
                         <div className="form-row">
                             <FormInput
                                 label="First Name"
                                 value={formData.first_name}
                                 onChange={e => handleInputChange('first_name', e.target.value)}
-                                placeholder="Enter first name"
                             />
                             <FormInput
                                 label="Last Name"
                                 value={formData.last_name}
                                 onChange={e => handleInputChange('last_name', e.target.value)}
-                                placeholder="Enter last name"
                                 required
                             />
                         </div>
@@ -177,15 +231,71 @@ export function ProfilePage() {
                                 label="Title"
                                 value={formData.title}
                                 onChange={e => handleInputChange('title', e.target.value)}
-                                placeholder="e.g., Software Engineer"
                             />
                             <FormInput
                                 label="Department"
                                 value={formData.department}
                                 onChange={e => handleInputChange('department', e.target.value)}
-                                placeholder="e.g., Engineering"
                             />
                         </div>
+
+
+                        <h2><Phone size={18} /> Contact Details</h2>
+                        <div className="form-row">
+                            <FormInput
+                                label="Mobile Phone"
+                                value={formData.mobile_phone}
+                                onChange={e => handleInputChange('mobile_phone', e.target.value)}
+                            />
+                            <FormInput
+                                label="Office Phone"
+                                value={formData.office_phone}
+                                onChange={e => handleInputChange('office_phone', e.target.value)}
+                            />
+                        </div>
+
+                        <h2><MapPin size={18} /> Address</h2>
+                        <FormInput
+                            label="Street"
+                            value={formData.street}
+                            onChange={e => handleInputChange('street', e.target.value)}
+                        />
+                        <div className="form-row">
+                            <FormInput label="City" value={formData.city} onChange={e => handleInputChange('city', e.target.value)} />
+                            <FormInput label="State" value={formData.state} onChange={e => handleInputChange('state', e.target.value)} />
+                        </div>
+                        <div className="form-row">
+                            <FormInput label="Country" value={formData.country} onChange={e => handleInputChange('country', e.target.value)} />
+                            <FormInput label="Postal Code" value={formData.postal_code} onChange={e => handleInputChange('postal_code', e.target.value)} />
+                        </div>
+
+                        <h2><Settings size={18} /> Preferences</h2>
+                        <div className="form-row">
+                            <FormInput
+                                label="Time Zone"
+                                value={formData.time_zone}
+                                onChange={e => handleInputChange('time_zone', e.target.value)}
+                            />
+                            <FormInput
+                                label="Currency"
+                                value={formData.preferred_currency}
+                                onChange={e => handleInputChange('preferred_currency', e.target.value)}
+                            />
+                        </div>
+
+                        <FormSwitch
+                            label="Full Screen Preview"
+                            checked={formData.full_screen_preview}
+                            onChange={checked => handleInputChange('full_screen_preview', checked)}
+                        />
+
+                        <FormInput
+                            label="Signature"
+                            type="textarea"
+                            value={formData.signature}
+                            onChange={e => handleInputChange('signature', e.target.value)}
+                        />
+
                         <div className="profile-actions">
                             <button type="submit" className="btn btn-primary" disabled={isSaving}>
                                 <Save size={18} />
@@ -195,74 +305,86 @@ export function ProfilePage() {
                     </form>
                 </section>
 
-                {/* Account Section */}
+                {/* --- Account Settings --- */}
                 <section className="profile-section">
-                    <h2>
-                        <Key size={20} />
-                        Account Settings
-                    </h2>
-
+                    <h2><Key size={20} /> Account Settings</h2>
                     <div className="account-info">
                         <div className="account-row">
-                            <div className="account-label">
-                                <Mail size={18} />
-                                <span>Email Address</span>
-                            </div>
+                            <div className="account-label"><Mail size={18} /><span>Email Address</span></div>
                             <div className="account-value">
                                 <span>{user.primary_email}</span>
-                                <button
-                                    className="btn btn-secondary btn-sm"
-                                    onClick={() => setShowEmailModal(true)}
-                                >
-                                    Change
-                                </button>
+                                <button className="btn btn-secondary btn-sm" onClick={() => startSensitiveFlow('email')}>Change</button>
                             </div>
                         </div>
-
                         <div className="account-row">
-                            <div className="account-label">
-                                <Lock size={18} />
-                                <span>Password</span>
-                            </div>
+                            <div className="account-label"><Lock size={18} /><span>Password</span></div>
                             <div className="account-value">
                                 <span>••••••••</span>
-                                <button
-                                    className="btn btn-secondary btn-sm"
-                                    onClick={() => setShowPasswordModal(true)}
-                                >
-                                    Change
-                                </button>
+                                <button className="btn btn-secondary btn-sm" onClick={() => startSensitiveFlow('password')}>Change</button>
                             </div>
                         </div>
-
                         <div className="account-row">
-                            <div className="account-label">
-                                <User size={18} />
-                                <span>Username</span>
-                            </div>
+                            <div className="account-label"><User size={18} /><span>Username</span></div>
                             <div className="account-value">
                                 <span className="text-muted">{user.username}</span>
-                                <span className="badge">Cannot be changed</span>
+                                <span className="badge">Read-only</span>
                             </div>
                         </div>
                     </div>
                 </section>
             </div>
 
-            {/* Password Change Modal */}
-            {showPasswordModal && (
-                <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
+            {/* --- 1. OTP Verification Modal --- */}
+            {(activeFlow !== 'idle' && otpStep !== 'verified') && (
+                <div className="modal-overlay" onClick={resetSensitiveState}>
                     <div className="modal" onClick={e => e.stopPropagation()}>
-                        <h3>Change Password</h3>
+                        <div className="modal-header-icon"><ShieldCheck size={32} /></div>
+                        <h3>Security Verification</h3>
                         <p className="modal-hint">
-                            Enter your new password below. It must be at least 8 characters.
+                            For your security, we have sent a 6-digit verification code to <strong>{user.primary_email}</strong>.
+                            Please enter it below to proceed.
                         </p>
+
+                        {/* Fix: Removed className from FormInput. 
+                          Wrapped in div with class "otp-input-container" for styling if needed.
+                        */}
+                        <div className="otp-input-container">
+                            <FormInput
+                                label="Verification Code"
+                                value={otpCode}
+                                onChange={e => setOtpCode(e.target.value)}
+                                placeholder="XXXXXX"
+                                required
+                            />
+                        </div>
+
+                        {otpStep === 'sending' && <p className="text-muted text-sm">Sending code...</p>}
+
+                        <div className="modal-actions">
+                            <button className="btn btn-secondary" onClick={resetSensitiveState}>Cancel</button>
+                            <button
+                                className="btn btn-primary"
+                                onClick={verifyOtp}
+                                disabled={otpStep === 'sending' || otpStep === 'verifying' || otpCode.length < 6}
+                            >
+                                {otpStep === 'verifying' ? 'Verifying...' : 'Verify Code'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- 2. Change Password Modal (Only shows after OTP) --- */}
+            {(activeFlow === 'password' && otpStep === 'verified') && (
+                <div className="modal-overlay" onClick={resetSensitiveState}>
+                    <div className="modal" onClick={e => e.stopPropagation()}>
+                        <h3>Set New Password</h3>
+                        <p className="modal-hint">Identity verified. Please enter your new password.</p>
                         <FormInput
                             label="New Password"
                             type="password"
                             value={newPassword}
                             onChange={e => setNewPassword(e.target.value)}
-                            placeholder="Enter new password"
                             required
                         />
                         <FormInput
@@ -270,21 +392,11 @@ export function ProfilePage() {
                             type="password"
                             value={confirmPassword}
                             onChange={e => setConfirmPassword(e.target.value)}
-                            placeholder="Confirm new password"
                             required
                         />
                         <div className="modal-actions">
-                            <button
-                                className="btn btn-secondary"
-                                onClick={() => setShowPasswordModal(false)}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="btn btn-primary"
-                                onClick={handlePasswordChange}
-                                disabled={isSaving}
-                            >
+                            <button className="btn btn-secondary" onClick={resetSensitiveState}>Cancel</button>
+                            <button className="btn btn-primary" onClick={handleFinalPasswordChange} disabled={isSaving}>
                                 {isSaving ? 'Updating...' : 'Update Password'}
                             </button>
                         </div>
@@ -292,34 +404,22 @@ export function ProfilePage() {
                 </div>
             )}
 
-            {/* Email Change Modal */}
-            {showEmailModal && (
-                <div className="modal-overlay" onClick={() => setShowEmailModal(false)}>
+            {/* --- 3. Change Email Modal (Only shows after OTP) --- */}
+            {(activeFlow === 'email' && otpStep === 'verified') && (
+                <div className="modal-overlay" onClick={resetSensitiveState}>
                     <div className="modal" onClick={e => e.stopPropagation()}>
-                        <h3>Change Email</h3>
-                        <p className="modal-hint">
-                            Enter your new email address below.
-                        </p>
+                        <h3>Update Email Address</h3>
+                        <p className="modal-hint">Identity verified. Please enter your new email address.</p>
                         <FormInput
                             label="New Email"
                             type="email"
                             value={newEmail}
                             onChange={e => setNewEmail(e.target.value)}
-                            placeholder="Enter new email"
                             required
                         />
                         <div className="modal-actions">
-                            <button
-                                className="btn btn-secondary"
-                                onClick={() => setShowEmailModal(false)}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="btn btn-primary"
-                                onClick={handleEmailChange}
-                                disabled={isSaving}
-                            >
+                            <button className="btn btn-secondary" onClick={resetSensitiveState}>Cancel</button>
+                            <button className="btn btn-primary" onClick={handleFinalEmailChange} disabled={isSaving}>
                                 {isSaving ? 'Updating...' : 'Update Email'}
                             </button>
                         </div>

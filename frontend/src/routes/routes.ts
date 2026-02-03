@@ -30,6 +30,7 @@ export const SETTINGS_SECTIONS = {
     ROLES: 'roles',
     PROFILES: 'profiles',
     GROUPS: 'groups',
+    ORGANIZATIONS: 'organizations',
     AUDIT_LOGS: 'audit-logs',
     SMTP: 'smtp',
 } as const;

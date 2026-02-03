@@ -14,10 +14,11 @@ import {
     Key,
     FolderTree,
     FileText,
+    Building2,
     Mail,
     X,
 } from 'lucide-react';
-import { UsersPage, RolesPage, ProfilesPage, GroupsPage, AuditLogsPage, SmtpPage } from '../../../plugins/rbac-settings/pages';
+import { UsersPage, RolesPage, ProfilesPage, GroupsPage, AuditLogsPage, SmtpPage, OrganizationPage } from '../../../plugins/rbac-settings/pages';
 import './AdminSettingsModal.css';
 
 interface SectionConfig {
@@ -28,6 +29,7 @@ interface SectionConfig {
 }
 
 const sections: SectionConfig[] = [
+    { id: SETTINGS_SECTIONS.ORGANIZATIONS, label: 'Organizations', icon: <Building2 size={18} />, component: OrganizationPage },
     { id: SETTINGS_SECTIONS.USERS, label: 'Users', icon: <Users size={18} />, component: UsersPage },
     { id: SETTINGS_SECTIONS.ROLES, label: 'Roles', icon: <Shield size={18} />, component: RolesPage },
     { id: SETTINGS_SECTIONS.PROFILES, label: 'Profiles', icon: <Key size={18} />, component: ProfilesPage },

@@ -99,3 +99,33 @@
     opacity: 0.7;
     cursor: not-allowed;
 }
+
+.link-button {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-top: 0.75rem;
+
+    color: var(--accent-color, #2563eb);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.link-button:hover {
+    color: #1d4ed8;
+}
+
+.link-button:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
+.login-form .link-button {
+    margin-top: none;
+    margin-bottom: 20px;
+}
