@@ -6,6 +6,7 @@ import { DuplicateAssignmentError, OrganizationNotFoundError } from '../errors/r
 import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
 import { CreateOrganizationRequestDto, UpdateOrganizationRequestDto } from '../dto';
 import { CreateOrganizationInput } from '../types/repository.types';
+import { IAuditService } from '../services/audit.service';
 
 export interface IOrganizationService {
     createOrganization(data: CreateOrganizationRequestDto, acting_user_id: string): Promise<Organizations>;
@@ -17,7 +18,8 @@ export interface IOrganizationService {
 export class OrganizationService implements IOrganizationService {
     constructor(
         private db: IDatabase<unknown>,
-        private organizationRepository: IOrganizationRepository
+        private organizationRepository: IOrganizationRepository,
+        private auditService: IAuditService
     ) { }
 
     async createOrganization(
@@ -114,7 +116,17 @@ export class OrganizationService implements IOrganizationService {
                 updated_at: new Date()
             };
 
-            return this.organizationRepository.update(t, updated);
+            const c = await this.organizationRepository.update(t, updated);
+            this.auditService.log(t, {
+                user_id: id,
+                action: 'update',
+                entity_type: 'organization',
+                entity_id: id,
+                old_values: JSON.parse(JSON.stringify(organization)),
+                new_values: JSON.parse(JSON.stringify(updated)),
+                status: 'success'
+            });
+            return c;
         });
     }
 }

@@ -9,6 +9,7 @@ export interface IRoleProfilesRepository {
   revoke(t: ITask<unknown> | undefined, roleId: string, profileId: string): Promise<void>;
   revokeAllByRole(t: ITask<unknown> | undefined, roleId: string): Promise<void>;
   assignAllByRole(t: ITask<unknown> | undefined, roleId: string, profileIds: string[], assignedBy?: string): Promise<void>;
+  findByIds(t: ITask<unknown> | undefined, ids: string[]): Promise<RoleProfiles[]>;
 }
 
 export class RoleProfilesRepository implements IRoleProfilesRepository {
@@ -24,6 +25,13 @@ export class RoleProfilesRepository implements IRoleProfilesRepository {
     return this.query<RoleProfiles>(
       `SELECT * FROM ${this.tableName} WHERE role_id = $1`,
       [roleId],
+      t
+    );
+  }
+  async findByIds(t: ITask<unknown> | undefined, ids: string[]): Promise<RoleProfiles[]> {
+    return this.query<RoleProfiles>(
+      `SELECT * FROM ${this.tableName} WHERE profile_id = ANY($1)`,
+      [ids],
       t
     );
   }

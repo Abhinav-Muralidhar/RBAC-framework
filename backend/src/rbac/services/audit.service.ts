@@ -10,6 +10,8 @@ import { AuditLogWithDetailsRow, IAuditLogsRepository } from '../repositories/au
 import { PaginatedResult, PaginationParams } from '../utils/pagination.utils';
 import { AuditLogFilters } from '../types/repository.types';
 import { IEvaluationService } from './evaluation.service';
+import { TransactionTask } from '../utils/transaction.utils'; // adjust path if needed
+
 const MODULE_CODE = 'SETTINGS';
 
 export interface IAuditService {
@@ -20,6 +22,7 @@ export interface IAuditService {
      * Audit logs are append-only.
      */
     log(
+        t: TransactionTask | undefined,
         data: {
             user_id?: string;
             role_id?: string;
@@ -38,12 +41,21 @@ export interface IAuditService {
     /**
      * Get audit log by ID
      */
-    getById(actingUserId: string, logId: string): Promise<AuditLogWithDetailsRow>;
+    getById(
+        t: TransactionTask | undefined,
+        actingUserId: string,
+        logId: string
+    ): Promise<AuditLogWithDetailsRow>;
 
     /**
      * Query audit logs with optional filters
      */
-    getAll(actingUserId: string, filters?: AuditLogFilters, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogWithDetailsRow[]>>;
+    getAll(
+        t: TransactionTask | undefined,
+        actingUserId: string,
+        filters?: AuditLogFilters,
+        pagination?: Partial<PaginationParams>
+    ): Promise<PaginatedResult<AuditLogWithDetailsRow>>;
 }
 
 /**
@@ -51,21 +63,27 @@ export interface IAuditService {
  */
 export class AuditService implements IAuditService {
 
-    constructor(private readonly auditLogsRepository: IAuditLogsRepository, private evaluationService: IEvaluationService) { }
+    constructor(
+        private readonly auditLogsRepository: IAuditLogsRepository,
+        private evaluationService: IEvaluationService
+    ) { }
 
-    async log(data: {
-        user_id?: string;
-        role_id?: string;
-        action: AuditAction;
-        module_id?: string;
-        entity_type?: string;
-        entity_id?: string;
-        old_values?: Record<string, unknown> | null;
-        new_values?: Record<string, unknown>;
-        ip_address?: string | undefined;
-        user_agent?: string | undefined;
-        status: AuditStatus;
-    }): Promise<AuditLogs> {
+    async log(
+        t: TransactionTask | undefined,
+        data: {
+            user_id?: string;
+            role_id?: string;
+            action: AuditAction;
+            module_id?: string;
+            entity_type?: string;
+            entity_id?: string;
+            old_values?: Record<string, unknown> | null;
+            new_values?: Record<string, unknown>;
+            ip_address?: string | undefined;
+            user_agent?: string | undefined;
+            status: AuditStatus;
+        }
+    ): Promise<AuditLogs> {
         // Build strict input object - all required fields must have values
         const input = {
             action: data.action,
@@ -81,20 +99,29 @@ export class AuditService implements IAuditService {
             new_values: data.new_values ?? null
         };
 
-        return this.auditLogsRepository.create(input);
+        return this.auditLogsRepository.create(t, input);
     }
 
-    async getById(actingUserId: string, logId: string): Promise<AuditLogWithDetailsRow> {
+    async getById(
+        t: TransactionTask | undefined,
+        actingUserId: string,
+        logId: string
+    ): Promise<AuditLogWithDetailsRow> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        const log = await this.auditLogsRepository.findByIdWithDetails(logId);
+        const log = await this.auditLogsRepository.findByIdWithDetails(t, logId);
         if (!log) {
             throw new Error(`Audit log not found: ${logId}`);
         }
         return log;
     }
 
-    async getAll(actingUserId: string, filters: AuditLogFilters = {}, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogWithDetailsRow[]>> {
+    async getAll(
+        t: TransactionTask | undefined,
+        actingUserId: string,
+        filters: AuditLogFilters = {},
+        pagination?: Partial<PaginationParams>
+    ): Promise<PaginatedResult<AuditLogWithDetailsRow>> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        return this.auditLogsRepository.findAllWithDetails(filters, pagination);
+        return this.auditLogsRepository.findAllWithDetails(t, filters, pagination);
     }
 }

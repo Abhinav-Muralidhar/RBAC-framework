@@ -15,21 +15,28 @@ export interface RoleDetail {
   code: string;
   description: string | null;
   is_active: boolean;
+
+  // Parent role (JOINed)
   parent_role_id: string | null;
   parent_role: {
     name: string;
     code: string;
   } | null;
+
+  // Assigned profiles (JOINed with names)
   profiles: Array<{
     id: string;
     name: string;
     code: string;
   }>;
+
+  // Counts
   user_count?: number;
   child_role_count?: number;
+
   created_at: Date;
   created_by: string | null;
-  created_by_name: string | null;
+  created_by_name: string | null;  // JOINed: creator's name
 }
 
 export interface IRoleRepository {
@@ -47,6 +54,7 @@ export interface IRoleRepository {
   findAncestors(t: ITask<unknown> | undefined, roleId: string): Promise<Roles[]>;
   findChildRoles(t: ITask<unknown> | undefined, roleId: string): Promise<Roles[]>;
   findRoleTree(t: ITask<unknown> | undefined): Promise<Roles[]>;
+  findByIds(t: ITask<unknown> | undefined, ids: string[]): Promise<Roles[]>;
 }
 
 export class RoleRepository implements IRoleRepository {
@@ -70,6 +78,16 @@ export class RoleRepository implements IRoleRepository {
     return (t ?? this.db).oneOrNone<Roles>(
       `SELECT * FROM ${this.tableName} WHERE id = $1 AND is_active = $2`,
       [id, isActive]
+    );
+  }
+
+  async findByIds(
+    t: ITask<unknown> | undefined,
+    ids: string[]
+  ): Promise<Roles[]> {
+    return (t ?? this.db).any<Roles>(
+      `SELECT * FROM ${this.tableName} WHERE id = ANY($1)`,
+      [ids]
     );
   }
 

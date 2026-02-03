@@ -81,16 +81,18 @@ export class ProfileService implements IProfileService {
                 is_active: data.is_active ?? true,
                 created_by: actingUserId
             });
-
-            const permissions = await this.permissionsRepository.findByIds(t, data.permission_ids as string[]);
-            if (permissions.length !== data.permission_ids!.length) {
-                const foundIds = new Set(permissions.map(p => p.id));
-                const missing = data.permission_ids!.filter(id => !foundIds.has(id));
-                throw new PermissionNotFoundError(missing.join(', '));
+            const perms = data.permission_ids ?? []
+            if (perms.length > 0) {
+                const permissions = await this.permissionsRepository.findByIds(t, perms as string[]);
+                if (permissions.length !== perms.length) {
+                    const foundIds = new Set(permissions.map(p => p.id));
+                    const missing = perms.filter(id => !foundIds.has(id));
+                    throw new PermissionNotFoundError(missing.join(', '));
+                }
+                await this.profilePermissionsRepository.replacePermissions(t, profile.id, permissions.map(p => p.id));
             }
-            await this.profilePermissionsRepository.replacePermissions(t, profile.id, permissions.map(p => p.id));
 
-            this.auditService.log({
+            this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'create',
                 entity_type: 'profile',
@@ -125,15 +127,18 @@ export class ProfileService implements IProfileService {
             }
 
             const updated = await this.profilesRepository.update(t, profileId, prof);
-            const permissions = await this.permissionsRepository.findByIds(t, data.permission_ids! as string[]);
-            if (permissions.length !== data.permission_ids!.length) {
-                const foundIds = new Set(permissions.map(p => p.id));
-                const missing = data.permission_ids!.filter(id => !foundIds.has(id));
-                throw new PermissionNotFoundError(missing.join(', '));
+            const perms = data.permission_ids ?? []
+            if (perms.length > 0) {
+                const permissions = await this.permissionsRepository.findByIds(t, perms as string[]);
+                if (permissions.length !== perms.length) {
+                    const foundIds = new Set(permissions.map(p => p.id));
+                    const missing = perms.filter(id => !foundIds.has(id));
+                    throw new PermissionNotFoundError(missing.join(', '));
+                }
+                await this.profilePermissionsRepository.replacePermissions(t, profileId, permissions.map(p => p.id));
             }
-            await this.profilePermissionsRepository.replacePermissions(t, profileId, permissions.map(p => p.id));
 
-            this.auditService.log({
+            this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'update',
                 entity_type: 'profile',
@@ -164,7 +169,7 @@ export class ProfileService implements IProfileService {
 
             await this.profilesRepository.update(t, profileId, prof);
 
-            this.auditService.log({
+            this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'delete',
                 entity_type: 'profile',

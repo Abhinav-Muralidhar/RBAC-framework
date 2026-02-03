@@ -14,11 +14,12 @@ import { RBACInternalError } from '../errors/rbac.errors';
 import crypto from 'node:crypto';
 import { ConcurrentSessionLimitError, SessionNotFoundError } from '../errors/rbac.errors';
 import { PaginatedResult } from '../utils/pagination.utils';
+import { IEvaluationService } from './evaluation.service';
 
 // CONSTANTS
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 Hours
 const MAX_CONCURRENT_SESSIONS_PER_USER = 5;
-
+const MODULE_CODE = 'SETTINGS';
 
 
 export interface IAuthSessionService {
@@ -72,6 +73,8 @@ export interface IAuthSessionService {
      */
     revoke(sessionId: string, actingUserId: string): Promise<void>;
 
+    revokeOneForUser(sessionId: string, userId: string, actingUserId: string): Promise<void>;
+
     /**
      * Revoke all sessions for a user
      */
@@ -103,7 +106,8 @@ export interface IAuthSessionService {
 export class AuthSessionService implements IAuthSessionService {
     constructor(
         private readonly authSessionsRepository: IAuthSessionsRepository,
-        private readonly auditService: IAuditService
+        private readonly auditService: IAuditService,
+        private readonly evaluationService: IEvaluationService
     ) { }
 
     async getById(sessionId: string): Promise<AuthSessions> {
@@ -116,6 +120,15 @@ export class AuthSessionService implements IAuthSessionService {
 
     async findAll(pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessions[]>> {
         return this.authSessionsRepository.findAll(pagination);
+    }
+
+    async revokeOneForUser(sessionId: string, userId: string, actingUserId: string): Promise<void> {
+        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
+        const session = await this.getById(sessionId);
+        if (!session) {
+            throw new SessionNotFoundError(sessionId);
+        }
+        await this.authSessionsRepository.deleteOneForUser(sessionId, userId, actingUserId);
     }
 
 
@@ -216,6 +229,9 @@ export class AuthSessionService implements IAuthSessionService {
 
     async revoke(sessionId: string, actingUserId: string): Promise<void> {
         const session = await this.getById(sessionId);
+        if (!session) {
+            throw new SessionNotFoundError(sessionId);
+        }
         await this.authSessionsRepository.delete(sessionId, actingUserId);
 
         // AUDIT: Log session revocation (fire-and-forget)

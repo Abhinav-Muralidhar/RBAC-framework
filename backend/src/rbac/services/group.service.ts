@@ -93,7 +93,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
                 await this.userRepository.replaceUsers(t, group.id, users, actingUserId);
             }
 
-            this.auditService.log({
+            this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'create',
                 entity_type: 'group',
@@ -140,7 +140,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
                 await this.userRepository.replaceUsers(t, groupId, users, actingUserId);
             }
 
-            this.auditService.log({
+            this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'update',
                 entity_type: 'group',
@@ -163,7 +163,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
 
             await this.groupRepository.delete(t, groupId);
 
-            this.auditService.log({
+            this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'delete',
                 entity_type: 'group',

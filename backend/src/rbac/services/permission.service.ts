@@ -237,7 +237,7 @@ export class PermissionService implements IPermissionService {
             }
 
             await this.roleProfilesRepository.assignAllByRole(t, roleId, profileIds, actingUserId);
-            this.auditService.log({
+            this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'create',
                 entity_type: 'role_profile',

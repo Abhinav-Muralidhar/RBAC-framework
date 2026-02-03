@@ -1,4 +1,4 @@
-import { Pool, QueryResultRow } from 'pg';
+import { IDatabase, ITask } from 'pg-promise';
 import { AuditLogs, AuditAction, AuditStatus } from '../models/audit_logs.model';
 import { CreateAuditLogInput, AuditLogFilters } from '../types/repository.types';
 import {
@@ -9,10 +9,12 @@ import {
   buildPaginatedResult
 } from '../utils/pagination.utils';
 
+export type TransactionTask = ITask<unknown>;
+
 /**
  * Raw row type from JOIN query
  */
-export interface AuditLogWithDetailsRow extends QueryResultRow {
+export interface AuditLogWithDetailsRow {
   id: string;
   user_id: string | null;
   user_name: string | null;
@@ -34,22 +36,24 @@ export interface AuditLogWithDetailsRow extends QueryResultRow {
 }
 
 export interface IAuditLogsRepository {
-  create(input: CreateAuditLogInput): Promise<AuditLogs>;
-  findById(id: string): Promise<AuditLogs | null>;
-  findByIdWithDetails(id: string): Promise<AuditLogWithDetailsRow | null>;
-  findAllWithDetails(filters?: AuditLogFilters, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogWithDetailsRow[]>>;
+  create(t: TransactionTask | undefined, input: CreateAuditLogInput): Promise<AuditLogs>;
+  findById(t: TransactionTask | undefined, id: string): Promise<AuditLogs | null>;
+  findByIdWithDetails(t: TransactionTask | undefined, id: string): Promise<AuditLogWithDetailsRow | null>;
+  findAllWithDetails(
+    t: TransactionTask | undefined,
+    filters?: AuditLogFilters,
+    pagination?: Partial<PaginationParams>
+  ): Promise<PaginatedResult<AuditLogWithDetailsRow>>;
 }
 
 export class AuditLogsRepository implements IAuditLogsRepository {
   private tableName = 'audit_logs';
 
-  constructor(private pool: InstanceType<typeof Pool>) { }
+  constructor(private db: IDatabase<unknown>) { }
 
-  protected async query<T extends QueryResultRow>(
-    text: string,
-    params?: unknown[]
-  ): Promise<{ rows: T[]; rowCount: number | null }> {
-    return this.pool.query<T>(text, params);
+  // Helper: use transaction if provided, otherwise main connection
+  private getTask(t?: TransactionTask) {
+    return t ?? this.db;
   }
 
   /**
@@ -86,27 +90,28 @@ export class AuditLogsRepository implements IAuditLogsRepository {
     `;
   }
 
-  async findById(id: string): Promise<AuditLogs | null> {
-    const res = await this.query<AuditLogs>(
+  async findById(t: TransactionTask | undefined, id: string): Promise<AuditLogs | null> {
+    const rows = await this.getTask(t).any<AuditLogs>(
       `SELECT * FROM ${this.tableName} WHERE id = $1`,
       [id]
     );
-    return res.rows[0] ?? null;
+    return rows[0] ?? null;
   }
 
-  /**
-   * Find audit log by ID with JOINed user, role, and module data
-   */
-  async findByIdWithDetails(id: string): Promise<AuditLogWithDetailsRow | null> {
-    const res = await this.query<AuditLogWithDetailsRow>(
+  async findByIdWithDetails(t: TransactionTask | undefined, id: string): Promise<AuditLogWithDetailsRow | null> {
+    const rows = await this.getTask(t).any<AuditLogWithDetailsRow>(
       `${this.selectWithJoinsQuery}
        WHERE al.id = $1`,
       [id]
     );
-    return res.rows[0] ?? null;
+    return rows[0] ?? null;
   }
 
-  async findAllWithDetails(filters?: AuditLogFilters, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogWithDetailsRow[]>> {
+  async findAllWithDetails(
+    t: TransactionTask | undefined,
+    filters?: AuditLogFilters,
+    pagination?: Partial<PaginationParams>
+  ): Promise<PaginatedResult<AuditLogWithDetailsRow>> {
     const p = normalizePaginationParams(pagination);
     const offset = getPaginationOffset(p.page, p.limit);
 
@@ -151,31 +156,33 @@ export class AuditLogsRepository implements IAuditLogsRepository {
         );
       }
     }
-    const where =
-      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const totalRes = await this.query<{ count: string }>(
-      `SELECT COUNT(*) FROM ${this.tableName}`
+    const task = this.getTask(t);
+
+    const totalRes = await task.one<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName} ${where}`,
+      values
     );
 
-    const res = await this.query<AuditLogWithDetailsRow[]>(
+    const rows = await task.any<AuditLogWithDetailsRow>(
       `${this.selectWithJoinsQuery}
-      ${where}
+       ${where}
        ORDER BY al.created_at DESC
        LIMIT $1 OFFSET $2`,
-      [p.limit, offset]
+      [...values, p.limit, offset]
     );
 
     return buildPaginatedResult(
-      res.rows,
-      parseInt(totalRes.rows[0]?.count ?? '0', 10),
+      rows,
+      parseInt(totalRes.count ?? '0', 10),
       p
     );
   }
 
-  async create(input: CreateAuditLogInput): Promise<AuditLogs> {
-    const res = await this.query<AuditLogs>(
+  async create(t: TransactionTask | undefined, input: CreateAuditLogInput): Promise<AuditLogs> {
+    const row = await this.getTask(t).one<AuditLogs>(
       `INSERT INTO ${this.tableName} (
         action, module_id, entity_type, entity_id, ip_address, user_agent, status,
         user_id, role_id, old_values, new_values
@@ -195,7 +202,8 @@ export class AuditLogsRepository implements IAuditLogsRepository {
         input.new_values ? JSON.stringify(input.new_values) : null
       ]
     );
-    if (!res.rows[0]) throw new Error('Audit log creation failed');
-    return res.rows[0];
+
+    if (!row) throw new Error('Audit log creation failed');
+    return row;
   }
 }

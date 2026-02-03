@@ -72,6 +72,7 @@ export interface CreateUserInput {
 /** Fields that can be updated on a user */
 export interface UpdateUserInput {
     password?: string;
+    username?: string;
     status?: 'active' | 'inactive' | 'deleted';
     first_name?: string | null;
     last_name?: string;

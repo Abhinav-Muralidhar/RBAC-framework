@@ -9,6 +9,8 @@ import {
 } from '../utils/pagination.utils';
 import { CreateUserInput, UpdateUserInput } from '../types/repository.types';
 import { UserStatus } from '../models/users.model';
+import { IDatabase } from 'pg-promise';
+import { TransactionTask } from './user_groups.repository';
 
 export interface UserDetail {
   id: string;
@@ -74,43 +76,39 @@ export interface UserDetail {
 
 
 export interface IUsersRepository {
-  findById(userId: string, status: string): Promise<Users | null>;
-  findByIdWithDetails(userId: string): Promise<UserDetail | null>;
-  findAllPaginated(filters?: { status: string, email: string, username: string, name: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Users>>;
-  create(input: CreateUserInput): Promise<Users>;
-  update(input: Users): Promise<Users>;
-  delete(userId: string): Promise<void>;
+  findById(t: TransactionTask | null, userId: string): Promise<Users | null>;
+  findByIdWithDetails(t: TransactionTask | null, userId: string): Promise<UserDetail | null>;
+  findAllPaginated(t: TransactionTask | null, filters?: { status: string, email: string, username: string, name: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Users>>;
+  create(t: TransactionTask | null, input: CreateUserInput): Promise<Users>;
+  update(t: TransactionTask | null, input: Users): Promise<Users>;
+  delete(t: TransactionTask | null, userId: string): Promise<void>;
+  deactivate(t: TransactionTask | null, userId: string): Promise<void>;
 }
 
 export class UsersRepository implements IUsersRepository {
   private tableName = 'users';
 
-  constructor(private pool: InstanceType<typeof Pool>) { }
+  constructor(private db: IDatabase<unknown>) { }
 
-  protected async query<T extends QueryResultRow>(
-    text: string,
-    params?: unknown[]
-  ): Promise<{ rows: T[]; rowCount: number | null }> {
-    return this.pool.query<T>(text, params);
+  private task(t: TransactionTask | null) {
+    return t ?? this.db;
   }
 
-  /**
-   * Find user by ID (excludes deleted/inactive)
-   */
-  async findById(userId: string, status: string): Promise<Users | null> {
-    const res = await this.query<Users>(
-      `SELECT * FROM ${this.tableName} WHERE id = $1 AND status = $2`,
-      [userId, status]
+  async findById(
+    t: TransactionTask | null,
+    userId: string
+  ): Promise<Users | null> {
+    const res = await this.task(t).any<Users>(
+      `SELECT * FROM ${this.tableName} WHERE id = $1`,
+      [userId]
     );
-    return res.rows[0] ?? null;
+    return res[0] ?? null;
   }
 
-  /**
-   * Find user by ID with JOINed manager name, creator name, roles, and groups
-   */
-  async findByIdWithDetails(userId: string): Promise<UserDetail | null> {
-    // Get the user with manager and creator names
-    const userRes = await this.query<Users & {
+  async findByIdWithDetails(t: TransactionTask | null, userId: string): Promise<UserDetail | null> {
+    const task = this.task(t);
+
+    const userRes = await task.any<Users & {
       reports_to_user_name: string | null;
       created_by_name: string | null;
     }>(
@@ -131,11 +129,10 @@ export class UsersRepository implements IUsersRepository {
       [userId]
     );
 
-    const user = userRes.rows[0];
+    const user = userRes[0];
     if (!user) return null;
 
-    // Get user's roles
-    const rolesRes = await this.query<{ id: string; name: string; code: string }>(
+    const rolesRes = await task.any<{ id: string; name: string; code: string }>(
       `SELECT r.id, r.name, r.code
        FROM roles r
        INNER JOIN user_roles ur ON r.id = ur.role_id
@@ -143,30 +140,26 @@ export class UsersRepository implements IUsersRepository {
       [userId]
     );
 
-    // Get user's groups
-    const groupsRes = await this.query<{ id: string; name: string }>(
+    const groupsRes = await task.any<{ id: string; name: string }>(
       `SELECT g.id, g.name
        FROM groups g
        INNER JOIN user_groups ug ON g.id = ug.group_id
        WHERE ug.user_id = $1 AND g.is_active = true`,
       [userId]
     );
-    const groupsrole = await this.query<{ id: string; name: string }>(
-      `SELECT g.id,g.name
+
+    const groupsrole = await task.any<{ id: string; name: string }>(
+      `SELECT g.id, g.name
        FROM groups g
-       INNER JOIN group_roles gr
-       ON g.id = gr.group_id
-       INNER JOIN roles r
-       ON gr.role_id = r.id
-       inner JOIN user_roles ur
-       ON r.id = ur.role_id
-       inner JOIN users u
-       ON ur.user_id = u.id
+       INNER JOIN group_roles gr ON g.id = gr.group_id
+       INNER JOIN roles r ON gr.role_id = r.id
+       INNER JOIN user_roles ur ON r.id = ur.role_id
+       INNER JOIN users u ON ur.user_id = u.id
        WHERE u.id = $1 and g.is_active = true and r.is_active = true`,
       [userId]
-    )
-    const allGroups = [...groupsRes.rows, ...groupsrole.rows];
+    );
 
+    const allGroups = [...groupsRes, ...groupsrole];
     const groups = Array.from(
       new Map(allGroups.map(group => [group.id, group])).values()
     );
@@ -175,18 +168,16 @@ export class UsersRepository implements IUsersRepository {
       ...user,
       reports_to_user_name: user.reports_to_user_name,
       created_by_name: user.created_by_name,
-      roles: rolesRes.rows,
-      groups: groups
+      roles: rolesRes,
+      groups,
     } as UserDetail;
   }
-  /**
-   * Find all users with pagination
-   */
+
   async findAllPaginated(
+    t: TransactionTask | null,
     filters?: { status: string; email: string; username: string; name: string },
     pagination?: Partial<PaginationParams>
   ): Promise<PaginatedResult<Users>> {
-
     const p = normalizePaginationParams(pagination);
     const offset = getPaginationOffset(p.page, p.limit);
 
@@ -194,56 +185,45 @@ export class UsersRepository implements IUsersRepository {
     const params: unknown[] = [];
     let paramIndex = 1;
 
-    // ---- filters ----
     if (filters?.status) {
       whereClauses.push(`status = $${paramIndex++}`);
       params.push(filters.status);
     }
-
     if (filters?.email) {
       whereClauses.push(`primary_email = $${paramIndex++}`);
       params.push(filters.email);
     }
-
     if (filters?.username) {
       whereClauses.push(`username = $${paramIndex++}`);
       params.push(filters.username);
     }
-
     if (filters?.name) {
       whereClauses.push(`(first_name ILIKE $${paramIndex} OR last_name ILIKE $${paramIndex})`);
       params.push(`%${filters.name}%`);
       paramIndex++;
     }
 
-    const whereSql = whereClauses.length
-      ? `WHERE ${whereClauses.join(' AND ')}`
-      : '';
+    const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    // ---- total count ----
-    const totalRes = await this.query<{ count: string }>(
+    const totalRes = await this.task(t).one<{ count: string }>(
       `SELECT COUNT(*) FROM ${this.tableName} ${whereSql}`,
       params
     );
+    const total = parseInt(totalRes.count ?? '0', 10);
 
-    const total = parseInt(totalRes.rows[0]?.count ?? '0', 10);
-
-    // ---- paginated data ----
-    const dataRes = await this.query<Users>(
+    const dataRes = await this.task(t).any<Users>(
       `SELECT *
-     FROM ${this.tableName}
-     ${whereSql}
-     ORDER BY created_at DESC
-     LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
+       FROM ${this.tableName}
+       ${whereSql}
+       ORDER BY created_at DESC
+       LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
       [...params, p.limit, offset]
     );
 
-    return buildPaginatedResult(dataRes.rows, total, p);
+    return buildPaginatedResult(dataRes, total, p);
   }
 
-
-
-  async create(input: CreateUserInput): Promise<Users> {
+  async create(t: TransactionTask | null, input: CreateUserInput): Promise<Users> {
     const values = [
       input.username,
       input.password,
@@ -281,8 +261,9 @@ export class UsersRepository implements IUsersRepository {
       input.aggregation_format ?? null,
       input.signature ?? null,
       input.created_by ?? null,
-    ]
-    const res = await this.query<Users>(
+    ];
+
+    const res = await this.task(t).one<Users>(
       `INSERT INTO ${this.tableName} (
         username, password, last_name, primary_email,
         status, first_name, title, department, reports_to_user_id,
@@ -294,24 +275,24 @@ export class UsersRepository implements IUsersRepository {
         symbol_placement, time_zone, business_hours, trailing_zero_handling,
         aggregation_format, signature, created_by
       ) VALUES (
-        $1, $2, $3, $4,
-        COALESCE($5, 'active'), $6, $7, $8, $9,
-        $10, $11, $12, $13,
-        $14, $15, $16, $17, $18, $19,
-        $20, $21, $22, $23,
-        $24, $25, $26,
-        $27, $28, $29,
-        $30, $31, $32, $33,
-        $34, $35, $36
+        $1,$2,$3,$4,
+        COALESCE($5, 'active'),$6,$7,$8,$9,
+        $10,$11,$12,$13,
+        $14,$15,$16,$17,$18,$19,
+        $20,$21,$22,$23,
+        $24,$25,$26,
+        $27,$28,$29,
+        $30,$31,$32,$33,
+        $34,$35,$36
       ) RETURNING *`,
       values
     );
 
-    if (!res.rows[0]) throw new Error('User creation failed');
-    return res.rows[0];
+    if (!res) throw new Error('User creation failed');
+    return res;
   }
 
-  async update(input: Users): Promise<Users> {
+  async update(t: TransactionTask | null, input: Users): Promise<Users> {
     const values = [
       input.username,
       input.password,
@@ -350,59 +331,42 @@ export class UsersRepository implements IUsersRepository {
       input.signature ?? null,
       input.created_by ?? null,
       input.id
-    ]
-    const res = await this.query<Users>(
+    ];
+
+    const res = await this.task(t).one<Users>(
       `UPDATE ${this.tableName}
-       SET username = $1,
-       password = $2,
-       last_name = $3,
-       primary_email = $4,
-       status = $5,
-       first_name = $6,
-       title = $7,
-       department = $8,
-       reports_to_user_id = $9,
-       secondary_email = $10,
-       other_email = $11,
-       office_phone = $12,
-       mobile_phone = $13,
-       home_phone = $14,
-       secondary_phone = $15,
-       fax = $16,
-       street = $17,
-       city = $18,
-       state = $19,
-       country = $20,
-       postal_code = $21,
-       default_landing_page = $22,
-       name_format = $23,
-       phone_country_code = $24,
-       full_screen_preview = $25,
-       preferred_currency = $26,
-       digit_grouping_pattern = $27,
-       decimal_separator = $28,
-       decimal_precision = $29,
-       symbol_placement = $30,
-       time_zone = $31,
-       business_hours = $32,
-       trailing_zero_handling = $33,
-       aggregation_format = $34,
-       signature = $35,
-       created_by = $36
+       SET username=$1, password=$2, last_name=$3, primary_email=$4,
+           status=$5, first_name=$6, title=$7, department=$8, reports_to_user_id=$9,
+           secondary_email=$10, other_email=$11, office_phone=$12, mobile_phone=$13,
+           home_phone=$14, secondary_phone=$15, fax=$16, street=$17, city=$18, state=$19,
+           country=$20, postal_code=$21, default_landing_page=$22, name_format=$23,
+           phone_country_code=$24, full_screen_preview=$25, preferred_currency=$26,
+           digit_grouping_pattern=$27, decimal_separator=$28, decimal_precision=$29,
+           symbol_placement=$30, time_zone=$31, business_hours=$32, trailing_zero_handling=$33,
+           aggregation_format=$34, signature=$35, created_by=$36
        WHERE id = $37
        RETURNING *`,
       values
     );
-    if (!res.rows[0]) throw new Error('User not found for update');
-    return res.rows[0];
+
+    if (!res) throw new Error('User not found for update');
+    return res;
   }
 
-  async delete(userId: string): Promise<void> {
-    // soft delete
-    await this.query(
+  async delete(t: TransactionTask | null, userId: string): Promise<void> {
+    await this.task(t).none(
       `UPDATE ${this.tableName}
-             SET status = 'deleted', updated_at = NOW()
-             WHERE id = $1`,
+       SET status = 'deleted', updated_at = NOW()
+       WHERE id = $1`,
+      [userId]
+    );
+  }
+
+  async deactivate(t: TransactionTask | null, userId: string): Promise<void> {
+    await this.task(t).none(
+      `UPDATE ${this.tableName}
+       SET status = 'inactive', updated_at = NOW()
+       WHERE id = $1`,
       [userId]
     );
   }

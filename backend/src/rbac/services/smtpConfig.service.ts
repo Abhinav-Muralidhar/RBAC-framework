@@ -1,82 +1,121 @@
 /**
  * SmtpConfigService
- * 
+ *
  * Service layer for SMTP configuration management.
- * OWNS: SMTP config lifecycle, credential encryption/decryption
+ * OWNS: SMTP config lifecycle
  * MUST NOT: Send emails, evaluate permissions, manage users
  */
+
+import { IDatabase } from 'pg-promise';
+import { withTransaction } from '../utils/transaction.utils';
+import { normalizePaginationParams, PaginatedResult, PaginationParams } from '../utils/pagination.utils';
 
 import { SmtpConfig, SmtpEncryption } from '../models/smtp_config.model';
 import { ISmtpConfigRepository } from '../repositories/smtp_config.repository';
 import { RBACInternalError } from '../errors/rbac.errors';
+import { SmtpConfigCreate } from '../dto/smtp_config.dto';
+import { IAuditService } from './audit.service';
 
 export interface ISmtpConfigService {
-    /**
-     * Get SMTP config by ID
-     * @throws SmtpConfigNotFoundError
-     */
     getById(configId: string): Promise<SmtpConfig>;
-
-    /**
-     * List all SMTP configs in organization
-     */
-    listAll(): Promise<SmtpConfig[]>;
-
-    /**
-     * Get active SMTP config for organization
-     * @throws SmtpConfigNotFoundError if no active config
-     */
-    getActive(): Promise<SmtpConfig>;
-
-    /**
-     * Create new SMTP config
-     * @throws SmtpConfigCreationError
-     */
+    listAll(
+        filters?: { isActive?: boolean },
+        paginationParams?: PaginationParams
+    ): Promise<PaginatedResult<SmtpConfig>>;
     create(
-
-        data: {
-            name: string;
-            host: string;
-            port: number;
-            username?: string;
-            password?: string;
-            encryption: SmtpEncryption;
-            from_email: string;
-            from_name?: string;
-            reply_to_email?: string;
-            is_active?: boolean;
-        },
+        data: SmtpConfigCreate,
         actingUserId: string
     ): Promise<SmtpConfig>;
-
-    /**
-     * Update SMTP config
-     * @throws SmtpConfigNotFoundError
-     */
     update(
-
         configId: string,
         data: Partial<SmtpConfig>,
         actingUserId: string
     ): Promise<SmtpConfig>;
+}
 
-    /**
-     * Delete SMTP config
-     * @throws SmtpConfigNotFoundError
-     */
-    delete(
+export class SmtpConfigService implements ISmtpConfigService {
 
-        configId: string,
+    constructor(
+        private db: IDatabase<unknown>,
+        private smtpConfigRepository: ISmtpConfigRepository,
+        private auditService: IAuditService
+    ) { }
+
+    async getById(configId: string): Promise<SmtpConfig> {
+        return withTransaction(this.db, async (t) => {
+            const config = await this.smtpConfigRepository.findById(t, configId);
+            if (!config) {
+                throw new RBACInternalError(`SMTP config not found: ${configId}`);
+            }
+            return config;
+        });
+    }
+
+    async listAll(
+        filters?: { isActive?: boolean },
+        paginationParams?: PaginationParams
+    ): Promise<PaginatedResult<SmtpConfig>> {
+        return withTransaction(this.db, async (t) => {
+            const params = normalizePaginationParams(paginationParams);
+            return this.smtpConfigRepository.findAll(t, filters, params);
+        });
+    }
+
+    async create(
+        data: SmtpConfigCreate,
         actingUserId: string
-    ): Promise<void>;
+    ): Promise<SmtpConfig> {
+        return withTransaction(this.db, async (t) => {
+            const config = await this.smtpConfigRepository.create(t, data);
+            this.auditService.log(t, {
+                user_id: actingUserId,
+                action: 'create',
+                entity_type: 'smtp_config',
+                entity_id: config.id,
+                old_values: {},  // No old values for create
+                new_values: { ...config } as Record<string, unknown>,
+                status: 'success'
+            }).catch(console.error);
+            return config;
+        });
+    }
 
-    /**
-     * Activate SMTP config (deactivates all others)
-     * @throws SmtpConfigNotFoundError
-     */
-    activate(
-
+    async update(
         configId: string,
+        data: Partial<SmtpConfig>,
         actingUserId: string
-    ): Promise<void>;
+    ): Promise<SmtpConfig> {
+        return withTransaction(this.db, async (t) => {
+            const existing = await this.smtpConfigRepository.findById(t, configId);
+            if (!existing) {
+                throw new RBACInternalError(`SMTP config not found: ${configId}`);
+            }
+
+            const updated: SmtpConfig = {
+                id: configId,
+                name: data.name ?? existing.name as string,
+                host: data.host ?? existing.host as string,
+                port: data.port ?? existing.port as number,
+                username: data.username ?? existing.username as string,
+                password: data.password ?? existing.password as string,
+                encryption: data.encryption ?? existing.encryption as SmtpEncryption,
+                from_email: data.from_email ?? existing.from_email as string,
+                from_name: data.from_name ?? existing.from_name as string,
+                reply_to_email: data.reply_to_email ?? existing.reply_to_email as string,
+                is_active: data.is_active ?? existing.is_active as boolean
+            };
+
+            const updatedConfig = await this.smtpConfigRepository.update(t, configId, updated);
+            this.auditService.log(t, {
+                user_id: actingUserId,
+                action: 'update',
+                entity_type: 'smtp_config',
+                entity_id: configId,
+                old_values: { ...existing } as Record<string, unknown>,
+                new_values: { ...updatedConfig } as Record<string, unknown>,
+                status: 'success'
+            }).catch(console.error);
+            return updatedConfig;
+        });
+    }
 }

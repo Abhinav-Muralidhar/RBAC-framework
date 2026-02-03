@@ -5,7 +5,7 @@ import { withTransaction, TransactionTask } from '../utils/transaction.utils';
 import { CreateOtpTokenInput } from '../types/repository.types';
 import { verifyPassword } from '../utils/crypto.utils';
 
-const MAX_OTP_GENERATE = 5;          // Maximum OTPs per user
+const MAX_OTP_GENERATE = 6;          // Maximum OTPs per user
 const OTP_EXPIRY_MINUTES = 5;        // OTP validity duration
 
 export interface IOtpService {
