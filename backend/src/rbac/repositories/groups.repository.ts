@@ -17,7 +17,7 @@ export interface IGroupRepository {
   findById(t: TransactionTask, id: string): Promise<Groups | null>;
   findByIdWithDetails(t: TransactionTask, id: string): Promise<GroupResponse | null>;
   findByName(t: TransactionTask, name: string, isActive?: boolean): Promise<PaginatedResult<Groups>>;
-  findAllPaginated(t: TransactionTask, filters?: { isActive?: boolean; name?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
+  findAllPaginated(t: TransactionTask, filters?: { isActive?: boolean; name?: string, code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
 }
 
 export interface GroupResponse {
@@ -197,29 +197,48 @@ export class GroupRepository implements IGroupRepository {
     );
   }
 
-  async findAllPaginated(t: TransactionTask, filters?: { isActive?: boolean; name?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>> {
+  async findAllPaginated(
+    t: TransactionTask,
+    filters?: { isActive?: boolean; name?: string; code?: string },
+    pagination?: Partial<PaginationParams>
+  ): Promise<PaginatedResult<Groups>> {
     const p = normalizePaginationParams(pagination);
     const offset = getPaginationOffset(p.page, p.limit);
-    const params: unknown[] = [filters?.isActive ?? true];
-    let whereClause = `WHERE is_active = $1`;
+
+    const params: unknown[] = [];
+    const where: string[] = [];
+
+    // isActive (default true)
+    params.push(filters?.isActive ?? true);
+    where.push(`is_active = $${params.length}`);
 
     if (filters?.name) {
       params.push(`%${filters.name}%`);
-      whereClause += ` AND name ILIKE $2`;
+      where.push(`name ILIKE $${params.length}`);
     }
+
+    if (filters?.code) {
+      params.push(`%${filters.code}%`);
+      where.push(`code ILIKE $${params.length}`);
+    }
+
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
     const totalRes = await this.query<{ count: string }>(
       `SELECT COUNT(*) FROM ${this.tableName} ${whereClause}`,
       params,
       t
     );
+
     params.push(p.limit, offset);
+
     const res = await this.query<Groups>(
       `SELECT *
-       FROM ${this.tableName}
-       ${whereClause}
-       ORDER BY created_at DESC
-       LIMIT $${params.length - 1}
-       OFFSET $${params.length}`,
+     FROM ${this.tableName}
+     ${whereClause}
+     ORDER BY created_at DESC
+     LIMIT $${params.length - 1}
+     OFFSET $${params.length}`,
       params,
       t
     );
