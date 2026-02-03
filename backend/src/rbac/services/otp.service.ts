@@ -1,58 +1,69 @@
 import { IOtpTokenRepository } from '../repositories/otp_token.repository';
 import { OtpTokens } from '../models/otp_tokens.model';
+import { IDatabase } from 'pg-promise';
+import { withTransaction, TransactionTask } from '../utils/transaction.utils';
+import { CreateOtpTokenInput } from '../types/repository.types';
+import { verifyPassword } from '../utils/crypto.utils';
 
 const MAX_OTP_GENERATE = 5;          // Maximum OTPs per user
 const OTP_EXPIRY_MINUTES = 5;        // OTP validity duration
 
-export class OtpService {
-  constructor(private otpRepo: IOtpTokenRepository) { }
+export interface IOtpService {
+  generateOtp(userId: string, sentTo: string, otpHash: string, ipAddress?: string, userAgent?: string): Promise<OtpTokens>;
+  validateOtp(userId: string, otpHash: string): Promise<boolean>;
+  cleanupExpiredOtps(): Promise<void>;
+}
 
-  /** Generate a new OTP for a user */
-  async generateOtp(userId: string, sentTo: string, otpHash: string): Promise<OtpTokens> {
-    // 1. Cleanup expired OTPs first (on-demand)
-    await this.otpRepo.deleteExpired();
+export class OtpService implements IOtpService {
+  constructor(private db: IDatabase<unknown>, private otpRepo: IOtpTokenRepository) { }
 
-    // 2. Fetch latest OTP to check attempt count
-    const latest = await this.otpRepo.findLatestByUser(userId);
+  async generateOtp(userId: string, sentTo: string, otpHash: string, ipAddress = '', userAgent = ''): Promise<OtpTokens> {
+    return withTransaction(this.db, async (t: TransactionTask) => {
+      // 1. Cleanup expired OTPs
+      await this.otpRepo.deleteExpired(t);
 
-    if (latest && latest.attempt_count >= MAX_OTP_GENERATE) {
-      throw new Error(`Maximum OTP generation attempts (${MAX_OTP_GENERATE}) reached`);
-    }
+      // 2. Count OTPs in the last X minutes
+      const recentOtpCount = await this.otpRepo.countRecentOtps(userId, OTP_EXPIRY_MINUTES, t);
+      if (recentOtpCount >= MAX_OTP_GENERATE) {
+        throw new Error(`Maximum OTP generation attempts (${MAX_OTP_GENERATE}) reached`);
+      }
+      // 3. Prepare new OTP
+      const input: CreateOtpTokenInput = {
+        user_id: userId,
+        otp_hash: otpHash,
+        sent_to: sentTo,
+        expires_at: new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000),
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        attempt_count: 1 // new OTP starts with 1
+      };
 
-    // 3. Prepare new OTP data - strict input type
-    const input = {
-      user_id: userId,
-      otp_hash: otpHash,
-      sent_to: sentTo,
-      expires_at: new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000),
-      ip_address: '',      // Can be passed in if you track
-      user_agent: '',      // Can be passed in if you track
-      attempt_count: latest ? latest.attempt_count + 1 : 1
-    };
-
-    // 4. Insert new OTP
-    return await this.otpRepo.create(input);
+      // 4. Insert new OTP atomically
+      return this.otpRepo.create(input, t);
+    });
   }
 
-  /** Validate an OTP and delete it if valid */
   async validateOtp(userId: string, otpHash: string): Promise<boolean> {
-    // Optionally, cleanup expired OTPs first
-    await this.otpRepo.deleteExpired();
-
-    // Atomically check & delete OTP
-    const success = await this.otpRepo.deleteOnSuccess(userId, otpHash);
-
-    if (!success) {
-      // OTP invalid or expired
-      return false;
+    return withTransaction(this.db, async (t: TransactionTask) => {
+      const valiasd = await this.otpRepo.findLatestByUser(userId, t);
+      if (valiasd?.attempt_count ?? 0 >= 5) {
+        throw new Error(`Maximum OTP generation attempts (${MAX_OTP_GENERATE}) reached`);
+      }
+      const success = await this.otpRepo.deleteOnSuccess(userId, otpHash, t);
+      if (!success) {
+        const count = await this.otpRepo.incrementAttempts(userId, t);
+        return false;
+      }
+      return true;
     }
-
-    // OTP existed and deleted → success
-    return true;
+    )
   }
+
 
   /** Optional: manually clean expired OTPs */
   async cleanupExpiredOtps(): Promise<void> {
-    await this.otpRepo.deleteExpired();
+    return withTransaction(this.db, async (t: TransactionTask) => {
+      await this.otpRepo.deleteExpired(t);
+    });
   }
 }

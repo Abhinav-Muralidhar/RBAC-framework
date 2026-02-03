@@ -274,3 +274,23 @@ export interface CreateOtpTokenInput {
     attempt_count?: number;
 }
 
+export interface CreateOrganizationInput {
+    company_name: string;
+    company_logo?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postal_code?: string | null;
+    country?: string | null;
+    country_code?: string | null;
+    phone?: string | null;
+    fax?: string | null;
+    website?: string | null;
+    facebook?: string | null;
+    twitter?: string | null;
+    linkedin?: string | null;
+    financial_year_start_month?: number | null;
+    gstin?: string | null;
+    is_active?: boolean;
+    created_by?: string | null;
+}

@@ -26,12 +26,15 @@ export interface CreateOrganizationRequestDto {
     linkedin?: string;
     financial_year_start_month?: number;
     is_active?: boolean;
+    created_by?: string;
 }
+
 
 export interface UpdateOrganizationRequestDto {
     company_name?: string;
     company_logo?: string;
     address?: string;
+    gstin?: string;
     city?: string;
     state?: string;
     postal_code?: string;
@@ -45,6 +48,7 @@ export interface UpdateOrganizationRequestDto {
     linkedin?: string | null;
     financial_year_start_month?: number | null;
     is_active?: boolean;
+    created_by?: string;
 }
 
 // ============================================================================
