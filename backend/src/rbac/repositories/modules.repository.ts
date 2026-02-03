@@ -1,53 +1,62 @@
-import { Pool, QueryResultRow } from 'pg';
+import { IDatabase, ITask } from 'pg-promise';
 import { Modules } from '../models/modules.model';
 import { CreateModuleInput } from '../types/repository.types';
 
-
 export interface IModuleRepository {
-  findAll(): Promise<Modules[]>;
-  findByCode(code: string): Promise<Modules | null>;
-  findById(id: string): Promise<Modules | null>;
-  create(input: CreateModuleInput): Promise<Modules>;
-  update(id: string, input: Modules): Promise<Modules>;
+  findAll(t?: ITask<unknown>): Promise<Modules[]>;
+  findByCode(t: ITask<unknown> | undefined, code: string): Promise<Modules | null>;
+  findById(t: ITask<unknown> | undefined, id: string): Promise<Modules | null>;
+  create(t: ITask<unknown> | undefined, input: CreateModuleInput): Promise<Modules>;
+  update(t: ITask<unknown> | undefined, id: string, input: Modules): Promise<Modules>;
+  delete(t: ITask<unknown> | undefined, id: string): Promise<void>;
 }
 
 export class ModuleRepository implements IModuleRepository {
   private tableName = 'modules';
 
-  constructor(private pool: InstanceType<typeof Pool>) { }
+  constructor(private db: IDatabase<unknown>) { }
 
-  protected async query<T extends QueryResultRow>(
+  protected query<T>(
     text: string,
-    params?: unknown[]
-  ): Promise<{ rows: T[]; rowCount: number | null }> {
-    return this.pool.query<T>(text, params);
+    params?: unknown[],
+    t?: ITask<unknown>
+  ): Promise<T[]> {
+    return (t ?? this.db).any<T>(text, params);
   }
 
-  async findById(id: string): Promise<Modules | null> {
-    const res = await this.query<Modules>(
+  async findById(
+    t: ITask<unknown> | undefined,
+    id: string
+  ): Promise<Modules | null> {
+    return (t ?? this.db).oneOrNone<Modules>(
       `SELECT * FROM ${this.tableName} WHERE id = $1`,
       [id]
     );
-    return res.rows[0] ?? null;
   }
 
-  async findByCode(code: string): Promise<Modules | null> {
-    const res = await this.query<Modules>(
+  async findByCode(
+    t: ITask<unknown> | undefined,
+    code: string
+  ): Promise<Modules | null> {
+    return (t ?? this.db).oneOrNone<Modules>(
       `SELECT * FROM ${this.tableName} WHERE code = $1`,
       [code]
     );
-    return res.rows[0] ?? null;
   }
 
-  async findAll(): Promise<Modules[]> {
-    const res = await this.query<Modules>(
-      `SELECT * FROM ${this.tableName}`
+  async findAll(t?: ITask<unknown>): Promise<Modules[]> {
+    return this.query<Modules>(
+      `SELECT * FROM ${this.tableName}`,
+      [],
+      t
     );
-    return res.rows;
   }
 
-  async create(input: CreateModuleInput): Promise<Modules> {
-    const res = await this.query<Modules>(
+  async create(
+    t: ITask<unknown> | undefined,
+    input: CreateModuleInput
+  ): Promise<Modules> {
+    return (t ?? this.db).one<Modules>(
       `INSERT INTO ${this.tableName} (name, code, description, is_active)
        VALUES ($1, $2, $3, COALESCE($4, true))
        RETURNING *`,
@@ -58,11 +67,13 @@ export class ModuleRepository implements IModuleRepository {
         input.is_active ?? null
       ]
     );
-    if (!res.rows[0]) throw new Error('Module creation failed');
-    return res.rows[0];
   }
 
-  async update(id: string, input: Modules): Promise<Modules> {
+  async update(
+    t: ITask<unknown> | undefined,
+    id: string,
+    input: Modules
+  ): Promise<Modules> {
     const updates: string[] = [];
     const values: unknown[] = [id];
     let paramIdx = 2;
@@ -85,30 +96,32 @@ export class ModuleRepository implements IModuleRepository {
     }
 
     if (!updates.length) {
-      const existing = await this.findById(id);
+      const existing = await this.findById(t, id);
       if (!existing) throw new Error(`Module ${id} not found`);
       return existing;
     }
 
     updates.push('updated_at = NOW()');
 
-    const res = await this.query<Modules>(
+    return (t ?? this.db).one<Modules>(
       `UPDATE ${this.tableName}
        SET ${updates.join(', ')}
        WHERE id = $1
        RETURNING *`,
       values
     );
-
-    if (!res.rows[0]) throw new Error('Module not found for update');
-    return res.rows[0];
   }
 
-  async delete(id: string): Promise<void> {
-    await this.query(
-      `UPDATE ${this.tableName} SET is_active = false, updated_at = NOW() WHERE id = $1`,
+  async delete(
+    t: ITask<unknown> | undefined,
+    id: string
+  ): Promise<void> {
+    await (t ?? this.db).none(
+      `UPDATE ${this.tableName}
+       SET is_active = false,
+           updated_at = NOW()
+       WHERE id = $1`,
       [id]
     );
   }
-
 }
