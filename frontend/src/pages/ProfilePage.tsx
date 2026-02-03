@@ -121,11 +121,9 @@ export function ProfilePage() {
     const handleSaveProfile = async (e: FormEvent) => {
         e.preventDefault();
         if (!user) return;
-
         setIsSaving(true);
         setError('');
         setSuccess('');
-
         try {
             await usersApi.update(user.id, {
                 ...formData,
@@ -186,6 +184,40 @@ export function ProfilePage() {
             return;
         }
 
+        try {
+            // Mock API call to send OTP
+            // await authApi.sendOtp(user.email); 
+            setTimeout(() => setOtpStep('sent'), 800);
+        } catch (err) {
+            setError('Failed to send verification code.');
+            setActiveFlow('idle');
+        }
+    };
+
+    const verifyOtp = async () => {
+        if (!otpCode) return;
+        setOtpStep('verifying');
+
+        try {
+            // Mock API verify
+            // await authApi.verifyOtp(otpCode);
+            setTimeout(() => {
+                if (otpCode === '123456') { // Mock check
+                    setOtpStep('verified');
+                } else {
+                    setError('Invalid verification code.');
+                    setOtpStep('sent');
+                }
+            }, 800);
+        } catch (err) {
+            setError('Verification failed.');
+            setOtpStep('sent');
+        }
+    };
+
+    // --- Final Actions (After OTP) ---
+    const handleFinalPasswordChange = async () => {
+        if (!user || newPassword !== confirmPassword) return;
         setIsSaving(true);
 
         try {
