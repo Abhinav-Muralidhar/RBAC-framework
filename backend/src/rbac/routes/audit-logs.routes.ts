@@ -8,9 +8,13 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { Pool } from 'pg';
-import { AuditLogsRepository } from '../repositories/audit_logs.repository';
 import { parseId, parsePagination, getRequiredParam } from './_paramUtils';
+import { AuditService } from '../services/audit.service';
+import { AuditLogsRepository } from '../repositories/audit_logs.repository';
+import { IDatabase } from 'pg-promise';
+import { EvaluationService } from '../services/evaluation.service';
+import { PermissionsRepository } from '../repositories/permissions.repository';
+import { AuditLogListFilterDto } from '../dto/audit_log.dto';
 
 /**
  * Standard response envelope
@@ -27,11 +31,33 @@ function sendError(res: Response, status: number, message: string, code?: string
     });
 }
 
-export function createAuditLogsRouter(pool: Pool): Router {
+export function parseAuditLogFilters(query: any): AuditLogListFilterDto {
+    return {
+        user_id: query.user_id,
+        action: query.action,
+        entity_type: query.entity_type,
+        entity_id: query.entity_id,
+        status: query.status,
+        start_date: query.start_date,
+        end_date: query.end_date
+    };
+}
+
+
+export function createAuditLogsRouter(db: IDatabase<unknown>): Router {
     const router = Router();
 
-    // Initialize repository
-    const auditLogsRepository = new AuditLogsRepository(pool);
+
+    const evaluationService = new EvaluationService(
+        new PermissionsRepository(db)
+    );
+
+    // --- Audit service ---
+    const auditLogService = new AuditService(
+        new AuditLogsRepository(db),
+        evaluationService,
+    );
+
 
     /**
      * GET /rbac/audit-logs
@@ -40,12 +66,13 @@ export function createAuditLogsRouter(pool: Pool): Router {
     router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         try {
             const pagination = parsePagination(req.query);
-            const offset = (pagination.page - 1) * pagination.limit;
-            const logs = await auditLogsRepository.findAllWithDetails(pagination.limit, offset);
+            const logs = await auditLogService.getAll(req.user!.id, parseAuditLogFilters(req.query), pagination);
 
             sendSuccess(res, logs, {
-                page: pagination.page,
-                limit: pagination.limit
+                page: logs.pagination.page,
+                limit: logs.pagination.limit,
+                total: logs.pagination.total,
+                totalPages: logs.pagination.totalPages
             });
         } catch (error) {
             next(error);
@@ -58,53 +85,9 @@ export function createAuditLogsRouter(pool: Pool): Router {
      */
     router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const logId = parseId(req.params.id, 'logId');
-            const log = await auditLogsRepository.findByIdWithDetails(logId);
-            if (!log) {
-                return sendError(res, 404, `Audit log not found: ${logId}`, 'AUDIT_LOG_NOT_FOUND');
-            }
+            const logId = parseId(req.params.id, 'id');
+            const log = await auditLogService.getById(req.user!.id, logId);
             sendSuccess(res, log);
-        } catch (error) {
-            next(error);
-        }
-    });
-
-    /**
-     * GET /rbac/audit-logs/user/:userId
-     * Get audit logs for a specific user
-     */
-    router.get('/user/:userId', async (req: Request, res: Response, next: NextFunction) => {
-        try {
-            const userId = parseId(req.params.userId, 'userId');
-            const pagination = parsePagination(req.query);
-            const offset = (pagination.page - 1) * pagination.limit;
-            const logs = await auditLogsRepository.findByUser(userId, pagination.limit, offset);
-
-            sendSuccess(res, logs, {
-                page: pagination.page,
-                limit: pagination.limit
-            });
-        } catch (error) {
-            next(error);
-        }
-    });
-
-    /**
-     * GET /rbac/audit-logs/entity/:entityType/:entityId
-     * Get audit logs for a specific entity
-     */
-    router.get('/entity/:entityType/:entityId', async (req: Request, res: Response, next: NextFunction) => {
-        try {
-            const entityType = getRequiredParam(req.params, 'entityType');
-            const entityId = getRequiredParam(req.params, 'entityId');
-            const pagination = parsePagination(req.query);
-            const offset = (pagination.page - 1) * pagination.limit;
-            const logs = await auditLogsRepository.findByEntity(entityType, entityId, pagination.limit, offset);
-
-            sendSuccess(res, logs, {
-                page: pagination.page,
-                limit: pagination.limit
-            });
         } catch (error) {
             next(error);
         }

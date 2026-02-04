@@ -5,6 +5,7 @@
  */
 
 import pgPromise, { IDatabase, ITask } from 'pg-promise';
+import { db } from '../../db';
 
 export type TransactionTask = ITask<unknown>;
 
@@ -15,7 +16,6 @@ export type TransactionTask = ITask<unknown>;
  * On error: rolls back and re-throws
  */
 export async function withTransaction<T>(
-    db: IDatabase<unknown>,
     callback: (t: TransactionTask) => Promise<T>
 ): Promise<T> {
     return db.tx(async (t) => {

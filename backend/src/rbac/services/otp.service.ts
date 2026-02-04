@@ -1,6 +1,5 @@
 import { IOtpTokenRepository } from '../repositories/otp_token.repository';
 import { OtpTokens } from '../models/otp_tokens.model';
-import { IDatabase } from 'pg-promise';
 import { withTransaction, TransactionTask } from '../utils/transaction.utils';
 import { CreateOtpTokenInput } from '../types/repository.types';
 import { verifyPassword } from '../utils/crypto.utils';
@@ -15,10 +14,10 @@ export interface IOtpService {
 }
 
 export class OtpService implements IOtpService {
-  constructor(private db: IDatabase<unknown>, private otpRepo: IOtpTokenRepository) { }
+  constructor(private otpRepo: IOtpTokenRepository) { }
 
   async generateOtp(userId: string, sentTo: string, otpHash: string, ipAddress = '', userAgent = ''): Promise<OtpTokens> {
-    return withTransaction(this.db, async (t: TransactionTask) => {
+    return withTransaction(async (t: TransactionTask) => {
       // 1. Cleanup expired OTPs
       await this.otpRepo.deleteExpired(t);
 
@@ -44,7 +43,7 @@ export class OtpService implements IOtpService {
   }
 
   async validateOtp(userId: string, otpHash: string): Promise<boolean> {
-    return withTransaction(this.db, async (t: TransactionTask) => {
+    return withTransaction(async (t: TransactionTask) => {
       const valiasd = await this.otpRepo.findLatestByUser(userId, t);
       if (valiasd?.attempt_count ?? 0 >= 5) {
         throw new Error(`Maximum OTP generation attempts (${MAX_OTP_GENERATE}) reached`);
@@ -62,7 +61,7 @@ export class OtpService implements IOtpService {
 
   /** Optional: manually clean expired OTPs */
   async cleanupExpiredOtps(): Promise<void> {
-    return withTransaction(this.db, async (t: TransactionTask) => {
+    return withTransaction(async (t: TransactionTask) => {
       await this.otpRepo.deleteExpired(t);
     });
   }

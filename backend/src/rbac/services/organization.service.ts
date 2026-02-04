@@ -1,5 +1,5 @@
 import { IDatabase } from 'pg-promise';
-import { withTransaction } from '../utils/transaction.utils';
+import { TransactionTask, withTransaction } from '../utils/transaction.utils';
 import { IOrganizationRepository } from '../repositories/organizations.repository';
 import { Organizations } from '../models/organizations.model';
 import { DuplicateAssignmentError, OrganizationNotFoundError } from '../errors/rbac.errors';
@@ -17,7 +17,6 @@ export interface IOrganizationService {
 
 export class OrganizationService implements IOrganizationService {
     constructor(
-        private db: IDatabase<unknown>,
         private organizationRepository: IOrganizationRepository,
         private auditService: IAuditService
     ) { }
@@ -26,7 +25,7 @@ export class OrganizationService implements IOrganizationService {
         data: CreateOrganizationRequestDto,
         acting_user_id: string
     ): Promise<Organizations> {
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const existing = await this.organizationRepository.getAll(
                 t,
                 { name: data.company_name },
@@ -65,13 +64,13 @@ export class OrganizationService implements IOrganizationService {
     }
 
     async getOrganizations(filters?: { is_active?: boolean; name?: string; code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Organizations>> {
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             return this.organizationRepository.getAll(t, filters, pagination);
         });
     }
 
     async getOrganization(id: string): Promise<Organizations> {
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const organization = await this.organizationRepository.getById(t, id);
             if (!organization) {
                 throw new OrganizationNotFoundError(id);
@@ -84,7 +83,7 @@ export class OrganizationService implements IOrganizationService {
         id: string,
         data: UpdateOrganizationRequestDto
     ): Promise<Organizations> {
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const organization = await this.organizationRepository.getById(t, id);
             if (!organization) {
                 throw new OrganizationNotFoundError(id);

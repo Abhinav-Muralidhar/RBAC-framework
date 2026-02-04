@@ -10,8 +10,8 @@ import { AuditLogWithDetailsRow, IAuditLogsRepository } from '../repositories/au
 import { PaginatedResult, PaginationParams } from '../utils/pagination.utils';
 import { AuditLogFilters } from '../types/repository.types';
 import { IEvaluationService } from './evaluation.service';
-import { TransactionTask } from '../utils/transaction.utils'; // adjust path if needed
-
+import { TransactionTask, withTransaction } from '../utils/transaction.utils'; // adjust path if needed
+import { IDatabase } from 'pg-promise';
 const MODULE_CODE = 'SETTINGS';
 
 export interface IAuditService {
@@ -42,7 +42,6 @@ export interface IAuditService {
      * Get audit log by ID
      */
     getById(
-        t: TransactionTask | undefined,
         actingUserId: string,
         logId: string
     ): Promise<AuditLogWithDetailsRow>;
@@ -51,7 +50,6 @@ export interface IAuditService {
      * Query audit logs with optional filters
      */
     getAll(
-        t: TransactionTask | undefined,
         actingUserId: string,
         filters?: AuditLogFilters,
         pagination?: Partial<PaginationParams>
@@ -65,7 +63,7 @@ export class AuditService implements IAuditService {
 
     constructor(
         private readonly auditLogsRepository: IAuditLogsRepository,
-        private evaluationService: IEvaluationService
+        private evaluationService: IEvaluationService,
     ) { }
 
     async log(
@@ -103,25 +101,23 @@ export class AuditService implements IAuditService {
     }
 
     async getById(
-        t: TransactionTask | undefined,
         actingUserId: string,
         logId: string
     ): Promise<AuditLogWithDetailsRow> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        const log = await this.auditLogsRepository.findByIdWithDetails(t, logId);
-        if (!log) {
-            throw new Error(`Audit log not found: ${logId}`);
-        }
-        return log;
+        return withTransaction(async (t: TransactionTask) => {
+            await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
+            const log = await this.auditLogsRepository.findByIdWithDetails(t, logId);
+            if (!log) {
+                throw new Error(`Audit log not found: ${logId}`);
+            }
+            return log;
+        });
     }
 
-    async getAll(
-        t: TransactionTask | undefined,
-        actingUserId: string,
-        filters: AuditLogFilters = {},
-        pagination?: Partial<PaginationParams>
-    ): Promise<PaginatedResult<AuditLogWithDetailsRow>> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        return this.auditLogsRepository.findAllWithDetails(t, filters, pagination);
+    async getAll(actingUserId: string, filters: AuditLogFilters = {}, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogWithDetailsRow>> {
+        return withTransaction(async (t: TransactionTask) => {
+            await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
+            return this.auditLogsRepository.findAllWithDetails(t, filters, pagination);
+        });
     }
 }

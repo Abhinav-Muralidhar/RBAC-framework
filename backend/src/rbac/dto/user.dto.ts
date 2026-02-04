@@ -117,6 +117,8 @@ export interface UpdateUserRequestDto {
 
     aggregation_format?: string | null;
     signature?: string | null;
+    last_login_at?: Date | null;
+    password_changed_at?: Date | null;
 }
 
 // ============================================================================

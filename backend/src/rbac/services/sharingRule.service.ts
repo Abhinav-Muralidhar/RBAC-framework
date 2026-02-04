@@ -7,7 +7,7 @@
  */
 
 import { IDatabase } from 'pg-promise';
-import { withTransaction } from '../utils/transaction.utils';
+import { TransactionTask, withTransaction } from '../utils/transaction.utils';
 import { SharingRules, SharingRuleType } from '../models/sharing_rules.model';
 import { ISharingRulesRepository } from '../repositories/sharing_rules.repository';
 import { IEvaluationService } from './evaluation.service';
@@ -28,7 +28,6 @@ export interface ISharingRuleService {
 }
 export class SharingRuleService implements ISharingRuleService {
     constructor(
-        private db: IDatabase<unknown>,
         private sharingRulesRepository: ISharingRulesRepository,
         private evaluationService: IEvaluationService,
         private auditService: IAuditService
@@ -37,7 +36,7 @@ export class SharingRuleService implements ISharingRuleService {
     async getById(actingUserId: string, ruleId: string): Promise<SharingRules> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const rule = await this.sharingRulesRepository.findById(t, ruleId);
             if (!rule) throw new SharingRuleNotFoundError(ruleId);
             return rule;
@@ -48,7 +47,7 @@ export class SharingRuleService implements ISharingRuleService {
     async listAll(actingUserId: string, filters?: { is_active?: boolean }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<SharingRules>> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
-        return withTransaction(this.db, (t) =>
+        return withTransaction(async (t: TransactionTask) =>
             this.sharingRulesRepository.findAll(t, filters, pagination)
         );
     }
@@ -60,7 +59,7 @@ export class SharingRuleService implements ISharingRuleService {
     ): Promise<SharingRules> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const existing = await this.sharingRulesRepository.findById(t, ruleId);
             if (!existing) throw new SharingRuleNotFoundError(ruleId);
 
@@ -92,7 +91,7 @@ export class SharingRuleService implements ISharingRuleService {
     async delete(actingUserId: string, ruleId: string): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const existing = await this.sharingRulesRepository.findById(t, ruleId);
             if (!existing) throw new SharingRuleNotFoundError(ruleId);
 

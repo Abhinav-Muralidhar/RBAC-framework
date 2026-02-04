@@ -5,7 +5,6 @@
  * All mutating operations require RBAC enforcement.
  * All mutations are audit logged.
  */
-import { IDatabase } from 'pg-promise';
 import { withTransaction, TransactionTask } from '../utils/transaction.utils';
 import { Groups } from '../models/groups.model';
 import { IGroupRepository } from '../repositories/groups.repository';
@@ -33,18 +32,17 @@ export interface IUnifiedGroupService {
 
 export class UnifiedGroupService implements IUnifiedGroupService {
     constructor(
-        private db: IDatabase<unknown>,
         private groupRepository: IGroupRepository,
         private groupRoleRepository: IGroupRoleRepository,
         private evaluationService: IEvaluationService,
         private auditService: IAuditService,
-        private userRepository: IUserGroupsRepository
+        private userGroupsRepository: IUserGroupsRepository
     ) { }
 
     async getById(actingUserId: string, groupId: string): Promise<GroupResponseDto> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const group = await this.groupRepository.findByIdWithDetails(t, groupId);
             if (!group) throw new GroupNotFoundError(groupId);
             return group;
@@ -58,7 +56,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
     ): Promise<PaginatedResult<Groups>> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             return this.groupRepository.findAllPaginated(t, filters, pagination);
         });
     }
@@ -69,7 +67,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
         if (!data.name) throw new Error('Group name is required');
         if (!data.code) throw new Error('Group code is required');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const existing = await this.groupRepository.findByName(t, data.name);
             if (existing) {
                 throw new DuplicateAssignmentError(`group name '${data.name}'`);
@@ -90,7 +88,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
 
             const users = data.users.map(u => u.id);
             if (users.length > 0) {
-                await this.userRepository.replaceUsers(t, group.id, users, actingUserId);
+                await this.userGroupsRepository.replaceUsers(t, group.id, users, actingUserId);
             }
 
             this.auditService.log(t, {
@@ -114,7 +112,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
     ): Promise<Groups> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const existing = await this.groupRepository.findById(t, groupId);
             if (!existing) throw new GroupNotFoundError(groupId);
 
@@ -137,7 +135,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
 
             const users = data.users.map(u => u.id);
             if (users.length > 0) {
-                await this.userRepository.replaceUsers(t, groupId, users, actingUserId);
+                await this.userGroupsRepository.replaceUsers(t, groupId, users, actingUserId);
             }
 
             this.auditService.log(t, {
@@ -157,7 +155,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
     async delete(actingUserId: string, groupId: string): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const existing = await this.groupRepository.findById(t, groupId);
             if (!existing) throw new GroupNotFoundError(groupId);
 

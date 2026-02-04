@@ -11,6 +11,9 @@ import { AuthSessionService } from '../services/authSession.service';
 import { AuthSessionsRepository } from '../repositories/auth_sessions.repository';
 import { IAuditService } from '../services/audit.service';
 import { parseId } from './_paramUtils';
+import { IDatabase } from 'pg-promise';
+import { EvaluationService } from '../services/evaluation.service';
+import { PermissionsRepository } from '../repositories/permissions.repository';
 
 /**
  * Standard response envelope
@@ -19,12 +22,17 @@ function sendSuccess<T>(res: Response, data: T, meta?: Record<string, unknown>) 
     res.json({ data, error: null, meta: meta ?? {} });
 }
 
-export function createSessionsRouter(pool: Pool, auditService: IAuditService): Router {
+export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAuditService): Router {
     const router = Router();
 
     // Initialize repository and service
-    const authSessionsRepository = new AuthSessionsRepository(pool);
-    const authSessionService = new AuthSessionService(authSessionsRepository, auditService);
+    const authSessionsRepository = new AuthSessionsRepository(db);
+    // Initialize services
+    const permissionsRepository = new PermissionsRepository(db);
+    const evaluationService = new EvaluationService(
+        permissionsRepository
+    );
+    const authSessionService = new AuthSessionService(authSessionsRepository, auditService, evaluationService);
 
     /**
      * GET /rbac/sessions/current
@@ -58,16 +66,14 @@ export function createSessionsRouter(pool: Pool, auditService: IAuditService): R
     router.get('/user/:userId', async (req: Request, res: Response, next: NextFunction) => {
         try {
             const userId = parseId(req.params.userId, 'userId');
-            const sessions = await authSessionsRepository.findActiveByUser(userId);
+            const sessions = await authSessionService.listActiveByUser(userId);
 
-            sendSuccess(res, sessions.map(s => ({
-                id: s.id,
-                user_id: s.user_id,
-                login_at: s.login_at,
-                expires_at: s.expires_at,
-                ip_address: s.ip_address,
-                user_agent: s.user_agent
-            })));
+            sendSuccess(res, sessions.data, {
+                page: sessions.pagination.page,
+                limit: sessions.pagination.limit,
+                total: sessions.pagination.total,
+                totalPages: sessions.pagination.totalPages
+            });
         } catch (error) {
             next(error);
         }
@@ -117,7 +123,7 @@ export function createSessionsRouter(pool: Pool, auditService: IAuditService): R
             const actingUserId = req.user!.id;
             const targetUserId = parseId(req.params.userId, 'userId');
             const count = await authSessionService.revokeAllByUser(actingUserId, targetUserId);
-            sendSuccess(res, { revoked: true, count });
+            sendSuccess(res, { revoked: true });
         } catch (error) {
             next(error);
         }

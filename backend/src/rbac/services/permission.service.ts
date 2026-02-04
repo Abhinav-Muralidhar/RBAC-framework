@@ -9,7 +9,7 @@
  */
 
 import { IDatabase } from 'pg-promise';
-import { withTransaction } from '../utils/transaction.utils';
+import { TransactionTask, withTransaction } from '../utils/transaction.utils';
 import { Permissions, PermissionAction } from '../models/permissions.model';
 import { Profiles } from '../models/profiles.model';
 import { PermissionEffect } from '../models/profile_permissions.model';
@@ -57,7 +57,6 @@ export interface IPermissionService {
 
 export class PermissionService implements IPermissionService {
     constructor(
-        private db: IDatabase<unknown>,
         private permissionsRepository: IPermissionsRepository,
         private profilesRepository: IProfilesRepository,
         private profilePermissionsRepository: IProfilePermissionsRepository,
@@ -71,7 +70,7 @@ export class PermissionService implements IPermissionService {
     async getPermissionById(actingUserId: string, permissionId: string): Promise<Permissions> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const permission = await this.permissionsRepository.findById(t, permissionId);
             if (!permission) {
                 throw new PermissionNotFoundError(permissionId);
@@ -83,7 +82,7 @@ export class PermissionService implements IPermissionService {
     async getPermissionByModuleAction(actingUserId: string, moduleCode: string, action: PermissionAction): Promise<Permissions> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const module = await this.moduleRepository.findByCode(t, moduleCode);
             if (!module) {
                 throw new ModuleNotFoundError(moduleCode);
@@ -101,7 +100,7 @@ export class PermissionService implements IPermissionService {
     async listPermissionsByModule(actingUserId: string, moduleCode: string): Promise<Permissions[]> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const module = await this.moduleRepository.findByCode(t, moduleCode);
             if (!module) {
                 throw new ModuleNotFoundError(moduleCode);
@@ -115,7 +114,7 @@ export class PermissionService implements IPermissionService {
     async listAllPermissions(actingUserId: string, filters?: { module_id?: string; action?: PermissionAction; }): Promise<Permissions[]> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             return this.permissionsRepository.findAll(t, filters);
         });
     }
@@ -123,7 +122,7 @@ export class PermissionService implements IPermissionService {
     async createPermission(actingUserId: string, data: CreatePermissionRequestDto): Promise<Permissions> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const module = await this.moduleRepository.findById(t, data.module_id);
             if (!module) {
                 throw new ModuleNotFoundError(data.module_id);
@@ -156,7 +155,7 @@ export class PermissionService implements IPermissionService {
     ): Promise<Permissions> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const existing = await this.permissionsRepository.findById(t, permissionId);
             if (!existing) {
                 throw new PermissionNotFoundError(permissionId);
@@ -176,7 +175,7 @@ export class PermissionService implements IPermissionService {
     async deletePermission(actingUserId: string, permissionId: string): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const existing = await this.permissionsRepository.findById(t, permissionId);
             if (!existing) {
                 throw new PermissionNotFoundError(permissionId);
@@ -192,7 +191,7 @@ export class PermissionService implements IPermissionService {
     ): Promise<Array<{ permission: Permissions; effect: PermissionEffect }>> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const profilePermissions =
                 await this.profilePermissionsRepository.findPermissionsByProfile(t, profileId);
 
@@ -222,7 +221,7 @@ export class PermissionService implements IPermissionService {
     ): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             //throw error if role doesnt exist
             const role = await this.roleRepository.findById(t, roleId);
             if (!role) {
@@ -256,7 +255,7 @@ export class PermissionService implements IPermissionService {
     ): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const profile = await this.profilesRepository.findById(t, profileId);
             if (!profile) {
                 throw new ProfileNotFoundError(profileId);
@@ -277,7 +276,7 @@ export class PermissionService implements IPermissionService {
     ): Promise<Profiles[]> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const roleProfiles =
                 await this.roleProfilesRepository.findProfilesByRole(t, roleId);
 

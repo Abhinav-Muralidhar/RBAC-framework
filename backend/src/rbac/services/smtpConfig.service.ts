@@ -7,7 +7,7 @@
  */
 
 import { IDatabase } from 'pg-promise';
-import { withTransaction } from '../utils/transaction.utils';
+import { TransactionTask, withTransaction } from '../utils/transaction.utils';
 import { normalizePaginationParams, PaginatedResult, PaginationParams } from '../utils/pagination.utils';
 
 import { SmtpConfig, SmtpEncryption } from '../models/smtp_config.model';
@@ -36,13 +36,12 @@ export interface ISmtpConfigService {
 export class SmtpConfigService implements ISmtpConfigService {
 
     constructor(
-        private db: IDatabase<unknown>,
         private smtpConfigRepository: ISmtpConfigRepository,
         private auditService: IAuditService
     ) { }
 
     async getById(configId: string): Promise<SmtpConfig> {
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const config = await this.smtpConfigRepository.findById(t, configId);
             if (!config) {
                 throw new RBACInternalError(`SMTP config not found: ${configId}`);
@@ -55,7 +54,7 @@ export class SmtpConfigService implements ISmtpConfigService {
         filters?: { isActive?: boolean },
         paginationParams?: PaginationParams
     ): Promise<PaginatedResult<SmtpConfig>> {
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const params = normalizePaginationParams(paginationParams);
             return this.smtpConfigRepository.findAll(t, filters, params);
         });
@@ -65,7 +64,7 @@ export class SmtpConfigService implements ISmtpConfigService {
         data: SmtpConfigCreate,
         actingUserId: string
     ): Promise<SmtpConfig> {
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const config = await this.smtpConfigRepository.create(t, data);
             this.auditService.log(t, {
                 user_id: actingUserId,
@@ -85,7 +84,7 @@ export class SmtpConfigService implements ISmtpConfigService {
         data: Partial<SmtpConfig>,
         actingUserId: string
     ): Promise<SmtpConfig> {
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const existing = await this.smtpConfigRepository.findById(t, configId);
             if (!existing) {
                 throw new RBACInternalError(`SMTP config not found: ${configId}`);

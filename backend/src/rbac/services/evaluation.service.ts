@@ -61,13 +61,7 @@ export interface IEvaluationService {
  */
 export class EvaluationService implements IEvaluationService {
     constructor(
-        private readonly moduleRepository: IModuleRepository,
-        private readonly userRoleRepository: IUserRoleRepository,
-        private readonly roleProfilesRepository: IRoleProfilesRepository,
-        private readonly profilePermissionsRepository: IProfilePermissionsRepository,
         private readonly permissionsRepository: IPermissionsRepository,
-        private readonly usersRepository: IUsersRepository,
-        private db: IDatabase<unknown>,
     ) { }
 
     /**
@@ -88,7 +82,7 @@ export class EvaluationService implements IEvaluationService {
         moduleCode: string,
         action: string
     ): Promise<PermissionDecision> {
-        return withTransaction(this.db, async (t) => {  // wrap in transaction
+        return withTransaction(async (t: TransactionTask) => {  // wrap in transaction
             try {
                 const effects = await this.permissionsRepository.findEffectsByUserAndModuleAction(t,
                     userId,
@@ -162,7 +156,7 @@ export class EvaluationService implements IEvaluationService {
         userId: string,
         requests: Array<{ moduleCode: string; action: string }>
     ): Promise<PermissionDecision[]> {
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const results: PermissionDecision[] = [];
             for (const req of requests) {
                 const decision = await this.evaluate(userId, req.moduleCode, req.action);

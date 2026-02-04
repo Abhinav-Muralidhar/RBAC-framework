@@ -78,6 +78,7 @@ export interface UserDetail {
 export interface IUsersRepository {
   findById(t: TransactionTask | null, userId: string): Promise<Users | null>;
   findByIdWithDetails(t: TransactionTask | null, userId: string): Promise<UserDetail | null>;
+  findByUsername(t: TransactionTask | null, username: string): Promise<Users | null>;
   findAllPaginated(t: TransactionTask | null, filters?: { status: string, email: string, username: string, name: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Users>>;
   create(t: TransactionTask | null, input: CreateUserInput): Promise<Users>;
   update(t: TransactionTask | null, input: Users): Promise<Users>;
@@ -92,6 +93,14 @@ export class UsersRepository implements IUsersRepository {
 
   private task(t: TransactionTask | null) {
     return t ?? this.db;
+  }
+
+  async findByUsername(t: TransactionTask | null, username: string): Promise<Users | null> {
+    const res = await this.task(t).any<Users>(
+      `SELECT * FROM ${this.tableName} WHERE username = $1`,
+      [username]
+    );
+    return res[0] ?? null;
   }
 
   async findById(
@@ -330,6 +339,8 @@ export class UsersRepository implements IUsersRepository {
       input.aggregation_format ?? null,
       input.signature ?? null,
       input.created_by ?? null,
+      input.last_login_at ?? null,
+      input.password_changed_at ?? null,
       input.id
     ];
 
@@ -343,8 +354,8 @@ export class UsersRepository implements IUsersRepository {
            phone_country_code=$24, full_screen_preview=$25, preferred_currency=$26,
            digit_grouping_pattern=$27, decimal_separator=$28, decimal_precision=$29,
            symbol_placement=$30, time_zone=$31, business_hours=$32, trailing_zero_handling=$33,
-           aggregation_format=$34, signature=$35, created_by=$36
-       WHERE id = $37
+           aggregation_format=$34, signature=$35, created_by=$36, last_login_at=$37, password_changed_at=$38
+       WHERE id = $39
        RETURNING *`,
       values
     );

@@ -7,7 +7,7 @@
  */
 
 import { IDatabase } from 'pg-promise';
-import { withTransaction } from '../utils/transaction.utils';
+import { TransactionTask, withTransaction } from '../utils/transaction.utils';
 import { IUsersRepository, UserDetail } from '../repositories/users.repository';
 import { Users, UserStatus } from '../models/users.model';
 import { hashPassword, validatePassword } from '../utils/crypto.utils';
@@ -26,15 +26,21 @@ export interface IUserService {
     update(actingUserId: string, id: string, data: UpdateUserRequestDto): Promise<Users>;
     delete(actingUserId: string, id: string): Promise<void>;
     getById(actingUserId: string, id: string): Promise<UserDetail | null>;
+    findByUsername(username: string): Promise<Users | null>;
 }
 
 export class UserService implements IUserService {
     constructor(
-        private db: IDatabase<unknown>,
         private userRepository: IUsersRepository,
         private evaluationService: IEvaluationService,
-        private auditService: IAuditService
+        private auditService: IAuditService,
     ) { }
+
+    async findByUsername(username: string): Promise<Users | null> {
+        return withTransaction(async (t: TransactionTask) => {
+            return this.userRepository.findByUsername(t, username);
+        });
+    }
 
 
     async listPaginated(
@@ -44,7 +50,7 @@ export class UserService implements IUserService {
     ): Promise<PaginatedResult<Users>> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             return this.userRepository.findAllPaginated(t, filters, pagination);
         });
     }
@@ -52,14 +58,14 @@ export class UserService implements IUserService {
     async getById(actingUserId: string, id: string): Promise<UserDetail | null> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             return this.userRepository.findByIdWithDetails(t, id);
         });
     }
 
     async create(actingUserId: string, data: CreateUserRequestDto): Promise<Users> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             if (data.password) {
                 validatePassword(data.password);
                 data.password = await hashPassword(data.password);
@@ -93,7 +99,7 @@ export class UserService implements IUserService {
     async update(actingUserId: string, id: string, data: UpdateUserRequestDto): Promise<Users> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const oldUser = await this.userRepository.findById(t, id);
 
             const userData = { ...data } as any;
@@ -109,6 +115,8 @@ export class UserService implements IUserService {
                 id: id,
                 created_at: oldUser!.created_at,
                 status: data.status ?? oldUser!.status,
+                last_login_at: null,
+                password_changed_at: null,
             };
 
             const updatedUser = await this.userRepository.update(t, updateUserData);
@@ -130,7 +138,7 @@ export class UserService implements IUserService {
     async delete(actingUserId: string, id: string): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const oldUser = await this.userRepository.findById(t, id);
 
             await this.userRepository.delete(t, id);
@@ -150,7 +158,7 @@ export class UserService implements IUserService {
     async deactivate(actingUserId: string, id: string): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
 
-        return withTransaction(this.db, async (t) => {
+        return withTransaction(async (t: TransactionTask) => {
             const oldUser = await this.userRepository.findById(t, id);
 
             await this.userRepository.deactivate(t, id);
