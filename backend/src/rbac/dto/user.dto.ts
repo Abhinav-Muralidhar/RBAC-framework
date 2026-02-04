@@ -122,6 +122,8 @@ export interface UpdateUserRequestDto {
     signature?: string | null;
     last_login_at?: Date | null;
     password_changed_at?: Date | null;
+    rolesid?: string;
+    rolesname?: string;
 }
 
 // ============================================================================
@@ -196,8 +198,8 @@ export interface UserResponseDto {
     aggregation_format: string | null;
     signature: string | null;
 
-    // Assigned roles (JOINed)
-    roles?: Array<{ id: string; name: string; code: string }>;
+    rolesid: string;
+    rolesname: string;
 
     // Assigned groups (JOINed)
     groups?: Array<{ id: string; name: string }>;

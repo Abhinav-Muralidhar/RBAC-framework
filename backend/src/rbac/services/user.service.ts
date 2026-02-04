@@ -86,7 +86,7 @@ export class UserService implements IUserService {
             };
 
             const user = await this.userRepository.create(t, userData);
-            const userRoles = await this.userRolesRepository.assign(t, user.id, data.rolesid);
+            await this.userRolesRepository.assign(t, user.id, data.rolesid as string);
 
             this.auditService.log(t, {
                 user_id: actingUserId,
@@ -134,6 +134,8 @@ export class UserService implements IUserService {
             };
 
             const updatedUser = await this.userRepository.update(t, updateUserData);
+            await this.userRolesRepository.revokeAllByUser(t, id);
+            await this.userRolesRepository.assign(t, id, data.rolesid as string);
 
             this.auditService.log(t, {
                 user_id: actingUserId,

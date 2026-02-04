@@ -144,6 +144,5 @@ export function createUsersRouter(db: IDatabase<unknown>, auditService: IAuditSe
             next(error);
         }
     });
-
     return router;
 }
