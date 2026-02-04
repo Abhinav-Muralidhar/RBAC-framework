@@ -61,7 +61,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
         if (!data.code) throw new Error('Group code is required');
 
         return withTransaction(async (t: TransactionTask) => {
-            const existing = await this.groupRepository.findByName(t, data.name);
+            const existing = await this.groupRepository.findByCode(t, data.name);
             if (existing) {
                 throw new DuplicateAssignmentError(`group name '${data.name}'`);
             }

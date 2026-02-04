@@ -27,8 +27,8 @@ export interface IUserService {
     update(actingUserId: string, id: string, data: UpdateUserRequestDto): Promise<Users>;
     delete(actingUserId: string, id: string): Promise<void>;
     getById(actingUserId: string, id: string): Promise<UserDetail | null>;
-    findByUsername(username: string): Promise<Users | null>;
-    findByEmail(email: string): Promise<Users | null>;
+    findByUsername(t: TransactionTask, username: string): Promise<Users | null>;
+    findByEmail(t: TransactionTask, email: string): Promise<Users | null>;
 }
 
 export class UserService implements IUserService {
@@ -39,16 +39,12 @@ export class UserService implements IUserService {
         private auditService: IAuditService,
     ) { }
 
-    async findByUsername(username: string): Promise<Users | null> {
-        return withTransaction(async (t: TransactionTask) => {
-            return this.userRepository.findByUsername(t, username);
-        });
+    async findByUsername(t: TransactionTask, username: string): Promise<Users | null> {
+        return this.userRepository.findByUsername(t, username);
     }
 
-    async findByEmail(email: string): Promise<Users | null> {
-        return withTransaction(async (t: TransactionTask) => {
-            return this.userRepository.findByEmail(t, email);
-        });
+    async findByEmail(t: TransactionTask, email: string): Promise<Users | null> {
+        return this.userRepository.findByEmail(t, email);
     }
 
     async listPaginated(

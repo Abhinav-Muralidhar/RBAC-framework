@@ -12,6 +12,7 @@ import { getRequiredQuery, parseId } from './_paramUtils';
 import { IDatabase } from 'pg-promise';
 import { EvaluationService } from '../services/evaluation.service';
 import { requirePermission } from '../middleware/requirePermission.middleware';
+import { TransactionTask, withTransaction } from '../utils/transaction.utils';
 
 /**
  * Standard response envelope
@@ -74,7 +75,7 @@ export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAudi
     router.get('/user/:userId', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const userId = parseId(req.params.userId, 'userId');
-            const sessions = await authSessionService.listActiveByUser(userId);
+            const sessions = await authSessionService.listActiveByUser(this, userId);
 
             sendSuccess(res, sessions.data, {
                 page: sessions.pagination.page,
@@ -109,10 +110,12 @@ export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAudi
      */
     router.delete('/user/:userId/all', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const actingUserId = req.user!.id;
-            const targetUserId = getRequiredQuery(req.params, 'userId');
-            const count = await authSessionService.revokeAllByUser(actingUserId, targetUserId);
-            sendSuccess(res, { revoked: true });
+            withTransaction(async (t: TransactionTask) => {
+                const actingUserId = req.user!.id;
+                const targetUserId = getRequiredQuery(req.params, 'userId');
+                const count = await authSessionService.revokeAllByUser(t, actingUserId, targetUserId);
+                sendSuccess(res, { revoked: true });
+            });
         } catch (error) {
             next(error);
         }
