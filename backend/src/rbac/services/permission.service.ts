@@ -25,7 +25,8 @@ import {
     ProfileNotFoundError,
     DuplicateAssignmentError,
     ModuleNotFoundError,
-    RoleNotFoundError
+    RoleNotFoundError,
+    UserNotFoundError
 } from '../errors/rbac.errors';
 import {
     CreatePermissionRequestDto,
@@ -64,7 +65,7 @@ export class PermissionService implements IPermissionService {
         private moduleRepository: IModuleRepository,
         private roleRepository: IRoleRepository,
         private evaluationService: IEvaluationService,
-        private auditService: IAuditService
+        private auditService: IAuditService,
     ) { }
 
     async getPermissionById(actingUserId: string, permissionId: string): Promise<Permissions> {

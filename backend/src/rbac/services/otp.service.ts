@@ -48,6 +48,10 @@ export class OtpService implements IOtpService {
       if (valiasd?.attempt_count ?? 0 >= 5) {
         throw new Error(`Maximum OTP generation attempts (${MAX_OTP_GENERATE}) reached`);
       }
+      if (!await verifyPassword(valiasd?.otp_hash ?? '', otpHash)) {
+        const count = await this.otpRepo.incrementAttempts(userId, t);
+        return false;
+      }
       const success = await this.otpRepo.deleteOnSuccess(userId, otpHash, t);
       if (!success) {
         const count = await this.otpRepo.incrementAttempts(userId, t);

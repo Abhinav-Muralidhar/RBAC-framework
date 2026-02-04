@@ -1,7 +1,7 @@
 import { IDatabase, ITask } from 'pg-promise';
 import { Permissions, PermissionAction } from '../models/permissions.model';
 import { CreatePermissionInput } from '../types/repository.types';
-export type PermissionEffect = 'allow' | 'deny';
+import { PermissionEffect } from '../models/profile_permissions.model';
 
 export interface IPermissionsRepository {
     findById(t: ITask<unknown> | undefined, id: string): Promise<Permissions | null>;

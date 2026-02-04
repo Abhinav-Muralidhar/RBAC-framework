@@ -19,7 +19,14 @@ import { EvaluationService } from '../services/evaluation.service';
 import { PermissionsRepository } from '../repositories/permissions.repository';
 import { IDatabase } from 'pg-promise';
 import { UserService } from '../services/user.service';
-
+import { PermissionService } from '../services/permission.service';
+import { ProfilesRepository } from '../repositories/profiles.repository';
+import { ProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
+import { RoleProfilesRepository } from '../repositories/role_profiles.repository';
+import { RoleRepository } from '../repositories/roles.repository';
+import { ModuleRepository } from '../repositories/modules.repository';
+import { PermissionEffect } from '../models/profile_permissions.model';
+import { PERMISSION_ACTIONS, PermissionAction } from '../models/permissions.model';
 // Cookie configuration
 const COOKIE_OPTIONS = {
     httpOnly: true,
@@ -39,7 +46,11 @@ function sendError(res: Response, status: number, message: string, code?: string
 function sendSuccess<T>(res: Response, data: T, meta?: Record<string, unknown>) {
     res.json({ data, error: null, meta: meta ?? {} });
 }
-
+function resolveEffect(effects: PermissionEffect[]): PermissionEffect {
+    if (effects.includes('deny')) return 'deny';
+    if (effects.includes('allow')) return 'allow';
+    return 'deny';
+}
 export function createAuthRouter(db: IDatabase<unknown>): Router {
     const router = Router();
 
@@ -47,6 +58,12 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
     const sessionsRepo = new AuthSessionsRepository(db);
     const usersRepo = new UsersRepository(db);
     const auditLogsRepo = new AuditLogsRepository(db);
+    const permissionsRepository = new PermissionsRepository(db);
+    const profilesRepository = new ProfilesRepository(db);
+    const profilePermissionsRepository = new ProfilePermissionsRepository(db);
+    const roleProfilesRepository = new RoleProfilesRepository(db);
+    const moduleRepository = new ModuleRepository(db);
+    const roleRepository = new RoleRepository(db);
     const evaluationService = new EvaluationService(
         new PermissionsRepository(db)
     );
@@ -56,6 +73,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
     const authSessionService = new AuthSessionService(sessionsRepo, auditService, evaluationService);
     const requireAuth = createAuthenticateMiddleware(authSessionService);
     const usersService = new UserService(usersRepo, evaluationService, auditService);
+    const permissionService = new PermissionService(permissionsRepository, profilesRepository, profilePermissionsRepository, roleProfilesRepository, moduleRepository, roleRepository, evaluationService, auditService);
 
     /**
      * POST /auth/login
@@ -158,9 +176,41 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
         const userId = req.user!.id; // from session middleware
 
         const user = await usersService.getById(userId, userId);
+        const modules = await moduleRepository.findAll();
 
-        sendSuccess(res, user);
+        const permissions: Record<
+            string,
+            Record<PermissionAction, PermissionEffect>
+        > = {};
+
+        for (const module of modules) {
+            const modulePermissions: Record<
+                PermissionAction,
+                PermissionEffect
+            > = {} as Record<PermissionAction, PermissionEffect>;
+
+            for (const action of PERMISSION_ACTIONS) {
+                const effects =
+                    await permissionsRepository.findEffectsByUserAndModuleAction(
+                        undefined,
+                        userId,
+                        module.code,
+                        action
+                    );
+
+                modulePermissions[action] = resolveEffect(effects);
+            }
+
+            permissions[module.code] = modulePermissions;
+        }
+
+        sendSuccess(res, {
+            user,
+            permissions,
+        });
     });
+
+
 
     return router;
 }

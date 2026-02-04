@@ -27,6 +27,7 @@ export interface IUserService {
     delete(actingUserId: string, id: string): Promise<void>;
     getById(actingUserId: string, id: string): Promise<UserDetail | null>;
     findByUsername(username: string): Promise<Users | null>;
+    findByEmail(email: string): Promise<Users | null>;
 }
 
 export class UserService implements IUserService {
@@ -42,6 +43,11 @@ export class UserService implements IUserService {
         });
     }
 
+    async findByEmail(email: string): Promise<Users | null> {
+        return withTransaction(async (t: TransactionTask) => {
+            return this.userRepository.findByEmail(t, email);
+        });
+    }
 
     async listPaginated(
         actingUserId: string,

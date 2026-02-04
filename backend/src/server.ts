@@ -19,13 +19,13 @@ if (!process.env.COOKIE_SECRET) {
   console.error('FATAL: COOKIE_SECRET environment variable is not set');
   process.exit(1);
 }
-app.set('trust proxy', true);
+app.set('trust proxy', 0);
 
 // Standard Middleware
 app.use(cors({
   origin: [
     process.env.CORS_ORIGIN || 'http://localhost:3000',
-    'http://localhost:5173'
+    'http://localhost:3001'
   ],
   credentials: true
 }));

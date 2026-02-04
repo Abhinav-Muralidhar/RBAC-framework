@@ -61,7 +61,7 @@ export const strictLimiter = rateLimit({
  */
 export const standardLimiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_API_WINDOW_MS || '60000', 10), // 1 minute
-    max: parseInt(process.env.RATE_LIMIT_API_MAX || '100', 10),
+    max: parseInt(process.env.RATE_LIMIT_API_MAX || '1000', 10),
     message: createRateLimitMessage(1),
     standardHeaders: true,
     legacyHeaders: false

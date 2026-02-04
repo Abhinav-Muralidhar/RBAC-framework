@@ -84,6 +84,7 @@ export interface IUsersRepository {
   update(t: TransactionTask | null, input: Users): Promise<Users>;
   delete(t: TransactionTask | null, userId: string): Promise<void>;
   deactivate(t: TransactionTask | null, userId: string): Promise<void>;
+  findByEmail(t: TransactionTask | null, email: string): Promise<Users | null>;
 }
 
 export class UsersRepository implements IUsersRepository {
@@ -99,6 +100,14 @@ export class UsersRepository implements IUsersRepository {
     const res = await this.task(t).any<Users>(
       `SELECT * FROM ${this.tableName} WHERE username = $1`,
       [username]
+    );
+    return res[0] ?? null;
+  }
+
+  async findByEmail(t: TransactionTask | null, email: string): Promise<Users | null> {
+    const res = await this.task(t).any<Users>(
+      `SELECT * FROM ${this.tableName} WHERE primary_email = $1`,
+      [email]
     );
     return res[0] ?? null;
   }

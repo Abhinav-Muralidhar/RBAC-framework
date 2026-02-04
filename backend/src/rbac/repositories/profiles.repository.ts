@@ -41,6 +41,7 @@ export interface IProfilesRepository {
     pagination?: Partial<PaginationParams>
   ): Promise<PaginatedResult<Profiles>>;
   findByIds(t: ITask<unknown> | undefined, ids: string[]): Promise<Profiles[]>;
+  findByRoles(t: ITask<unknown> | undefined, roleIds: string[]): Promise<Profiles[]>
 }
 
 export class ProfilesRepository implements IProfilesRepository {
@@ -63,6 +64,13 @@ export class ProfilesRepository implements IProfilesRepository {
     return (t ?? this.db).any<Profiles>(
       `SELECT * FROM ${this.tableName} WHERE id = ANY($1)`,
       [ids]
+    );
+  }
+
+  async findByRoles(t: ITask<unknown> | undefined, roleIds: string[]): Promise<Profiles[]> {
+    return (t ?? this.db).any<Profiles>(
+      `SELECT * FROM ${this.tableName} WHERE id = ANY($1)`,
+      [roleIds]
     );
   }
 
