@@ -105,27 +105,41 @@ export class UserService implements IUserService {
         });
     }
 
-    async update(actingUserId: string, id: string, data: UpdateUserRequestDto): Promise<Users> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
+    async update(
+        actingUserId: string,
+        id: string,
+        data: UpdateUserRequestDto
+    ): Promise<Users> {
 
-        return withTransaction(async (t: TransactionTask) => {
+        await this.evaluationService.enforcePermission(
+            actingUserId,
+            MODULE_CODE,
+            'update'
+        );
+
+        return withTransaction(async (t) => {
             const oldUser = await this.userRepository.findById(t, id);
+            if (!oldUser) throw new Error('User not found');
 
-            const userData = { ...data } as any;
+            const userData: any = { ...data };
 
             if (userData.password) {
                 validatePassword(userData.password);
                 userData.password = await hashPassword(userData.password);
             }
 
+            const cleanData = Object.fromEntries(
+                Object.entries(userData).filter(([_, v]) => v !== undefined)
+            );
+
             const updateUserData: Users = {
-                ...oldUser!,
-                ...data,
-                id: id,
-                created_at: oldUser!.created_at,
-                status: data.status ?? oldUser!.status,
-                last_login_at: null,
-                password_changed_at: null,
+                ...oldUser,
+                ...cleanData,
+                id,
+                created_at: oldUser.created_at,
+                status: data.status ?? oldUser.status,
+                last_login_at: oldUser.last_login_at ?? null,
+                password_changed_at: oldUser.password_changed_at ?? null,
             };
 
             const updatedUser = await this.userRepository.update(t, updateUserData);
@@ -135,14 +149,15 @@ export class UserService implements IUserService {
                 action: 'update',
                 entity_type: 'user',
                 entity_id: id,
-                old_values: oldUser ? { ...oldUser, password: '[REDACTED]' } : null,
-                new_values: { ...data, password: data.password ? '[REDACTED]' : undefined },
+                old_values: { ...oldUser, password: '[REDACTED]' },
+                new_values: { ...cleanData, password: cleanData.password ? '[REDACTED]' : undefined },
                 status: 'success'
             }).catch(console.error);
 
             return updatedUser;
         });
     }
+
 
     async delete(actingUserId: string, id: string): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
