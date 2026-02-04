@@ -6,17 +6,9 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { Pool } from 'pg';
 import { RoleService } from '../services/role.service';
-import { RoleRepository } from '../repositories/roles.repository';
-import { RoleProfilesRepository } from '../repositories/role_profiles.repository';
-import { UserRoleRepository } from '../repositories/user_roles.repository';
 import { EvaluationService } from '../services/evaluation.service';
 import { IAuditService } from '../services/audit.service';
-import { PermissionsRepository } from '../repositories/permissions.repository';
-import { ModuleRepository } from '../repositories/modules.repository';
-import { ProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
-import { UsersRepository } from '../repositories/users.repository';
 import { parseId, parsePagination } from './_paramUtils';
 import { IDatabase } from 'pg-promise';
 import { requirePermission } from '../middleware/requirePermission.middleware';
@@ -43,29 +35,8 @@ function filter(query: any): any {
     return filters;
 }
 
-export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditService): Router {
+export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditService, evaluationService: EvaluationService, roleService: RoleService): Router {
     const router = Router();
-
-    // Initialize repositories
-    const roleRepository = new RoleRepository(db);
-    const roleProfilesRepository = new RoleProfilesRepository(db);
-    const userRoleRepository = new UserRoleRepository(db);
-    const permissionsRepository = new PermissionsRepository(db);
-    const moduleRepository = new ModuleRepository(db);
-    const profilePermissionsRepository = new ProfilePermissionsRepository(db);
-    const usersRepository = new UsersRepository(db);
-
-    // Initialize services
-    const evaluationService = new EvaluationService(
-        permissionsRepository
-    );
-    const roleService = new RoleService(
-        roleRepository,
-        userRoleRepository,
-        roleProfilesRepository,
-        evaluationService,
-        auditService
-    );
 
     /**
      * GET /rbac/roles

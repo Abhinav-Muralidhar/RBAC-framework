@@ -7,17 +7,9 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import { ProfileService } from '../services/profile.service';
-import { ProfilesRepository } from '../repositories/profiles.repository';
-import { ProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
-import { PermissionsRepository } from '../repositories/permissions.repository';
 import { EvaluationService } from '../services/evaluation.service';
 import { IAuditService } from '../services/audit.service';
-import { ModuleRepository } from '../repositories/modules.repository';
-import { RoleProfilesRepository } from '../repositories/role_profiles.repository';
-import { UserRoleRepository } from '../repositories/user_roles.repository';
-import { UsersRepository } from '../repositories/users.repository';
 import { parseId, parsePagination } from './_paramUtils';
-import { PermissionEffect } from '../models/profile_permissions.model';
 import { IDatabase } from 'pg-promise';
 import { requirePermission } from '../middleware/requirePermission.middleware';
 /**
@@ -41,29 +33,8 @@ function parseFilter(query: any): any {
     return filter;
 }
 
-export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAuditService): Router {
+export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAuditService, evaluationService: EvaluationService, profileService: ProfileService): Router {
     const router = Router();
-
-    // Initialize repositories
-    const profilesRepository = new ProfilesRepository(db);
-    const profilePermissionsRepository = new ProfilePermissionsRepository(db);
-    const permissionsRepository = new PermissionsRepository(db);
-    const moduleRepository = new ModuleRepository(db);
-    const roleProfilesRepository = new RoleProfilesRepository(db);
-    const userRoleRepository = new UserRoleRepository(db);
-    const usersRepository = new UsersRepository(db);
-
-    // Initialize services
-    const evaluationService = new EvaluationService(
-        permissionsRepository,
-    );
-    const profileService = new ProfileService(
-        profilesRepository,
-        profilePermissionsRepository,
-        permissionsRepository,
-        evaluationService,
-        auditService
-    );
 
     /**
      * GET /rbac/profiles

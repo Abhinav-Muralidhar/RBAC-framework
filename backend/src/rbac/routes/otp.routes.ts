@@ -1,15 +1,13 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { IOtpService, OtpService } from '../services/otp.service';
-import { getRequiredParam } from './_paramUtils';
+import { OtpService } from '../services/otp.service';
 import { IDatabase } from 'pg-promise';
 import { OtpTokenRepository } from '../repositories/otp_token.repository';
-import { IUserService, UserService } from '../services/user.service';
+import { UserService } from '../services/user.service';
 import { UsersRepository } from '../repositories/users.repository';
 import { EvaluationService } from '../services/evaluation.service';
 import { AuditService } from '../services/audit.service';
 import { PermissionsRepository } from '../repositories/permissions.repository';
-import { UserNotFoundError } from '../errors/rbac.errors';
-import { validatePassword, hashPassword } from '../utils/crypto.utils';
+import { hashPassword } from '../utils/crypto.utils';
 import { UserRoleRepository } from '../repositories/user_roles.repository';
 
 /**
@@ -38,21 +36,8 @@ function generateAlphaNumericOtp(length: number = 6): string {
 /**
  * OTP router
  */
-export function createOtpRouter(db: IDatabase<unknown>, auditService: AuditService): Router {
+export function createOtpRouter(db: IDatabase<unknown>, auditService: AuditService, evaluationService: EvaluationService, userService: UserService, otpService: OtpService): Router {
     const router = Router();
-    // Initialize repositories
-    const usersRepository = new UsersRepository(db);
-    const permissionsRepository = new PermissionsRepository(db);
-
-    // Initialize services
-    const evaluationService = new EvaluationService(
-        permissionsRepository
-
-    );
-    const userRolesRepository = new UserRoleRepository(db);
-    const userService = new UserService(usersRepository, userRolesRepository, evaluationService, auditService);
-    const otpTokenRepository = new OtpTokenRepository(db);
-    const otpService = new OtpService(otpTokenRepository);
     /**
      * POST /auth/otp/send
      * Request body: { email: string }

@@ -34,7 +34,6 @@ export class UnifiedGroupService implements IUnifiedGroupService {
     constructor(
         private groupRepository: IGroupRepository,
         private groupRoleRepository: IGroupRoleRepository,
-        private evaluationService: IEvaluationService,
         private auditService: IAuditService,
         private userGroupsRepository: IUserGroupsRepository
     ) { }
