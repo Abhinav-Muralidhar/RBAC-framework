@@ -6,7 +6,6 @@
  * Collapsible with localStorage persistence and mobile responsiveness.
  */
 
-import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAdminSettings } from '../../contexts/AdminSettingsContext';
@@ -18,8 +17,6 @@ import {
     LogOut,
     User,
     Shield,
-    ChevronLeft,
-    ChevronRight,
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -39,8 +36,6 @@ const navItems: NavItem[] = [
     },
 ];
 
-const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
-
 export function Sidebar() {
     const { user, hasPermission, logout } = useAuth();
     const { openSettings } = useAdminSettings();
@@ -53,10 +48,6 @@ export function Sidebar() {
 
     const handleOpenSettings = () => {
         openSettings();
-    };
-
-    const toggleCollapsed = () => {
-        setIsCollapsed(!isCollapsed);
     };
 
     // Check if user can access settings
@@ -77,14 +68,6 @@ export function Sidebar() {
                     <Shield size={28} />
                     {!isCollapsed && <span>RBAC</span>}
                 </div>
-                <button
-                    className="sidebar-toggle"
-                    onClick={toggleCollapsed}
-                    aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                    title={isCollapsed ? 'Expand' : 'Collapse'}
-                >
-                    {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-                </button>
             </div>
 
             <nav className="sidebar-nav">

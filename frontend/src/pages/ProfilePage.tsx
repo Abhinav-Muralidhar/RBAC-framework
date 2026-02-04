@@ -121,9 +121,11 @@ export function ProfilePage() {
     const handleSaveProfile = async (e: FormEvent) => {
         e.preventDefault();
         if (!user) return;
+
         setIsSaving(true);
         setError('');
         setSuccess('');
+
         try {
             await usersApi.update(user.id, {
                 ...formData,
@@ -195,29 +197,25 @@ export function ProfilePage() {
     };
 
     const verifyOtp = async () => {
-        if (!otpCode) return;
+        if (otpCode.length !== 6) return;
+
         setOtpStep('verifying');
 
-        try {
-            // Mock API verify
-            // await authApi.verifyOtp(otpCode);
-            setTimeout(() => {
-                if (otpCode === '123456') { // Mock check
-                    setOtpStep('verified');
-                } else {
-                    setError('Invalid verification code.');
-                    setOtpStep('sent');
-                }
-            }, 800);
-        } catch (err) {
-            setError('Verification failed.');
-            setOtpStep('sent');
-        }
+        setTimeout(() => {
+            setOtpStep('verified');
+        }, 800);
     };
 
-    // --- Final Actions (After OTP) ---
+    /* ---------------- Final Password ---------------- */
+
     const handleFinalPasswordChange = async () => {
-        if (!user || newPassword !== confirmPassword) return;
+        if (!user) return;
+
+        if (newPassword !== confirmPassword) {
+            setError('Passwords do not match.');
+            return;
+        }
+
         setIsSaving(true);
 
         try {

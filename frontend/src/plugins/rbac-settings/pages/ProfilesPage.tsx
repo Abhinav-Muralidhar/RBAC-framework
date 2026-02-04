@@ -13,7 +13,10 @@ import { ProfileForm, submitProfileForm } from '../components/ProfileForm';
 import { useCrudPage } from '../../../core/hooks';
 import './SettingsPage.css';
 import { FormModal } from '../../../core/components/FormModal';
+import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { ProfileForm, submitProfileForm } from '../components/ProfileForm';
+import { useCrudPage } from '../../../core/hooks';
+import './SettingsPage.css';
 
 export function ProfilesPage() {
     const crud = useCrudPage<Profile>({
@@ -39,7 +42,6 @@ export function ProfilesPage() {
                     <Plus size={18} />
                     Add Profile
                 </button>
-
             </header>
 
             <div className="page-toolbar">
