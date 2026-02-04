@@ -14,6 +14,7 @@ export interface IOrganizationService {
     getOrganizations(filters?: { is_active?: boolean; name?: string; code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Organizations>>;
     updateOrganization(id: string, data: UpdateOrganizationRequestDto): Promise<Organizations>;
 }
+const MODULE_CODE = 'organization';
 
 export class OrganizationService implements IOrganizationService {
     constructor(
@@ -119,6 +120,7 @@ export class OrganizationService implements IOrganizationService {
             this.auditService.log(t, {
                 user_id: id,
                 action: 'update',
+                module_code: MODULE_CODE,
                 entity_type: 'organization',
                 entity_id: id,
                 old_values: JSON.parse(JSON.stringify(organization)),

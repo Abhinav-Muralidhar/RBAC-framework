@@ -92,6 +92,7 @@ export class ProfileService implements IProfileService {
             this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'create',
+                module_code: MODULE_CODE,
                 entity_type: 'profile',
                 entity_id: profile.id,
                 old_values: null,
@@ -136,6 +137,7 @@ export class ProfileService implements IProfileService {
 
             this.auditService.log(t, {
                 user_id: actingUserId,
+                module_code: MODULE_CODE,
                 action: 'update',
                 entity_type: 'profile',
                 entity_id: profileId,
@@ -167,6 +169,7 @@ export class ProfileService implements IProfileService {
             this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'delete',
+                module_code: MODULE_CODE,
                 entity_type: 'profile',
                 entity_id: profileId,
                 old_values: { ...existing },

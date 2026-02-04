@@ -88,6 +88,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
             this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'create',
+                module_code: MODULE_CODE,
                 entity_type: 'group',
                 entity_id: group.id,
                 old_values: null,
@@ -134,6 +135,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
                 user_id: actingUserId,
                 action: 'update',
                 entity_type: 'group',
+                module_code: MODULE_CODE,
                 entity_id: groupId,
                 old_values: { ...existing } as Record<string, unknown>,
                 new_values: { ...data } as Record<string, unknown>,
@@ -156,6 +158,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
                 user_id: actingUserId,
                 action: 'delete',
                 entity_type: 'group',
+                module_code: MODULE_CODE,
                 entity_id: groupId,
                 old_values: { ...existing } as Record<string, unknown>,
                 new_values: { is_deleted: true },

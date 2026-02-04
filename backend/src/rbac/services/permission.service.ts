@@ -233,6 +233,7 @@ export class PermissionService implements IPermissionService {
             this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'create',
+                module_code: MODULE_CODE,
                 entity_type: 'role_profile',
                 entity_id: `${roleId}:${profileIds.join(',')}`,
                 old_values: null,

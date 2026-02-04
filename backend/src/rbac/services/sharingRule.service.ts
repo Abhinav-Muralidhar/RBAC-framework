@@ -71,6 +71,7 @@ export class SharingRuleService implements ISharingRuleService {
             this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'update',
+                module_code: MODULE_CODE,
                 entity_type: 'sharing_rule',
                 entity_id: ruleId,
                 old_values: { ...existing } as Record<string, unknown>,
@@ -92,6 +93,7 @@ export class SharingRuleService implements ISharingRuleService {
             this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'delete',
+                module_code: MODULE_CODE,
                 entity_type: 'sharing_rule',
                 entity_id: ruleId,
                 old_values: { ...existing } as Record<string, unknown>,

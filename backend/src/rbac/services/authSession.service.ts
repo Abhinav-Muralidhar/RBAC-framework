@@ -180,6 +180,7 @@ export class AuthSessionService implements IAuthSessionService {
             this.auditService.log(t, {
                 user_id: data.user_id,
                 action: 'create',
+                module_code: MODULE_CODE,
                 entity_type: 'session',
                 entity_id: session.id,
                 old_values: null,
@@ -234,6 +235,7 @@ export class AuthSessionService implements IAuthSessionService {
             // AUDIT: Log session logout (fire-and-forget)
             this.auditService.log(t, {
                 user_id: existing.user_id,
+                module_code: MODULE_CODE,
                 action: 'update',
                 entity_type: 'session',
                 entity_id: sessionId,
@@ -255,6 +257,7 @@ export class AuthSessionService implements IAuthSessionService {
             // AUDIT: Log session revocation (fire-and-forget)
             this.auditService.log(t, {
                 user_id: actingUserId,
+                module_code: MODULE_CODE,
                 action: 'delete',
                 entity_type: 'session',
                 entity_id: sessionId,
@@ -276,6 +279,7 @@ export class AuthSessionService implements IAuthSessionService {
             // AUDIT: Log bulk session revocation (fire-and-forget)
             this.auditService.log(t, {
                 user_id: actingUserId,
+                module_code: MODULE_CODE,
                 action: 'delete',
                 entity_type: 'sessions_bulk',
                 entity_id: userId,

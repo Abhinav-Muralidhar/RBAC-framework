@@ -108,7 +108,7 @@ export function createSmtpConfigRouter(db: IDatabase<unknown>, auditService: Aud
         try {
             const id = getRequiredParam(req.params, 'id');
             const actingUserId = req.user!.id;
-            await smtpService.update(id, { is_active: false }, actingUserId);
+            await smtpService.delete(id, actingUserId);
             sendSuccess(res, { message: 'Deleted successfully' });
         } catch (error) {
             next(error);

@@ -9,6 +9,7 @@ export interface ISmtpConfigRepository {
   update(t: TransactionTask, id: string, input: SmtpConfig): Promise<SmtpConfig>;
   findById(t: TransactionTask, id: string): Promise<SmtpConfig | null>;
   findAll(t: TransactionTask, filters?: { isActive?: boolean }, paginationParams?: PaginationParams): Promise<PaginatedResult<SmtpConfig>>;
+  delete(t: TransactionTask, id: string): Promise<void>;
 }
 
 export class SmtpConfigRepository implements ISmtpConfigRepository {
@@ -22,6 +23,10 @@ export class SmtpConfigRepository implements ISmtpConfigRepository {
     params?: unknown[]
   ): Promise<T[]> {
     return t.any<T>(text, params);
+  }
+
+  async delete(t: TransactionTask, id: string): Promise<void> {
+    await t.none(`UPDATE ${this.tableName} SET is_active = false WHERE id = $1`, [id]);
   }
 
   async findById(t: TransactionTask, id: string): Promise<SmtpConfig | null> {
