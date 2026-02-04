@@ -10,6 +10,7 @@ import { AuditService } from '../services/audit.service';
 import { PermissionsRepository } from '../repositories/permissions.repository';
 import { UserNotFoundError } from '../errors/rbac.errors';
 import { validatePassword, hashPassword } from '../utils/crypto.utils';
+import { UserRoleRepository } from '../repositories/user_roles.repository';
 
 /**
  * Standard response helpers
@@ -40,7 +41,8 @@ export function createOtpRouter(db: IDatabase<unknown>, auditService: AuditServi
         permissionsRepository
 
     );
-    const userService = new UserService(usersRepository, evaluationService, auditService);
+    const userRolesRepository = new UserRoleRepository(db);
+    const userService = new UserService(usersRepository, userRolesRepository, evaluationService, auditService);
     const otpTokenRepository = new OtpTokenRepository(db);
     const otpService = new OtpService(otpTokenRepository);
     /**

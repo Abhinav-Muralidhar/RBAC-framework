@@ -56,7 +56,6 @@ export class UserService implements IUserService {
         filters?: UserListFilterDto,
         pagination?: Partial<PaginationParams>
     ): Promise<PaginatedResult<Users>> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
         return withTransaction(async (t: TransactionTask) => {
             return this.userRepository.findAllPaginated(t, filters, pagination);
@@ -64,7 +63,6 @@ export class UserService implements IUserService {
     }
 
     async getById(actingUserId: string, id: string): Promise<UserDetail | null> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
         return withTransaction(async (t: TransactionTask) => {
             return this.userRepository.findByIdWithDetails(t, id);
@@ -72,7 +70,6 @@ export class UserService implements IUserService {
     }
 
     async create(actingUserId: string, data: CreateUserRequestDto): Promise<Users> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
         return withTransaction(async (t: TransactionTask) => {
             if (data.password) {
                 validatePassword(data.password);
@@ -110,12 +107,6 @@ export class UserService implements IUserService {
         id: string,
         data: UpdateUserRequestDto
     ): Promise<Users> {
-
-        await this.evaluationService.enforcePermission(
-            actingUserId,
-            MODULE_CODE,
-            'update'
-        );
 
         return withTransaction(async (t) => {
             const oldUser = await this.userRepository.findById(t, id);
@@ -160,8 +151,6 @@ export class UserService implements IUserService {
 
 
     async delete(actingUserId: string, id: string): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
-
         return withTransaction(async (t: TransactionTask) => {
             const oldUser = await this.userRepository.findById(t, id);
 
@@ -180,8 +169,6 @@ export class UserService implements IUserService {
     }
 
     async deactivate(actingUserId: string, id: string): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
-
         return withTransaction(async (t: TransactionTask) => {
             const oldUser = await this.userRepository.findById(t, id);
 
