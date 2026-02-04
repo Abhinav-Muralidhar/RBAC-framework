@@ -79,7 +79,7 @@ export function requirePermission(
                 // Handle domain errors
                 if (error instanceof PermissionDeniedError) {
                     // Audit denial
-                    await auditService.log({
+                    await auditService.log(undefined, {
                         user_id: userId,
                         action: 'update',
                         entity_type: 'permission_check',
@@ -108,7 +108,7 @@ export function requirePermission(
                 }
 
                 if (error instanceof InvalidModuleActionError) {
-                    await auditService.log({
+                    await auditService.log(undefined, {
                         user_id: userId,
                         action: 'update',
                         entity_type: 'permission_check',
@@ -132,7 +132,7 @@ export function requirePermission(
                     // FAIL-CLOSED: Internal error = deny access
                     console.error('RBAC Internal Error:', error);
 
-                    await auditService.log({
+                    await auditService.log(undefined, {
                         user_id: userId,
                         action: 'update',
                         entity_type: 'permission_check',
@@ -155,7 +155,7 @@ export function requirePermission(
                 // FAIL-CLOSED: Unknown error = deny access
                 console.error('Unknown error in permission middleware:', error);
 
-                await auditService.log({
+                await auditService.log(undefined, {
                     user_id: userId,
                     action: 'update',
                     entity_type: 'permission_check',
@@ -180,7 +180,7 @@ export function requirePermission(
             console.error('Critical error in permission middleware:', error);
 
             if (req.user?.id) {
-                await auditService.log({
+                await auditService.log(undefined, {
                     user_id: req.user.id,
                     action: 'update',
                     entity_type: 'permission_check',

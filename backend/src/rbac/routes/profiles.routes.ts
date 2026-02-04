@@ -6,7 +6,6 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { Pool } from 'pg';
 import { ProfileService } from '../services/profile.service';
 import { ProfilesRepository } from '../repositories/profiles.repository';
 import { ProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
@@ -19,7 +18,7 @@ import { UserRoleRepository } from '../repositories/user_roles.repository';
 import { UsersRepository } from '../repositories/users.repository';
 import { parseId, parsePagination } from './_paramUtils';
 import { PermissionEffect } from '../models/profile_permissions.model';
-
+import { IDatabase } from 'pg-promise';
 /**
  * Standard response envelope
  */
@@ -34,27 +33,28 @@ function sendError(res: Response, status: number, message: string, code?: string
         meta: {}
     });
 }
+function parseFilter(query: any): any {
+    const filter: any = {};
+    if (query.is_active) filter.is_active = query.is_active;
+    if (query.code) filter.code = query.code;
+    return filter;
+}
 
-export function createProfilesRouter(pool: Pool, auditService: IAuditService): Router {
+export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAuditService): Router {
     const router = Router();
 
     // Initialize repositories
-    const profilesRepository = new ProfilesRepository(pool);
-    const profilePermissionsRepository = new ProfilePermissionsRepository(pool);
-    const permissionsRepository = new PermissionsRepository(pool);
-    const moduleRepository = new ModuleRepository(pool);
-    const roleProfilesRepository = new RoleProfilesRepository(pool);
-    const userRoleRepository = new UserRoleRepository(pool);
-    const usersRepository = new UsersRepository(pool);
+    const profilesRepository = new ProfilesRepository(db);
+    const profilePermissionsRepository = new ProfilePermissionsRepository(db);
+    const permissionsRepository = new PermissionsRepository(db);
+    const moduleRepository = new ModuleRepository(db);
+    const roleProfilesRepository = new RoleProfilesRepository(db);
+    const userRoleRepository = new UserRoleRepository(db);
+    const usersRepository = new UsersRepository(db);
 
     // Initialize services
     const evaluationService = new EvaluationService(
-        moduleRepository,
-        userRoleRepository,
-        roleProfilesRepository,
-        profilePermissionsRepository,
         permissionsRepository,
-        usersRepository
     );
     const profileService = new ProfileService(
         profilesRepository,
@@ -72,8 +72,8 @@ export function createProfilesRouter(pool: Pool, auditService: IAuditService): R
         try {
             const actingUserId = req.user!.id;
             const pagination = parsePagination(req.query);
-
-            const result = await profileService.listPaginated(actingUserId, {}, pagination);
+            const filter = parseFilter(req.query);
+            const result = await profileService.listPaginated(actingUserId, filter, pagination);
             sendSuccess(res, result.data, {
                 page: result.pagination.page,
                 limit: result.pagination.limit,
@@ -92,7 +92,7 @@ export function createProfilesRouter(pool: Pool, auditService: IAuditService): R
     router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
         try {
             const profileId = parseId(req.params.id, 'profileId');
-            const profile = await profilesRepository.findByIdWithDetails(profileId);
+            const profile = await profileService.getById(req.user!.id, profileId);
             if (!profile) {
                 return sendError(res, 404, `Profile not found: ${profileId}`, 'PROFILE_NOT_FOUND');
             }
@@ -141,55 +141,6 @@ export function createProfilesRouter(pool: Pool, auditService: IAuditService): R
             const profileId = parseId(req.params.id, 'profileId');
             await profileService.delete(actingUserId, profileId);
             sendSuccess(res, { deleted: true });
-        } catch (error) {
-            next(error);
-        }
-    });
-
-    /**
-     * PUT /rbac/profiles/:id/permissions
-     * Update profile permissions
-     */
-    router.put('/:id/permissions', async (req: Request, res: Response, next: NextFunction) => {
-        try {
-            const actingUserId = req.user!.id;
-            const profileId = parseId(req.params.id, 'profileId');
-            const { permission_ids } = req.body;
-            await profileService.updateProfilePermissions(actingUserId, profileId, permission_ids ?? []);
-            sendSuccess(res, { updated: true });
-        } catch (error) {
-            next(error);
-        }
-    });
-
-    /**
-     * POST /rbac/profiles/:id/permissions/:permissionId
-     * Assign permission to profile
-     */
-    router.post('/:id/permissions/:permissionId', async (req: Request, res: Response, next: NextFunction) => {
-        try {
-            const actingUserId = req.user!.id;
-            const profileId = parseId(req.params.id, 'profileId');
-            const permissionId = parseId(req.params.permissionId, 'permissionId');
-            const effect: PermissionEffect = req.body.effect ?? 'allow';
-            await profileService.assignPermission(actingUserId, profileId, permissionId, effect);
-            sendSuccess(res, { assigned: true });
-        } catch (error) {
-            next(error);
-        }
-    });
-
-    /**
-     * DELETE /rbac/profiles/:id/permissions/:permissionId
-     * Revoke permission from profile
-     */
-    router.delete('/:id/permissions/:permissionId', async (req: Request, res: Response, next: NextFunction) => {
-        try {
-            const actingUserId = req.user!.id;
-            const profileId = parseId(req.params.id, 'profileId');
-            const permissionId = parseId(req.params.permissionId, 'permissionId');
-            await profileService.revokePermission(actingUserId, profileId, permissionId);
-            sendSuccess(res, { revoked: true });
         } catch (error) {
             next(error);
         }

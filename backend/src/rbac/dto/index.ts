@@ -32,5 +32,5 @@ export * from './sharing-rule.dto';
 export * from './auth-session.dto';
 
 // Audit Log DTOs
-export * from './audit-log.dto';
+export * from './audit_log.dto';
 

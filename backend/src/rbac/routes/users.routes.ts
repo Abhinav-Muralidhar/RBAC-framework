@@ -17,6 +17,7 @@ import { RoleProfilesRepository } from '../repositories/role_profiles.repository
 import { UserRoleRepository } from '../repositories/user_roles.repository';
 import { ProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
 import { parseId, parsePagination } from './_paramUtils';
+import { IDatabase } from 'pg-promise';
 
 /**
  * Standard response envelope
@@ -33,25 +34,30 @@ function sendError(res: Response, status: number, message: string, code?: string
     });
 }
 
-export function createUsersRouter(pool: Pool, auditService: IAuditService): Router {
+function parseFilters(query: any): any {
+    const filters: Record<string, unknown> = {};
+    if (query.name) filters.name = query.name;
+    if (query.email) filters.email = query.email;
+    if (query.username) filters.username = query.username;
+    if (query.status) filters.status = query.status;
+    return filters;
+}
+
+export function createUsersRouter(db: IDatabase<unknown>, auditService: IAuditService): Router {
     const router = Router();
 
     // Initialize repositories
-    const usersRepository = new UsersRepository(pool);
-    const permissionsRepository = new PermissionsRepository(pool);
-    const moduleRepository = new ModuleRepository(pool);
-    const userRoleRepository = new UserRoleRepository(pool);
-    const roleProfilesRepository = new RoleProfilesRepository(pool);
-    const profilePermissionsRepository = new ProfilePermissionsRepository(pool);
+    const usersRepository = new UsersRepository(db);
+    const permissionsRepository = new PermissionsRepository(db);
+    const moduleRepository = new ModuleRepository(db);
+    const userRoleRepository = new UserRoleRepository(db);
+    const roleProfilesRepository = new RoleProfilesRepository(db);
+    const profilePermissionsRepository = new ProfilePermissionsRepository(db);
 
     // Initialize services
     const evaluationService = new EvaluationService(
-        moduleRepository,
-        userRoleRepository,
-        roleProfilesRepository,
-        profilePermissionsRepository,
-        permissionsRepository,
-        usersRepository
+        permissionsRepository
+
     );
     const userService = new UserService(usersRepository, evaluationService, auditService);
 
@@ -63,8 +69,9 @@ export function createUsersRouter(pool: Pool, auditService: IAuditService): Rout
         try {
             const actingUserId = req.user!.id;
             const pagination = parsePagination(req.query);
+            const filters = parseFilters(req.query);
 
-            const result = await userService.listPaginated(actingUserId, {}, pagination);
+            const result = await userService.listPaginated(actingUserId, filters, pagination);
             sendSuccess(res, result.data, {
                 page: result.pagination.page,
                 limit: result.pagination.limit,
@@ -84,7 +91,7 @@ export function createUsersRouter(pool: Pool, auditService: IAuditService): Rout
         try {
             const userId = parseId(req.params.id, 'userId');
 
-            const user = await usersRepository.findByIdWithDetails(userId);
+            const user = await userService.getById(req.user!.id, userId);
             if (!user) {
                 return sendError(res, 404, `User not found: ${userId}`, 'USER_NOT_FOUND');
             }

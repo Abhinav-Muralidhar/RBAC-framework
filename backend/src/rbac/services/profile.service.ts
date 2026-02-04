@@ -1,14 +1,13 @@
 /**
- * ProfileService
+ * UnifiedProfileService
  * 
- * Service layer for Profile management.
+ * Business logic for profile management.
  * All mutating operations require RBAC enforcement.
  * All mutations are audit logged.
  */
-
+import { IDatabase } from 'pg-promise';
+import { TransactionTask, withTransaction } from '../utils/transaction.utils';
 import { Profiles } from '../models/profiles.model';
-import { Permissions } from '../models/permissions.model';
-import { PermissionEffect } from '../models/profile_permissions.model';
 import { IProfilesRepository } from '../repositories/profiles.repository';
 import { IProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
 import { IPermissionsRepository } from '../repositories/permissions.repository';
@@ -19,8 +18,9 @@ import {
     PermissionNotFoundError,
     DuplicateAssignmentError
 } from '../errors/rbac.errors';
-import { ProfileListFilterDto, CreateProfileRequestDto, UpdateProfileRequestDto } from '../dto/profile.dto';
+import { CreateProfileRequestDto, ProfileResponseDto, UpdateProfileRequestDto } from '../dto/profile.dto';
 import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
+import { Permissions } from '../models/permissions.model';
 
 // Module code for RBAC operations
 const MODULE_CODE = 'SETTINGS';
@@ -31,30 +31,12 @@ export interface ProfilePermissionFlagDto {
     allowed: boolean;
 }
 
-export interface ProfileResponseDto {
-    id: string;
-    name: string;
-    code: string;
-    description: string | undefined;
-    is_active: boolean;
-    permissions: ProfilePermissionFlagDto[];
-}
-
 export interface IProfileService {
-    getById(actingUserId: string, profileId: string): Promise<Profiles>;
-    getByCode(actingUserId: string, code: string): Promise<Profiles>;
-    listAll(actingUserId: string): Promise<Profiles[]>;
-    listPaginated(actingUserId: string, filters?: ProfileListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Profiles>>;
-    listActive(actingUserId: string): Promise<Profiles[]>;
+    getById(actingUserId: string, profileId: string): Promise<ProfileResponseDto>
+    listPaginated(actingUserId: string, filters?: { is_active?: boolean, code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Profiles>>;
     create(actingUserId: string, data: CreateProfileRequestDto): Promise<Profiles>;
     update(actingUserId: string, profileId: string, data: UpdateProfileRequestDto): Promise<Profiles>;
     delete(actingUserId: string, profileId: string): Promise<void>;
-    assignPermission(actingUserId: string, profileId: string, permissionId: string, effect: PermissionEffect): Promise<void>;
-    revokePermission(actingUserId: string, profileId: string, permissionId: string): Promise<void>;
-    getPermissions(actingUserId: string, profileId: string): Promise<Array<{ permission: Permissions; effect: PermissionEffect }>>;
-    getProfileWithPermissions(actingUserId: string, profileId: string): Promise<ProfileResponseDto>;
-    createProfile(actingUserId: string, data: { name: string; description?: string; permission_ids: string[] }): Promise<{ id: string }>;
-    updateProfilePermissions(actingUserId: string, profileId: string, permissionIds: string[]): Promise<void>;
 }
 
 export class ProfileService implements IProfileService {
@@ -66,296 +48,135 @@ export class ProfileService implements IProfileService {
         private auditService: IAuditService
     ) { }
 
-    async getById(actingUserId: string, profileId: string): Promise<Profiles> {
+    async getById(actingUserId: string, profileId: string): Promise<ProfileResponseDto> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        const profile = await this.profilesRepository.findById(profileId);
-        if (!profile) {
-            throw new ProfileNotFoundError(profileId);
-        }
-        return profile;
-    }
-
-    async getByCode(actingUserId: string, code: string): Promise<Profiles> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        const profile = await this.profilesRepository.findByCode(code);
-        if (!profile) {
-            throw new ProfileNotFoundError(code);
-        }
-        return profile;
-    }
-
-    async listAll(actingUserId: string): Promise<Profiles[]> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        return this.profilesRepository.findAll();
+        return withTransaction(async (t: TransactionTask) => {
+            const profile = await this.profilesRepository.findByIdWithDetails(t, profileId);
+            if (!profile) throw new ProfileNotFoundError(profileId);
+            return profile;
+        });
     }
 
     async listPaginated(
         actingUserId: string,
-        filters?: ProfileListFilterDto,
+        filters?: { is_active?: boolean, code?: string },
         pagination?: Partial<PaginationParams>
     ): Promise<PaginatedResult<Profiles>> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        return this.profilesRepository.findAllPaginated(filters, pagination);
+        return withTransaction(async (t: TransactionTask) => this.profilesRepository.findAllPaginated(t, filters, pagination));
     }
 
-    async listActive(actingUserId: string): Promise<Profiles[]> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        return this.profilesRepository.findActive();
-    }
-
+    //create profile as well as do thing like update its premissions wiht default allow
     async create(actingUserId: string, data: CreateProfileRequestDto): Promise<Profiles> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
+        return withTransaction(async (t: TransactionTask) => {
+            const existing = await this.profilesRepository.findAllPaginated(t, { search: data.code as string });
+            if (existing.data.length > 0) throw new DuplicateAssignmentError(`profile code '${data.code}'`);
 
-        const existing = await this.profilesRepository.findByCode(data.code);
-        if (existing) {
-            throw new DuplicateAssignmentError(`profile code '${data.code}'`);
-        }
+            const profile = await this.profilesRepository.create(t, {
+                name: data.name!,
+                code: data.code!,
+                description: data.description ?? null,
+                is_active: data.is_active ?? true,
+                created_by: actingUserId
+            });
+            const perms = data.permission_ids ?? []
+            if (perms.length > 0) {
+                const permissions = await this.permissionsRepository.findByIds(t, perms as string[]);
+                if (permissions.length !== perms.length) {
+                    const foundIds = new Set(permissions.map(p => p.id));
+                    const missing = perms.filter(id => !foundIds.has(id));
+                    throw new PermissionNotFoundError(missing.join(', '));
+                }
+                await this.profilePermissionsRepository.replacePermissions(t, profile.id, permissions.map(p => p.id));
+            }
 
-        const profile = await this.profilesRepository.create({
-            name: data.name,
-            code: data.code,
-            description: data.description ?? null,
-            is_active: data.is_active ?? true,
-            created_by: actingUserId
+            this.auditService.log(t, {
+                user_id: actingUserId,
+                action: 'create',
+                entity_type: 'profile',
+                entity_id: profile.id,
+                old_values: null,
+                new_values: { ...data },
+                status: 'success'
+            }).catch(console.error);
+
+            return profile;
         });
-
-        // AUDIT: Log profile creation (fire-and-forget)
-        this.auditService.log({
-            user_id: actingUserId,
-            action: 'create',
-            entity_type: 'profile',
-            entity_id: profile.id,
-            old_values: null,
-            new_values: { ...data } as Record<string, unknown>,
-            status: 'success'
-        }).catch(console.error);
-
-        return profile;
     }
-
+    //update the profile along wihtits premissions with default allow
     async update(actingUserId: string, profileId: string, data: UpdateProfileRequestDto): Promise<Profiles> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
+        return withTransaction(async (t: TransactionTask) => {
+            const existing = await this.profilesRepository.findById(t, profileId);
+            if (!existing) throw new ProfileNotFoundError(profileId);
 
-        const existing = await this.profilesRepository.findById(profileId);
-        if (!existing) {
-            throw new ProfileNotFoundError(profileId);
-        }
-
-        // Check code uniqueness if changing code
-        if (data.code && data.code !== existing.code) {
-            const codeConflict = await this.profilesRepository.findByCode(data.code);
-            if (codeConflict) {
-                throw new DuplicateAssignmentError(`profile code '${data.code}'`);
+            if (data.code && data.code !== existing.code) {
+                const conflict = await this.profilesRepository.findAllPaginated(t, { search: data.code });
+                if (conflict.data.length > 0) throw new DuplicateAssignmentError(`profile code '${data.code}'`);
             }
-        }
 
-        const updatedProfile = await this.profilesRepository.update(profileId, data);
+            const prof: Profiles = {
+                id: profileId,
+                name: data.name ?? existing.name,
+                code: data.code ?? existing.code,
+                description: data.description ?? null,
+                is_active: data.is_active ?? true,
+                created_at: existing.created_at,
+            }
 
-        // AUDIT: Log profile update (fire-and-forget)
-        this.auditService.log({
-            user_id: actingUserId,
-            action: 'update',
-            entity_type: 'profile',
-            entity_id: profileId,
-            old_values: { ...existing } as Record<string, unknown>,
-            new_values: { ...data } as Record<string, unknown>,
-            status: 'success'
-        }).catch(console.error);
+            const updated = await this.profilesRepository.update(t, profileId, prof);
+            const perms = data.permission_ids ?? []
+            if (perms.length > 0) {
+                const permissions = await this.permissionsRepository.findByIds(t, perms as string[]);
+                if (permissions.length !== perms.length) {
+                    const foundIds = new Set(permissions.map(p => p.id));
+                    const missing = perms.filter(id => !foundIds.has(id));
+                    throw new PermissionNotFoundError(missing.join(', '));
+                }
+                await this.profilePermissionsRepository.replacePermissions(t, profileId, permissions.map(p => p.id));
+            }
 
-        return updatedProfile;
+            this.auditService.log(t, {
+                user_id: actingUserId,
+                action: 'update',
+                entity_type: 'profile',
+                entity_id: profileId,
+                old_values: { ...existing },
+                new_values: { ...data },
+                status: 'success'
+            }).catch(console.error);
+
+            return updated;
+        });
     }
 
     async delete(actingUserId: string, profileId: string): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
+        return withTransaction(async (t: TransactionTask) => {
+            const existing = await this.profilesRepository.findById(t, profileId);
+            if (!existing) throw new ProfileNotFoundError(profileId);
 
-        const existing = await this.profilesRepository.findById(profileId);
-        if (!existing) {
-            throw new ProfileNotFoundError(profileId);
-        }
-
-        await this.profilesRepository.delete(profileId);
-
-        // AUDIT: Log profile deletion (fire-and-forget)
-        this.auditService.log({
-            user_id: actingUserId,
-            action: 'delete',
-            entity_type: 'profile',
-            entity_id: profileId,
-            old_values: { ...existing } as Record<string, unknown>,
-            new_values: { is_deleted: true },
-            status: 'success'
-        }).catch(console.error);
-    }
-
-    async assignPermission(
-        actingUserId: string,
-        profileId: string,
-        permissionId: string,
-        effect: PermissionEffect
-    ): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
-
-        const profile = await this.profilesRepository.findById(profileId);
-        if (!profile) {
-            throw new ProfileNotFoundError(profileId);
-        }
-
-        const permission = await this.permissionsRepository.findById(permissionId);
-        if (!permission) {
-            throw new PermissionNotFoundError(permissionId);
-        }
-
-        const existingAssignment = await this.profilePermissionsRepository.findAssignment(profileId, permissionId);
-        if (existingAssignment) {
-            if (existingAssignment.effect !== effect) {
-                await this.profilePermissionsRepository.updateEffect(profileId, permissionId, effect);
-                // AUDIT: Log permission effect update
-                this.auditService.log({
-                    user_id: actingUserId,
-                    action: 'update',
-                    entity_type: 'profile_permission',
-                    entity_id: `${profileId}:${permissionId}`,
-                    old_values: { effect: existingAssignment.effect },
-                    new_values: { effect },
-                    status: 'success'
-                }).catch(console.error);
+            const prof: Profiles = {
+                id: profileId,
+                name: existing.name,
+                code: existing.code,
+                description: existing.description as string,
+                is_active: false,
+                created_at: existing.created_at,
             }
-            return;
-        }
 
-        await this.profilePermissionsRepository.assign(profileId, permissionId, effect);
+            await this.profilesRepository.update(t, profileId, prof);
 
-        // AUDIT: Log permission assignment (fire-and-forget)
-        this.auditService.log({
-            user_id: actingUserId,
-            action: 'create',
-            entity_type: 'profile_permission',
-            entity_id: `${profileId}:${permissionId}`,
-            old_values: null,
-            new_values: { profile_id: profileId, permission_id: permissionId, effect },
-            status: 'success'
-        }).catch(console.error);
-    }
-
-    async revokePermission(actingUserId: string, profileId: string, permissionId: string): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
-
-        const profile = await this.profilesRepository.findById(profileId);
-        if (!profile) {
-            throw new ProfileNotFoundError(profileId);
-        }
-
-        await this.profilePermissionsRepository.revoke(profileId, permissionId);
-
-        // AUDIT: Log permission revocation (fire-and-forget)
-        this.auditService.log({
-            user_id: actingUserId,
-            action: 'delete',
-            entity_type: 'profile_permission',
-            entity_id: `${profileId}:${permissionId}`,
-            old_values: { profile_id: profileId, permission_id: permissionId },
-            status: 'success'
-        }).catch(console.error);
-    }
-
-    async getPermissions(actingUserId: string, profileId: string): Promise<Array<{ permission: Permissions; effect: PermissionEffect }>> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-
-        const profilePermissions = await this.profilePermissionsRepository.findPermissionsByProfile(profileId);
-        const result: Array<{ permission: Permissions; effect: PermissionEffect }> = [];
-
-        for (const pp of profilePermissions) {
-            const permission = await this.permissionsRepository.findById(pp.permission_id);
-            if (permission) {
-                result.push({ permission, effect: pp.effect });
-            }
-        }
-
-        return result;
-    }
-
-    async getProfileWithPermissions(actingUserId: string, profileId: string): Promise<ProfileResponseDto> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-
-        const profile = await this.profilesRepository.findById(profileId);
-        if (!profile) {
-            throw new ProfileNotFoundError(profileId);
-        }
-
-        const profilePermissions = await this.profilePermissionsRepository.findPermissionsByProfile(profileId);
-
-        const permissions: ProfilePermissionFlagDto[] = profilePermissions.map(pp => ({
-            permissionId: pp.permission_id,
-            allowed: pp.effect === 'allow'
-        }));
-
-        return {
-            id: profile.id,
-            name: profile.name,
-            code: profile.code,
-            description: profile.description ?? undefined,
-            is_active: profile.is_active,
-            permissions
-        };
-    }
-
-    async createProfile(
-        actingUserId: string,
-        data: { name: string; description?: string; permission_ids: string[] }
-    ): Promise<{ id: string }> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
-
-        const code = data.name.toLowerCase().replace(/\s+/g, '_');
-
-        const profile = await this.profilesRepository.create({
-            name: data.name,
-            code,
-            description: data.description ?? null,
-            is_active: true,
-            created_by: actingUserId
+            this.auditService.log(t, {
+                user_id: actingUserId,
+                action: 'delete',
+                entity_type: 'profile',
+                entity_id: profileId,
+                old_values: { ...existing },
+                new_values: { is_deleted: true },
+                status: 'success'
+            }).catch(console.error);
         });
-
-        if (data.permission_ids.length > 0) {
-            await this.profilePermissionsRepository.batchAssign(profile.id, data.permission_ids);
-        }
-
-        // AUDIT: Log profile creation with permissions (fire-and-forget)
-        this.auditService.log({
-            user_id: actingUserId,
-            action: 'create',
-            entity_type: 'profile',
-            entity_id: profile.id,
-            old_values: null,
-            new_values: { ...data, code },
-            status: 'success'
-        }).catch(console.error);
-
-        return { id: profile.id };
-    }
-
-    async updateProfilePermissions(actingUserId: string, profileId: string, permissionIds: string[]): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
-
-        const profile = await this.profilesRepository.findById(profileId);
-        if (!profile) {
-            throw new ProfileNotFoundError(profileId);
-        }
-
-        // Get old permissions for audit
-        const oldPerms = await this.profilePermissionsRepository.findPermissionsByProfile(profileId);
-        const oldPermissionIds = oldPerms.map(p => p.permission_id);
-
-        await this.profilePermissionsRepository.replacePermissions(profileId, permissionIds);
-
-        // AUDIT: Log profile permissions update (fire-and-forget)
-        this.auditService.log({
-            user_id: actingUserId,
-            action: 'update',
-            entity_type: 'profile_permissions',
-            entity_id: profileId,
-            old_values: { permission_ids: oldPermissionIds },
-            new_values: { permission_ids: permissionIds },
-            status: 'success'
-        }).catch(console.error);
     }
 }

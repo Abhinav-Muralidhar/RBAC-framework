@@ -6,6 +6,24 @@
  * Based on database migrations.
  */
 
+import { AuditAction, AuditStatus } from "../models/audit_logs.model";
+
+// ============================================================
+// AUTH SESSIONS
+// ============================================================
+/**
+ * Strict input type for updating a session.
+ * Only these fields can be updated.
+ */
+export interface CreateAuthSessionInput {
+    user_id: string;
+    session_token: string;
+    ip_address: string;
+    user_agent: string;
+    login_at: Date;
+    expires_at: Date;
+    logout_at: Date | null;
+}
 // ============================================================
 // USERS
 // ============================================================
@@ -54,6 +72,7 @@ export interface CreateUserInput {
 /** Fields that can be updated on a user */
 export interface UpdateUserInput {
     password?: string;
+    username?: string;
     status?: 'active' | 'inactive' | 'deleted';
     first_name?: string | null;
     last_name?: string;
@@ -130,13 +149,6 @@ export interface CreateProfileInput {
     created_by?: string | null;
 }
 
-/** Fields that can be updated on a profile */
-export interface UpdateProfileInput {
-    name?: string;
-    code?: string;
-    description?: string | null;
-    is_active?: boolean;
-}
 
 // ============================================================
 // GROUPS
@@ -152,14 +164,6 @@ export interface CreateGroupInput {
     created_by?: string | null;
 }
 
-/** Fields that can be updated on a group */
-export interface UpdateGroupInput {
-    name?: string;
-    code?: string;
-    description?: string | null;
-    is_active?: boolean;
-}
-
 // ============================================================
 // MODULES
 // ============================================================
@@ -169,14 +173,6 @@ export interface CreateModuleInput {
     name: string;
     code: string;
     // Optional fields
-    description?: string | null;
-    is_active?: boolean;
-}
-
-/** Fields that can be updated on a module */
-export interface UpdateModuleInput {
-    name?: string;
-    code?: string;
     description?: string | null;
     is_active?: boolean;
 }
@@ -193,11 +189,6 @@ export interface CreatePermissionInput {
     description?: string | null;
 }
 
-/** Fields that can be updated on a permission */
-export interface UpdatePermissionInput {
-    action?: 'create' | 'read' | 'update' | 'delete' | 'export';
-    description?: string | null;
-}
 
 // ============================================================
 // SHARING RULES
@@ -237,20 +228,6 @@ export interface CreateSmtpConfigInput {
     reply_to_email?: string | null;
 }
 
-/** Fields that can be updated on SMTP config */
-export interface UpdateSmtpConfigInput {
-    name?: string;
-    host?: string;
-    port?: number;
-    username?: string;
-    password?: string;
-    encryption?: 'none' | 'ssl' | 'tls';
-    from_email?: string;
-    from_name?: string;
-    is_active?: boolean;
-    reply_to_email?: string | null;
-}
-
 // ============================================================
 // AUDIT LOGS (append-only, no update)
 // ============================================================
@@ -265,10 +242,21 @@ export interface CreateAuditLogInput {
     user_agent: string;
     status: 'success' | 'failure';
     // Optional fields
-    user_id?: string | null;
-    role_id?: string | null;
-    old_values?: Record<string, unknown> | null;
-    new_values?: Record<string, unknown> | null;
+    user_id: string | null;
+    role_id: string | null;
+    old_values: Record<string, unknown> | null;
+    new_values: Record<string, unknown> | null;
+}
+
+export interface AuditLogFilters {
+    startDate?: Date;
+    endDate?: Date;
+    user_id?: string;
+    role_id?: string;
+    action?: AuditAction;
+    module_id?: string;
+    entity_type?: string;
+    status?: AuditStatus;
 }
 
 // ============================================================
@@ -287,20 +275,15 @@ export interface CreateOtpTokenInput {
     attempt_count?: number;
 }
 
-// ============================================================
-// ORGANIZATIONS
-// ============================================================
-
-/** Fields that can be updated on an organization (from 01_organizations.js migration) */
-export interface UpdateOrganizationInput {
-    company_name?: string;
-    company_logo?: string;
-    address?: string;
-    city?: string;
-    state?: string;
-    postal_code?: string;
-    country?: string;
-    country_code?: string;
+export interface CreateOrganizationInput {
+    company_name: string;
+    company_logo?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postal_code?: string | null;
+    country?: string | null;
+    country_code?: string | null;
     phone?: string | null;
     fax?: string | null;
     website?: string | null;
@@ -308,6 +291,7 @@ export interface UpdateOrganizationInput {
     twitter?: string | null;
     linkedin?: string | null;
     financial_year_start_month?: number | null;
-    gstin?: string;
+    gstin?: string | null;
     is_active?: boolean;
+    created_by?: string | null;
 }

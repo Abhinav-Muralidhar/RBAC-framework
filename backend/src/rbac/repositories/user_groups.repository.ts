@@ -1,31 +1,37 @@
-import { Pool, QueryResultRow } from 'pg';
+import { IDatabase, ITask } from 'pg-promise';
 import { UserGroups } from '../models/user_groups.model';
 
+export type TransactionTask = ITask<unknown>;
+
 export interface IUserGroupsRepository {
-  addMember(userId: string, groupId: string, assignedBy?: string): Promise<void>;
-  removeMember(userId: string, groupId: string): Promise<void>;
-  findUsersByGroup(groupId: string): Promise<UserGroups[]>;
-  findGroupsByUser(userId: string): Promise<UserGroups[]>;
+  addMember(t: TransactionTask | undefined, userId: string, groupId: string, assignedBy?: string): Promise<void>;
+  removeMember(t: TransactionTask | undefined, userId: string, groupId: string): Promise<void>;
+  findUsersByGroup(t: TransactionTask | undefined, groupId: string): Promise<UserGroups[]>;
+  findGroupsByUser(t: TransactionTask | undefined, userId: string): Promise<UserGroups[]>;
+  addMembers(t: TransactionTask | undefined, groupId: string, userIds: string[], assignedBy?: string): Promise<void>;
+  replaceUsers(t: TransactionTask | undefined, groupId: string, userIds: string[], assignedBy?: string): Promise<void>;
 }
 
 export class UserGroupsRepository implements IUserGroupsRepository {
   private tableName = 'user_groups';
 
-  constructor(private pool: InstanceType<typeof Pool>) { }
+  constructor(private db: IDatabase<unknown>) { }
 
-  protected async query<T extends QueryResultRow>(
+  protected async query<T>(
     text: string,
-    params?: unknown[]
-  ): Promise<{ rows: T[]; rowCount: number | null }> {
-    return this.pool.query<T>(text, params);
+    params?: unknown[],
+    t?: TransactionTask
+  ): Promise<T[]> {
+    return (t ?? this.db).any<T>(text, params);
   }
 
   async addMember(
+    t: TransactionTask | undefined,
     userId: string,
     groupId: string,
     assignedBy?: string
   ): Promise<void> {
-    await this.query(
+    await (t ?? this.db).none(
       `
       INSERT INTO ${this.tableName} (user_id, group_id, assigned_by)
       VALUES ($1, $2, $3)
@@ -35,8 +41,12 @@ export class UserGroupsRepository implements IUserGroupsRepository {
     );
   }
 
-  async removeMember(userId: string, groupId: string): Promise<void> {
-    await this.query(
+  async removeMember(
+    t: TransactionTask | undefined,
+    userId: string,
+    groupId: string
+  ): Promise<void> {
+    await (t ?? this.db).none(
       `
       DELETE FROM ${this.tableName}
       WHERE user_id = $1 AND group_id = $2
@@ -45,25 +55,60 @@ export class UserGroupsRepository implements IUserGroupsRepository {
     );
   }
 
-  async findUsersByGroup(groupId: string): Promise<UserGroups[]> {
-    const res = await this.query<UserGroups>(
+  async findUsersByGroup(
+    t: TransactionTask | undefined,
+    groupId: string
+  ): Promise<UserGroups[]> {
+    return this.query<UserGroups>(
       `
       SELECT * FROM ${this.tableName}
       WHERE group_id = $1
       `,
-      [groupId]
+      [groupId],
+      t
     );
-    return res.rows;
   }
 
-  async findGroupsByUser(userId: string): Promise<UserGroups[]> {
-    const res = await this.query<UserGroups>(
+  async findGroupsByUser(
+    t: TransactionTask | undefined,
+    userId: string
+  ): Promise<UserGroups[]> {
+    return this.query<UserGroups>(
       `
       SELECT * FROM ${this.tableName}
       WHERE user_id = $1
       `,
-      [userId]
+      [userId],
+      t
     );
-    return res.rows;
+  }
+
+  async addMembers(
+    t: TransactionTask | undefined,
+    groupId: string,
+    userIds: string[],
+    assignedBy?: string
+  ): Promise<void> {
+    const executor = t ?? this.db;
+    for (const userId of userIds) {
+      await this.addMember(executor as TransactionTask, userId, groupId, assignedBy);
+    }
+  }
+
+
+  async replaceUsers(
+    t: TransactionTask | undefined,
+    groupId: string,
+    userIds: string[],
+    assignedBy?: string
+  ): Promise<void> {
+    const executor = t ?? this.db;
+    await executor.none(
+      `DELETE FROM ${this.tableName} WHERE group_id = $1`,
+      [groupId]
+    );
+    for (const userId of userIds) {
+      await this.addMember(executor as TransactionTask, userId, groupId, assignedBy);
+    }
   }
 }

@@ -5,7 +5,7 @@
  * All mutating operations require RBAC enforcement.
  * All mutations are audit logged.
  */
-
+import { withTransaction, TransactionTask } from '../utils/transaction.utils';
 import { Groups } from '../models/groups.model';
 import { IGroupRepository } from '../repositories/groups.repository';
 import { IGroupRoleRepository } from '../repositories/group_roles.repository';
@@ -15,29 +15,19 @@ import {
     GroupNotFoundError,
     DuplicateAssignmentError
 } from '../errors/rbac.errors';
-import { GroupListFilterDto, CreateGroupRequestDto, UpdateGroupRequestDto } from '../dto/group.dto';
+import { GroupResponseDto } from '../dto/group.dto';
 import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
+import { IUserGroupsRepository } from '../repositories/user_groups.repository';
 
 // Module code for RBAC operations
 const MODULE_CODE = 'SETTINGS';
 
 export interface IUnifiedGroupService {
-    // Group operations
-    getById(actingUserId: string, groupId: string): Promise<Groups>;
-    getByName(actingUserId: string, name: string): Promise<Groups>;
-    listAll(actingUserId: string): Promise<Groups[]>;
-    listPaginated(actingUserId: string, filters?: GroupListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
-    listActive(actingUserId: string): Promise<Groups[]>;
-    listInactive(actingUserId: string): Promise<Groups[]>;
-    create(actingUserId: string, data: CreateGroupRequestDto): Promise<Groups>;
-    update(actingUserId: string, groupId: string, data: UpdateGroupRequestDto): Promise<Groups>;
+    getById(actingUserId: string, groupId: string): Promise<GroupResponseDto>;
+    create(actingUserId: string, data: GroupResponseDto): Promise<Groups>;
     delete(actingUserId: string, groupId: string): Promise<void>;
-
-    // Role operations
-    assignRole(actingUserId: string, groupId: string, roleId: string): Promise<void>;
-    removeRole(actingUserId: string, groupId: string, roleId: string): Promise<void>;
-    replaceRoles(actingUserId: string, groupId: string, roleIds: string[]): Promise<void>;
-    getRoles(actingUserId: string, groupId: string): Promise<string[]>;
+    update(actingUserId: string, groupId: string, data: GroupResponseDto): Promise<Groups>;
+    listAll(actingUserId: string, filters?: { is_active?: boolean; name?: string; code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
 }
 
 export class UnifiedGroupService implements IUnifiedGroupService {
@@ -45,186 +35,141 @@ export class UnifiedGroupService implements IUnifiedGroupService {
         private groupRepository: IGroupRepository,
         private groupRoleRepository: IGroupRoleRepository,
         private evaluationService: IEvaluationService,
-        private auditService: IAuditService
+        private auditService: IAuditService,
+        private userGroupsRepository: IUserGroupsRepository
     ) { }
 
-    // -----------------------
-    // Group operations
-    // -----------------------
-    async getById(actingUserId: string, groupId: string): Promise<Groups> {
+    async getById(actingUserId: string, groupId: string): Promise<GroupResponseDto> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        const group = await this.groupRepository.findById(groupId);
-        if (!group) throw new GroupNotFoundError(groupId);
-        return group;
+
+        return withTransaction(async (t: TransactionTask) => {
+            const group = await this.groupRepository.findByIdWithDetails(t, groupId);
+            if (!group) throw new GroupNotFoundError(groupId);
+            return group;
+        });
     }
 
-    async getByName(actingUserId: string, name: string): Promise<Groups> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        const group = await this.groupRepository.findByName(name);
-        if (!group) throw new GroupNotFoundError(name);
-        return group;
-    }
-
-    async listAll(actingUserId: string): Promise<Groups[]> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        return this.groupRepository.findAll();
-    }
-
-    async listPaginated(
+    async listAll(
         actingUserId: string,
-        filters?: GroupListFilterDto,
+        filters?: { is_active?: boolean; name?: string; code?: string },
         pagination?: Partial<PaginationParams>
     ): Promise<PaginatedResult<Groups>> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        return this.groupRepository.findAllPaginated(filters, pagination);
+
+        return withTransaction(async (t: TransactionTask) => {
+            return this.groupRepository.findAllPaginated(t, filters, pagination);
+        });
     }
 
-    async listActive(actingUserId: string): Promise<Groups[]> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        return this.groupRepository.findActive();
-    }
-
-    async listInactive(actingUserId: string): Promise<Groups[]> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        return this.groupRepository.findInactive();
-    }
-
-    async create(actingUserId: string, data: CreateGroupRequestDto): Promise<Groups> {
+    async create(actingUserId: string, data: GroupResponseDto): Promise<Groups> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
 
         if (!data.name) throw new Error('Group name is required');
-        const existing = await this.groupRepository.findByName(data.name);
-        if (existing) throw new DuplicateAssignmentError(`group name '${data.name}'`);
+        if (!data.code) throw new Error('Group code is required');
 
-        const group = await this.groupRepository.create({
-            name: data.name,
-            code: data.code,
-            description: data.description ?? null,
-            is_active: data.is_active ?? true,
-            created_by: actingUserId
+        return withTransaction(async (t: TransactionTask) => {
+            const existing = await this.groupRepository.findByName(t, data.name);
+            if (existing) {
+                throw new DuplicateAssignmentError(`group name '${data.name}'`);
+            }
+
+            const group = await this.groupRepository.create(t, {
+                name: data.name,
+                code: data.code,
+                description: data.description ?? null,
+                is_active: data.is_active ?? true,
+                created_by: actingUserId
+            });
+
+            const roles = data.roles.map(r => r.id);
+            if (roles.length > 0) {
+                await this.groupRoleRepository.replaceRoles(t, group.id, roles, actingUserId);
+            }
+
+            const users = data.users.map(u => u.id);
+            if (users.length > 0) {
+                await this.userGroupsRepository.replaceUsers(t, group.id, users, actingUserId);
+            }
+
+            this.auditService.log(t, {
+                user_id: actingUserId,
+                action: 'create',
+                entity_type: 'group',
+                entity_id: group.id,
+                old_values: null,
+                new_values: { ...data } as Record<string, unknown>,
+                status: 'success'
+            }).catch(console.error);
+
+            return group;
         });
-
-        // AUDIT: Log group creation (fire-and-forget)
-        this.auditService.log({
-            user_id: actingUserId,
-            action: 'create',
-            entity_type: 'group',
-            entity_id: group.id,
-            old_values: null,
-            new_values: { ...data } as Record<string, unknown>,
-            status: 'success'
-        }).catch(console.error);
-
-        return group;
     }
 
-    async update(actingUserId: string, groupId: string, data: UpdateGroupRequestDto): Promise<Groups> {
+    async update(
+        actingUserId: string,
+        groupId: string,
+        data: GroupResponseDto
+    ): Promise<Groups> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
 
-        const existing = await this.groupRepository.findById(groupId);
-        if (!existing) throw new GroupNotFoundError(groupId);
+        return withTransaction(async (t: TransactionTask) => {
+            const existing = await this.groupRepository.findById(t, groupId);
+            if (!existing) throw new GroupNotFoundError(groupId);
 
-        if (data.name && data.name !== existing.name) {
-            const conflict = await this.groupRepository.findByName(data.name);
-            if (conflict) throw new DuplicateAssignmentError(`group name '${data.name}'`);
-        }
+            const updated: Groups = {
+                id: existing.id,
+                name: data.name ?? existing.name,
+                code: data.code ?? existing.code,
+                description: (data.description ?? existing.description) as string | null,
+                is_active: data.is_active ?? existing.is_active,
+                created_by: existing.created_by as string | null,
+                created_at: existing.created_at
+            };
 
-        const updatedGroup = await this.groupRepository.update(groupId, data);
+            const result = await this.groupRepository.update(t, groupId, updated);
 
-        // AUDIT: Log group update (fire-and-forget)
-        this.auditService.log({
-            user_id: actingUserId,
-            action: 'update',
-            entity_type: 'group',
-            entity_id: groupId,
-            old_values: { ...existing } as Record<string, unknown>,
-            new_values: { ...data } as Record<string, unknown>,
-            status: 'success'
-        }).catch(console.error);
+            const roles = data.roles.map(r => r.id);
+            if (roles.length > 0) {
+                await this.groupRoleRepository.replaceRoles(t, groupId, roles, actingUserId);
+            }
 
-        return updatedGroup;
+            const users = data.users.map(u => u.id);
+            if (users.length > 0) {
+                await this.userGroupsRepository.replaceUsers(t, groupId, users, actingUserId);
+            }
+
+            this.auditService.log(t, {
+                user_id: actingUserId,
+                action: 'update',
+                entity_type: 'group',
+                entity_id: groupId,
+                old_values: { ...existing } as Record<string, unknown>,
+                new_values: { ...data } as Record<string, unknown>,
+                status: 'success'
+            }).catch(console.error);
+
+            return result;
+        });
     }
 
     async delete(actingUserId: string, groupId: string): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
 
-        const existing = await this.groupRepository.findById(groupId);
-        if (!existing) throw new GroupNotFoundError(groupId);
+        return withTransaction(async (t: TransactionTask) => {
+            const existing = await this.groupRepository.findById(t, groupId);
+            if (!existing) throw new GroupNotFoundError(groupId);
 
-        await this.groupRepository.delete(groupId);
+            await this.groupRepository.delete(t, groupId);
 
-        // AUDIT: Log group deletion (fire-and-forget)
-        this.auditService.log({
-            user_id: actingUserId,
-            action: 'delete',
-            entity_type: 'group',
-            entity_id: groupId,
-            old_values: { ...existing } as Record<string, unknown>,
-            new_values: { is_deleted: true },
-            status: 'success'
-        }).catch(console.error);
-    }
-
-    // -----------------------
-    // Role operations
-    // -----------------------
-    async assignRole(actingUserId: string, groupId: string, roleId: string): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
-        await this.getById(actingUserId, groupId); // validate group exists
-        await this.groupRoleRepository.assignRole(groupId, roleId, actingUserId);
-
-        // AUDIT: Log group-role assignment (fire-and-forget)
-        this.auditService.log({
-            user_id: actingUserId,
-            action: 'create',
-            entity_type: 'group_role',
-            entity_id: `${groupId}:${roleId}`,
-            old_values: null,
-            new_values: { group_id: groupId, role_id: roleId },
-            status: 'success'
-        }).catch(console.error);
-    }
-
-    async removeRole(actingUserId: string, groupId: string, roleId: string): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
-        await this.getById(actingUserId, groupId); // validate group exists
-        await this.groupRoleRepository.removeRole(groupId, roleId);
-
-        // AUDIT: Log group-role removal (fire-and-forget)
-        this.auditService.log({
-            user_id: actingUserId,
-            action: 'delete',
-            entity_type: 'group_role',
-            entity_id: `${groupId}:${roleId}`,
-            old_values: { group_id: groupId, role_id: roleId },
-            status: 'success'
-        }).catch(console.error);
-    }
-
-    async replaceRoles(actingUserId: string, groupId: string, roleIds: string[]): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
-        await this.getById(actingUserId, groupId); // validate group exists
-
-        // Get old roles for audit
-        const oldRoleIds = await this.groupRoleRepository.findRolesByGroup(groupId);
-
-        await this.groupRoleRepository.replaceRoles(groupId, roleIds, actingUserId);
-
-        // AUDIT: Log group roles replacement (fire-and-forget)
-        this.auditService.log({
-            user_id: actingUserId,
-            action: 'update',
-            entity_type: 'group_roles',
-            entity_id: groupId,
-            old_values: { role_ids: oldRoleIds },
-            new_values: { role_ids: roleIds },
-            status: 'success'
-        }).catch(console.error);
-    }
-
-    async getRoles(actingUserId: string, groupId: string): Promise<string[]> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        await this.getById(actingUserId, groupId); // validate group exists
-        return this.groupRoleRepository.findRolesByGroup(groupId);
+            this.auditService.log(t, {
+                user_id: actingUserId,
+                action: 'delete',
+                entity_type: 'group',
+                entity_id: groupId,
+                old_values: { ...existing } as Record<string, unknown>,
+                new_values: { is_deleted: true },
+                status: 'success'
+            }).catch(console.error);
+        });
     }
 }

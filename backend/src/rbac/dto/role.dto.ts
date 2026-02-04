@@ -53,7 +53,6 @@ export interface RoleResponseDto {
     // Parent role (JOINed)
     parent_role_id: string | null;
     parent_role: {
-        id: string;
         name: string;
         code: string;
     } | null;

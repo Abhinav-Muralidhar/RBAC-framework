@@ -53,6 +53,10 @@ export interface GroupResponseDto {
         name: string;
         code: string;
     }>;
+    users: Array<{
+        id: string;
+        name: string;
+    }>;
 
     // User count in this group
     user_count?: number;

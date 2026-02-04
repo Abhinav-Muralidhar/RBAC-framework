@@ -1,11 +1,20 @@
-import { Pool, QueryResultRow } from 'pg';
+import { IDatabase, ITask } from 'pg-promise';
 import { AuditLogs, AuditAction, AuditStatus } from '../models/audit_logs.model';
-import { CreateAuditLogInput } from '../types/repository.types';
+import { CreateAuditLogInput, AuditLogFilters } from '../types/repository.types';
+import {
+  PaginationParams,
+  PaginatedResult,
+  normalizePaginationParams,
+  getPaginationOffset,
+  buildPaginatedResult
+} from '../utils/pagination.utils';
+
+export type TransactionTask = ITask<unknown>;
 
 /**
  * Raw row type from JOIN query
  */
-interface AuditLogWithDetailsRow extends QueryResultRow {
+export interface AuditLogWithDetailsRow {
   id: string;
   user_id: string | null;
   user_name: string | null;
@@ -27,27 +36,24 @@ interface AuditLogWithDetailsRow extends QueryResultRow {
 }
 
 export interface IAuditLogsRepository {
-  create(input: CreateAuditLogInput): Promise<AuditLogs>;
-  findById(id: string): Promise<AuditLogs | null>;
-  findByIdWithDetails(id: string): Promise<AuditLogWithDetailsRow | null>;
-  findByUser(userId: string, limit?: number, offset?: number): Promise<AuditLogs[]>;
-  findByEntity(entityType: string, entityId: string, limit?: number, offset?: number): Promise<AuditLogs[]>;
-  findByAction(action: AuditAction, limit?: number, offset?: number): Promise<AuditLogs[]>;
-  findByDateRange(startDate: Date, endDate: Date, limit?: number, offset?: number): Promise<AuditLogs[]>;
-  findAll(limit?: number, offset?: number): Promise<AuditLogs[]>;
-  findAllWithDetails(limit?: number, offset?: number): Promise<AuditLogWithDetailsRow[]>;
+  create(t: TransactionTask | undefined, input: CreateAuditLogInput): Promise<AuditLogs>;
+  findById(t: TransactionTask | undefined, id: string): Promise<AuditLogs | null>;
+  findByIdWithDetails(t: TransactionTask | undefined, id: string): Promise<AuditLogWithDetailsRow | null>;
+  findAllWithDetails(
+    t: TransactionTask | undefined,
+    filters?: AuditLogFilters,
+    pagination?: Partial<PaginationParams>
+  ): Promise<PaginatedResult<AuditLogWithDetailsRow>>;
 }
 
 export class AuditLogsRepository implements IAuditLogsRepository {
   private tableName = 'audit_logs';
 
-  constructor(private pool: InstanceType<typeof Pool>) { }
+  constructor(private db: IDatabase<unknown>) { }
 
-  protected async query<T extends QueryResultRow>(
-    text: string,
-    params?: unknown[]
-  ): Promise<{ rows: T[]; rowCount: number | null }> {
-    return this.pool.query<T>(text, params);
+  // Helper: use transaction if provided, otherwise main connection
+  private getTask(t?: TransactionTask) {
+    return t ?? this.db;
   }
 
   /**
@@ -84,100 +90,103 @@ export class AuditLogsRepository implements IAuditLogsRepository {
     `;
   }
 
-  async findById(id: string): Promise<AuditLogs | null> {
-    const res = await this.query<AuditLogs>(
+  async findById(t: TransactionTask | undefined, id: string): Promise<AuditLogs | null> {
+    const rows = await this.getTask(t).any<AuditLogs>(
       `SELECT * FROM ${this.tableName} WHERE id = $1`,
       [id]
     );
-    return res.rows[0] ?? null;
+    return rows[0] ?? null;
   }
 
-  /**
-   * Find audit log by ID with JOINed user, role, and module data
-   */
-  async findByIdWithDetails(id: string): Promise<AuditLogWithDetailsRow | null> {
-    const res = await this.query<AuditLogWithDetailsRow>(
+  async findByIdWithDetails(t: TransactionTask | undefined, id: string): Promise<AuditLogWithDetailsRow | null> {
+    const rows = await this.getTask(t).any<AuditLogWithDetailsRow>(
       `${this.selectWithJoinsQuery}
        WHERE al.id = $1`,
       [id]
     );
-    return res.rows[0] ?? null;
+    return rows[0] ?? null;
   }
 
-  async findByUser(userId: string, limit: number = 50, offset: number = 0): Promise<AuditLogs[]> {
-    const res = await this.query<AuditLogs>(
-      `SELECT * FROM ${this.tableName}
-       WHERE user_id = $1
-       ORDER BY created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [userId, limit, offset]
+  async findAllWithDetails(
+    t: TransactionTask | undefined,
+    filters?: AuditLogFilters,
+    pagination?: Partial<PaginationParams>
+  ): Promise<PaginatedResult<AuditLogWithDetailsRow>> {
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
+
+    const conditions: string[] = [];
+    const values: unknown[] = [];
+
+    if (filters) {
+      if (filters.user_id) {
+        values.push(filters.user_id);
+        conditions.push(`al.user_id = $${values.length}`);
+      }
+
+      if (filters.role_id) {
+        values.push(filters.role_id);
+        conditions.push(`al.role_id = $${values.length}`);
+      }
+
+      if (filters.action) {
+        values.push(filters.action);
+        conditions.push(`al.action = $${values.length}`);
+      }
+
+      if (filters.module_id) {
+        values.push(filters.module_id);
+        conditions.push(`al.module_id = $${values.length}`);
+      }
+
+      if (filters.entity_type) {
+        values.push(filters.entity_type);
+        conditions.push(`al.entity_type = $${values.length}`);
+      }
+
+      if (filters.status) {
+        values.push(filters.status);
+        conditions.push(`al.status = $${values.length}`);
+      }
+
+      if (filters.startDate && filters.endDate) {
+        values.push(filters.startDate, filters.endDate);
+        conditions.push(
+          `al.created_at BETWEEN $${values.length - 1} AND $${values.length}`
+        );
+      }
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const task = this.getTask(t);
+
+    const totalRes = await task.one<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName} ${where}`,
+      values
     );
-    return res.rows;
-  }
 
-  async findByEntity(entityType: string, entityId: string, limit: number = 50, offset: number = 0): Promise<AuditLogs[]> {
-    const res = await this.query<AuditLogs>(
-      `SELECT * FROM ${this.tableName}
-       WHERE entity_type = $1 AND entity_id = $2
-       ORDER BY created_at DESC
-       LIMIT $3 OFFSET $4`,
-      [entityType, entityId, limit, offset]
-    );
-    return res.rows;
-  }
-
-  async findByAction(action: AuditAction, limit: number = 50, offset: number = 0): Promise<AuditLogs[]> {
-    const res = await this.query<AuditLogs>(
-      `SELECT * FROM ${this.tableName}
-       WHERE action = $1
-       ORDER BY created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [action, limit, offset]
-    );
-    return res.rows;
-  }
-
-  async findByDateRange(startDate: Date, endDate: Date, limit: number = 50, offset: number = 0): Promise<AuditLogs[]> {
-    const res = await this.query<AuditLogs>(
-      `SELECT * FROM ${this.tableName}
-       WHERE created_at BETWEEN $1 AND $2
-       ORDER BY created_at DESC
-       LIMIT $3 OFFSET $4`,
-      [startDate, endDate, limit, offset]
-    );
-    return res.rows;
-  }
-
-  async findAll(limit: number = 50, offset: number = 0): Promise<AuditLogs[]> {
-    const res = await this.query<AuditLogs>(
-      `SELECT * FROM ${this.tableName}
-       ORDER BY created_at DESC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
-    return res.rows;
-  }
-
-  /**
-   * Find all audit logs with JOINed user, role, and module data
-   * Returns human-readable names alongside IDs
-   */
-  async findAllWithDetails(limit: number = 50, offset: number = 0): Promise<AuditLogWithDetailsRow[]> {
-    const res = await this.query<AuditLogWithDetailsRow>(
+    const rows = await task.any<AuditLogWithDetailsRow>(
       `${this.selectWithJoinsQuery}
+       ${where}
        ORDER BY al.created_at DESC
        LIMIT $1 OFFSET $2`,
-      [limit, offset]
+      [...values, p.limit, offset]
     );
-    return res.rows;
+
+    return buildPaginatedResult(
+      rows,
+      parseInt(totalRes.count ?? '0', 10),
+      p
+    );
   }
 
-  async create(input: CreateAuditLogInput): Promise<AuditLogs> {
-    const res = await this.query<AuditLogs>(
+  async create(t: TransactionTask | undefined, input: CreateAuditLogInput): Promise<AuditLogs> {
+    const row = await this.getTask(t).one<AuditLogs>(
       `INSERT INTO ${this.tableName} (
         action, module_id, entity_type, entity_id, ip_address, user_agent, status,
         user_id, role_id, old_values, new_values
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       RETURNING *`,
       [
         input.action,
@@ -193,8 +202,8 @@ export class AuditLogsRepository implements IAuditLogsRepository {
         input.new_values ? JSON.stringify(input.new_values) : null
       ]
     );
-    if (!res.rows[0]) throw new Error('Audit log creation failed');
-    return res.rows[0];
+
+    if (!row) throw new Error('Audit log creation failed');
+    return row;
   }
 }
-

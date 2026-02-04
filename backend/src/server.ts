@@ -3,7 +3,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
-import { Pool } from 'pg';
+import { db } from './db';
 import { createRBACRouter } from './rbac/routes';
 import { createAuthRouter } from './rbac/routes/auth.routes';
 import { errorHandler, notFoundHandler } from './rbac/middleware/errorHandler.middleware';
@@ -20,20 +20,6 @@ if (!process.env.COOKIE_SECRET) {
   process.exit(1);
 }
 app.set('trust proxy', 0);
-
-// Database connection pool
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  // Fallback to individual params if DATABASE_URL is not set (though .env has it)
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-  database: process.env.DB_NAME || 'rbac_db',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  max: parseInt(process.env.DB_POOL_SIZE || '20', 10),
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000
-});
 
 // Standard Middleware
 app.use(cors({
@@ -60,12 +46,12 @@ app.get('/health', (req: Request, res: Response) => {
   });
 });
 
-// Auth routes (public - no auth required)
-app.use('/auth', createAuthRouter(pool));
+// Auth routes (public)
+app.use('/auth', createAuthRouter(db));
 
-// Mount RBAC routes with /rbac prefix
-// All routes under /rbac/* require authentication
-app.use('/rbac', createRBACRouter(pool));
+// RBAC routes (protected)
+app.use('/rbac', createRBACRouter(db));
+
 
 // Error handling middleware (must be after all routes)
 app.use(notFoundHandler);

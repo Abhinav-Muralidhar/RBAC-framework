@@ -18,20 +18,26 @@ import { createProfilesRouter } from './profiles.routes';
 import { createGroupsRouter } from './groups.routes';
 import { createAuditLogsRouter } from './audit-logs.routes';
 import { createSessionsRouter } from './sessions.routes';
+import { IDatabase } from 'pg-promise';
+import { EvaluationService } from '../services/evaluation.service';
+import { PermissionsRepository } from '../repositories/permissions.repository';
 
 /**
  * Create the main RBAC router with all sub-routes
  */
-export function createRBACRouter(pool: Pool): Router {
+export function createRBACRouter(db: IDatabase<unknown>): Router {
     const router = Router();
 
     // Initialize repositories
-    const authSessionsRepository = new AuthSessionsRepository(pool);
-    const auditLogsRepository = new AuditLogsRepository(pool);
+    const authSessionsRepository = new AuthSessionsRepository(db);
+    const auditLogsRepository = new AuditLogsRepository(db);
+    const evaluationService = new EvaluationService(
+        new PermissionsRepository(db)
+    );
 
     // Initialize services needed for middleware
-    const auditService = new AuditService(auditLogsRepository);
-    const authSessionService = new AuthSessionService(authSessionsRepository, auditService);
+    const auditService = new AuditService(auditLogsRepository, evaluationService);
+    const authSessionService = new AuthSessionService(authSessionsRepository, auditService, evaluationService);
 
     // Create authentication middleware
     const authenticate = createAuthenticateMiddleware(authSessionService);
@@ -40,12 +46,12 @@ export function createRBACRouter(pool: Pool): Router {
     router.use(authenticate);
 
     // Mount sub-routers
-    router.use('/users', createUsersRouter(pool, auditService));
-    router.use('/roles', createRolesRouter(pool, auditService));
-    router.use('/profiles', createProfilesRouter(pool, auditService));
-    router.use('/groups', createGroupsRouter(pool, auditService));
-    router.use('/audit-logs', createAuditLogsRouter(pool));
-    router.use('/sessions', createSessionsRouter(pool, auditService));
+    router.use('/users', createUsersRouter(db, auditService));
+    router.use('/roles', createRolesRouter(db, auditService));
+    router.use('/profiles', createProfilesRouter(db, auditService));
+    router.use('/groups', createGroupsRouter(db));
+    router.use('/audit-logs', createAuditLogsRouter(db));
+    router.use('/sessions', createSessionsRouter(db, auditService));
 
     return router;
 }

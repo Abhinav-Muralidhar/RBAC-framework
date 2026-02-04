@@ -13,6 +13,13 @@ export class RBACError extends Error {
     }
 }
 
+// Custom error for sharing rules
+export class SharingRuleNotFoundError extends RBACError {
+    constructor(ruleId: string) {
+        super(`Sharing rule not found: ${ruleId}`);
+    }
+}
+
 /**
  * PermissionDeniedError
  * 

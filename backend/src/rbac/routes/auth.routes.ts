@@ -15,7 +15,18 @@ import { AuditService } from '../services/audit.service';
 import { authLimiter } from '../middleware/rateLimit.middleware';
 import { verifyPassword } from '../utils/crypto.utils';
 import { createAuthenticateMiddleware } from '../middleware/authenticate.middleware';
-
+import { EvaluationService } from '../services/evaluation.service';
+import { PermissionsRepository } from '../repositories/permissions.repository';
+import { IDatabase } from 'pg-promise';
+import { UserService } from '../services/user.service';
+import { PermissionService } from '../services/permission.service';
+import { ProfilesRepository } from '../repositories/profiles.repository';
+import { ProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
+import { RoleProfilesRepository } from '../repositories/role_profiles.repository';
+import { RoleRepository } from '../repositories/roles.repository';
+import { ModuleRepository } from '../repositories/modules.repository';
+import { PermissionEffect } from '../models/profile_permissions.model';
+import { PERMISSION_ACTIONS, PermissionAction } from '../models/permissions.model';
 // Cookie configuration
 const COOKIE_OPTIONS = {
     httpOnly: true,
@@ -25,18 +36,44 @@ const COOKIE_OPTIONS = {
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
 };
 
-export function createAuthRouter(pool: Pool): Router {
+function sendError(res: Response, status: number, message: string, code?: string) {
+    res.status(status).json({
+        data: null,
+        error: { message, code: code ?? 'ERROR' },
+        meta: {}
+    });
+}
+function sendSuccess<T>(res: Response, data: T, meta?: Record<string, unknown>) {
+    res.json({ data, error: null, meta: meta ?? {} });
+}
+function resolveEffect(effects: PermissionEffect[]): PermissionEffect {
+    if (effects.includes('deny')) return 'deny';
+    if (effects.includes('allow')) return 'allow';
+    return 'deny';
+}
+export function createAuthRouter(db: IDatabase<unknown>): Router {
     const router = Router();
 
     // Repositories
-    const sessionsRepo = new AuthSessionsRepository(pool);
-    const usersRepo = new UsersRepository(pool);
-    const auditLogsRepo = new AuditLogsRepository(pool);
+    const sessionsRepo = new AuthSessionsRepository(db);
+    const usersRepo = new UsersRepository(db);
+    const auditLogsRepo = new AuditLogsRepository(db);
+    const permissionsRepository = new PermissionsRepository(db);
+    const profilesRepository = new ProfilesRepository(db);
+    const profilePermissionsRepository = new ProfilePermissionsRepository(db);
+    const roleProfilesRepository = new RoleProfilesRepository(db);
+    const moduleRepository = new ModuleRepository(db);
+    const roleRepository = new RoleRepository(db);
+    const evaluationService = new EvaluationService(
+        new PermissionsRepository(db)
+    );
 
     // Services
-    const auditService = new AuditService(auditLogsRepo);
-    const authSessionService = new AuthSessionService(sessionsRepo, auditService);
+    const auditService = new AuditService(auditLogsRepo, evaluationService);
+    const authSessionService = new AuthSessionService(sessionsRepo, auditService, evaluationService);
     const requireAuth = createAuthenticateMiddleware(authSessionService);
+    const usersService = new UserService(usersRepo, evaluationService, auditService);
+    const permissionService = new PermissionService(permissionsRepository, profilesRepository, profilePermissionsRepository, roleProfilesRepository, moduleRepository, roleRepository, evaluationService, auditService);
 
     /**
      * POST /auth/login
@@ -47,43 +84,25 @@ export function createAuthRouter(pool: Pool): Router {
     router.post('/login', authLimiter, async (req: Request, res: Response): Promise<void> => {
         try {
             const { username, password } = req.body;
-
             if (!username || !password) {
-                res.status(400).json({
-                    data: null,
-                    error: { message: 'Username and password are required', code: 'VALIDATION_ERROR' },
-                    meta: { timestamp: new Date().toISOString() }
-                });
+                sendError(res, 400, 'Username and password are required', 'VALIDATION_ERROR');
                 return;
             }
 
-            // Find user by username
-            const user = await usersRepo.findByUsername(username);
+            const user = await usersService.findByUsername(username);
             if (!user) {
-                res.status(401).json({
-                    data: null,
-                    error: { message: 'Invalid username or password', code: 'AUTH_FAILED' },
-                    meta: { timestamp: new Date().toISOString() }
-                });
+                sendError(res, 401, 'Invalid username or password', 'AUTH_FAILED');
                 return;
             }
 
             // Check user status
             if (user.status !== 'active') {
-                res.status(401).json({
-                    data: null,
-                    error: { message: 'Account is not active', code: 'ACCOUNT_INACTIVE' },
-                    meta: { timestamp: new Date().toISOString() }
-                });
+                sendError(res, 401, 'Account is not active', 'ACCOUNT_INACTIVE');
                 return;
             }
             const isValidPassword = await verifyPassword(password, user.password);
             if (!isValidPassword) {
-                res.status(401).json({
-                    data: null,
-                    error: { message: 'Invalid username or password', code: 'AUTH_FAILED' },
-                    meta: { timestamp: new Date().toISOString() }
-                });
+                sendError(res, 401, 'Invalid username or password', 'AUTH_FAILED');
                 return;
             }
 
@@ -98,31 +117,14 @@ export function createAuthRouter(pool: Pool): Router {
             res.cookie('sessionToken', session.session_token, COOKIE_OPTIONS);
 
             // Update last login
-            await usersRepo.update(user.id, { last_login_at: new Date() });
+            await usersService.update(req.user!.id, user.id, { last_login_at: new Date() });
 
-            res.status(200).json({
-                data: {
-                    user: {
-                        id: user.id,
-                        username: user.username,
-                        first_name: user.first_name,
-                        last_name: user.last_name,
-                        primary_email: user.primary_email,
-                        status: user.status,
-                    },
-                    message: 'Login successful'
-                },
-                error: null,
-                meta: { timestamp: new Date().toISOString() }
-            });
+            const userResponse = await usersService.getById(user.id, user.id);
+
+            sendSuccess(res, userResponse, { message: 'Login successful' });
 
         } catch (error) {
-            console.error('Login error:', error);
-            res.status(500).json({
-                data: null,
-                error: { message: 'Login failed', code: 'INTERNAL_ERROR' },
-                meta: { timestamp: new Date().toISOString() }
-            });
+            sendError(res, 500, 'Login failed', 'INTERNAL_ERROR');
         }
     });
 
@@ -155,24 +157,17 @@ export function createAuthRouter(pool: Pool): Router {
                 signed: true,
             });
 
-            res.status(200).json({
-                data: { message: 'Logged out successfully' },
-                error: null,
-                meta: { timestamp: new Date().toISOString() }
-            });
+            sendSuccess(res, { message: 'Logged out successfully' });
 
         } catch (error) {
-            console.error('Logout error:', error);
+
+            sendError(res, 500, 'Logout failed', 'INTERNAL_ERROR');
             res.clearCookie('sessionToken', {
                 ...COOKIE_OPTIONS,
                 maxAge: undefined
             });
 
-            res.status(200).json({
-                data: { message: 'Logged out' },
-                error: null,
-                meta: { timestamp: new Date().toISOString() }
-            });
+            sendSuccess(res, { message: 'Logged out successfully' });
         }
     });
 
@@ -180,14 +175,41 @@ export function createAuthRouter(pool: Pool): Router {
     router.get('/users/me', requireAuth, async (req, res) => {
         const userId = req.user!.id; // from session middleware
 
-        const user = await usersRepo.findById(userId);
+        const user = await usersService.getById(userId, userId);
+        const modules = await moduleRepository.findAll();
 
-        res.json({
-            data: user,
-            error: null,
-            meta: { timestamp: new Date().toISOString() },
+        const permissions: Record<
+            string,
+            Record<PermissionAction, PermissionEffect>
+        > = {};
+
+        for (const module of modules) {
+            const modulePermissions: Record<
+                PermissionAction,
+                PermissionEffect
+            > = {} as Record<PermissionAction, PermissionEffect>;
+
+            for (const action of PERMISSION_ACTIONS) {
+                const effects =
+                    await permissionsRepository.findEffectsByUserAndModuleAction(
+                        undefined,
+                        userId,
+                        module.code,
+                        action
+                    );
+
+                modulePermissions[action] = resolveEffect(effects);
+            }
+
+            permissions[module.code] = modulePermissions;
+        }
+
+        sendSuccess(res, {
+            user,
+            permissions,
         });
     });
+
 
 
     return router;

@@ -6,7 +6,13 @@
  */
 
 import { AuditLogs, AuditAction, AuditStatus } from '../models/audit_logs.model';
-import { IAuditLogsRepository } from '../repositories/audit_logs.repository';
+import { AuditLogWithDetailsRow, IAuditLogsRepository } from '../repositories/audit_logs.repository';
+import { PaginatedResult, PaginationParams } from '../utils/pagination.utils';
+import { AuditLogFilters } from '../types/repository.types';
+import { IEvaluationService } from './evaluation.service';
+import { TransactionTask, withTransaction } from '../utils/transaction.utils'; // adjust path if needed
+import { IDatabase } from 'pg-promise';
+const MODULE_CODE = 'SETTINGS';
 
 export interface IAuditService {
     /**
@@ -16,6 +22,7 @@ export interface IAuditService {
      * Audit logs are append-only.
      */
     log(
+        t: TransactionTask | undefined,
         data: {
             user_id?: string;
             role_id?: string;
@@ -33,76 +40,48 @@ export interface IAuditService {
 
     /**
      * Get audit log by ID
-     * @throws AuditLogNotFoundError
      */
-    getById(logId: string): Promise<AuditLogs>;
+    getById(
+        actingUserId: string,
+        logId: string
+    ): Promise<AuditLogWithDetailsRow>;
 
     /**
-     * Query audit logs by user
-     */
-    getByUser(
-        userId: string,
-        limit?: number,
-        offset?: number
-    ): Promise<AuditLogs[]>;
-
-    /**
-     * Query audit logs by entity
-     */
-    getByEntity(
-        entityType: string,
-        entityId: string,
-        limit?: number,
-        offset?: number
-    ): Promise<AuditLogs[]>;
-
-    /**
-     * Query audit logs by action
-     */
-    getByAction(
-        action: AuditAction,
-        limit?: number,
-        offset?: number
-    ): Promise<AuditLogs[]>;
-
-    /**
-     * Query audit logs by date range
-     */
-    getByDateRange(
-        startDate: Date,
-        endDate: Date,
-        limit?: number,
-        offset?: number
-    ): Promise<AuditLogs[]>;
-
-    /**
-     * Query all audit logs
+     * Query audit logs with optional filters
      */
     getAll(
-        limit?: number,
-        offset?: number
-    ): Promise<AuditLogs[]>;
+        actingUserId: string,
+        filters?: AuditLogFilters,
+        pagination?: Partial<PaginationParams>
+    ): Promise<PaginatedResult<AuditLogWithDetailsRow>>;
 }
 
 /**
  * AuditService Implementation
  */
 export class AuditService implements IAuditService {
-    constructor(private readonly auditLogsRepository: IAuditLogsRepository) { }
 
-    async log(data: {
-        user_id?: string;
-        role_id?: string;
-        action: AuditAction;
-        module_id?: string;
-        entity_type?: string;
-        entity_id?: string;
-        old_values?: Record<string, unknown> | null;
-        new_values?: Record<string, unknown>;
-        ip_address?: string | undefined;
-        user_agent?: string | undefined;
-        status: AuditStatus;
-    }): Promise<AuditLogs> {
+    constructor(
+        private readonly auditLogsRepository: IAuditLogsRepository,
+        private evaluationService: IEvaluationService,
+    ) { }
+
+    async log(
+        t: TransactionTask | undefined,
+        data: {
+            user_id?: string;
+            role_id?: string;
+            action: AuditAction;
+            module_id?: string;
+            entity_type?: string;
+            entity_id?: string;
+            old_values?: Record<string, unknown> | null;
+            new_values?: Record<string, unknown>;
+            ip_address?: string | undefined;
+            user_agent?: string | undefined;
+            status: AuditStatus;
+        }
+    ): Promise<AuditLogs> {
         // Build strict input object - all required fields must have values
         const input = {
             action: data.action,
@@ -118,34 +97,27 @@ export class AuditService implements IAuditService {
             new_values: data.new_values ?? null
         };
 
-        return this.auditLogsRepository.create(input);
+        return this.auditLogsRepository.create(t, input);
     }
 
-    async getById(logId: string): Promise<AuditLogs> {
-        const log = await this.auditLogsRepository.findById(logId);
-        if (!log) {
-            throw new Error(`Audit log not found: ${logId}`);
-        }
-        return log;
+    async getById(
+        actingUserId: string,
+        logId: string
+    ): Promise<AuditLogWithDetailsRow> {
+        return withTransaction(async (t: TransactionTask) => {
+            await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
+            const log = await this.auditLogsRepository.findByIdWithDetails(t, logId);
+            if (!log) {
+                throw new Error(`Audit log not found: ${logId}`);
+            }
+            return log;
+        });
     }
 
-    async getByUser(userId: string, limit?: number, offset?: number): Promise<AuditLogs[]> {
-        return this.auditLogsRepository.findByUser(userId, limit, offset);
-    }
-
-    async getByEntity(entityType: string, entityId: string, limit?: number, offset?: number): Promise<AuditLogs[]> {
-        return this.auditLogsRepository.findByEntity(entityType, entityId, limit, offset);
-    }
-
-    async getByAction(action: AuditAction, limit?: number, offset?: number): Promise<AuditLogs[]> {
-        return this.auditLogsRepository.findByAction(action, limit, offset);
-    }
-
-    async getByDateRange(startDate: Date, endDate: Date, limit?: number, offset?: number): Promise<AuditLogs[]> {
-        return this.auditLogsRepository.findByDateRange(startDate, endDate, limit, offset);
-    }
-
-    async getAll(limit?: number, offset?: number): Promise<AuditLogs[]> {
-        return this.auditLogsRepository.findAll(limit, offset);
+    async getAll(actingUserId: string, filters: AuditLogFilters = {}, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogWithDetailsRow>> {
+        return withTransaction(async (t: TransactionTask) => {
+            await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
+            return this.auditLogsRepository.findAllWithDetails(t, filters, pagination);
+        });
     }
 }

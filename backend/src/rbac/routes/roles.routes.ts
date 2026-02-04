@@ -18,6 +18,7 @@ import { ModuleRepository } from '../repositories/modules.repository';
 import { ProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
 import { UsersRepository } from '../repositories/users.repository';
 import { parseId, parsePagination } from './_paramUtils';
+import { IDatabase } from 'pg-promise';
 
 /**
  * Standard response envelope
@@ -33,27 +34,29 @@ function sendError(res: Response, status: number, message: string, code?: string
         meta: {}
     });
 }
+function filter(query: any): any {
+    const filters: any = {};
+    if (query.parent_role_id) filters.parent_role_id = query.parent_role_id;
+    if (query.is_active) filters.is_active = query.is_active;
+    if (query.search) filters.search = query.search;
+    return filters;
+}
 
-export function createRolesRouter(pool: Pool, auditService: IAuditService): Router {
+export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditService): Router {
     const router = Router();
 
     // Initialize repositories
-    const roleRepository = new RoleRepository(pool);
-    const roleProfilesRepository = new RoleProfilesRepository(pool);
-    const userRoleRepository = new UserRoleRepository(pool);
-    const permissionsRepository = new PermissionsRepository(pool);
-    const moduleRepository = new ModuleRepository(pool);
-    const profilePermissionsRepository = new ProfilePermissionsRepository(pool);
-    const usersRepository = new UsersRepository(pool);
+    const roleRepository = new RoleRepository(db);
+    const roleProfilesRepository = new RoleProfilesRepository(db);
+    const userRoleRepository = new UserRoleRepository(db);
+    const permissionsRepository = new PermissionsRepository(db);
+    const moduleRepository = new ModuleRepository(db);
+    const profilePermissionsRepository = new ProfilePermissionsRepository(db);
+    const usersRepository = new UsersRepository(db);
 
     // Initialize services
     const evaluationService = new EvaluationService(
-        moduleRepository,
-        userRoleRepository,
-        roleProfilesRepository,
-        profilePermissionsRepository,
-        permissionsRepository,
-        usersRepository
+        permissionsRepository
     );
     const roleService = new RoleService(
         roleRepository,
@@ -71,8 +74,9 @@ export function createRolesRouter(pool: Pool, auditService: IAuditService): Rout
         try {
             const actingUserId = req.user!.id;
             const pagination = parsePagination(req.query);
+            const filters = filter(req.query);
 
-            const result = await roleService.listPaginated(actingUserId, {}, pagination);
+            const result = await roleService.listPaginated(actingUserId, filters, pagination);
             sendSuccess(res, result.data, {
                 page: result.pagination.page,
                 limit: result.pagination.limit,
@@ -91,7 +95,7 @@ export function createRolesRouter(pool: Pool, auditService: IAuditService): Rout
     router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
         try {
             const roleId = parseId(req.params.id, 'roleId');
-            const role = await roleRepository.findByIdWithDetails(roleId);
+            const role = await roleService.getById(req.user!.id, roleId);
             if (!role) {
                 return sendError(res, 404, `Role not found: ${roleId}`, 'ROLE_NOT_FOUND');
             }
@@ -108,7 +112,7 @@ export function createRolesRouter(pool: Pool, auditService: IAuditService): Rout
     router.post('/', async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
-            const role = await roleService.create(actingUserId, req.body);
+            const role = await roleService.createRoleProfiles(actingUserId, req.body);
             sendSuccess(res, role);
         } catch (error) {
             next(error);
@@ -123,7 +127,7 @@ export function createRolesRouter(pool: Pool, auditService: IAuditService): Rout
         try {
             const actingUserId = req.user!.id;
             const roleId = parseId(req.params.id, 'roleId');
-            const role = await roleService.update(actingUserId, roleId, req.body);
+            const role = await roleService.updateRoleProfiles(actingUserId, roleId, req.body);
             sendSuccess(res, role);
         } catch (error) {
             next(error);
@@ -162,22 +166,6 @@ export function createRolesRouter(pool: Pool, auditService: IAuditService): Rout
     });
 
     /**
-     * POST /rbac/roles/:id/assign/:userId
-     * Assign role to user
-     */
-    router.post('/:id/assign/:userId', async (req: Request, res: Response, next: NextFunction) => {
-        try {
-            const actingUserId = req.user!.id;
-            const roleId = parseId(req.params.id, 'roleId');
-            const targetUserId = parseId(req.params.userId, 'userId');
-            await roleService.assignToUser(actingUserId, targetUserId, roleId);
-            sendSuccess(res, { assigned: true });
-        } catch (error) {
-            next(error);
-        }
-    });
-
-    /**
      * DELETE /rbac/roles/:id/revoke/:userId
      * Revoke role from user
      */
@@ -186,7 +174,7 @@ export function createRolesRouter(pool: Pool, auditService: IAuditService): Rout
             const actingUserId = req.user!.id;
             const roleId = parseId(req.params.id, 'roleId');
             const targetUserId = parseId(req.params.userId, 'userId');
-            await roleService.revokeFromUser(actingUserId, targetUserId, roleId);
+            await roleService.unassignRoleFromUser(actingUserId, roleId, targetUserId);
             sendSuccess(res, { revoked: true });
         } catch (error) {
             next(error);

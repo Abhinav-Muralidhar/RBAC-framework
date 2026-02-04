@@ -1,6 +1,6 @@
-import { Pool, QueryResultRow } from 'pg';
+import { IDatabase, ITask } from 'pg-promise';
 import { Groups } from '../models/groups.model';
-import { GroupListFilterDto, GroupResponseDto } from '../dto/group.dto';
+import { TransactionTask } from '../utils/transaction.utils';
 import {
   PaginationParams,
   PaginatedResult,
@@ -8,77 +8,89 @@ import {
   getPaginationOffset,
   buildPaginatedResult
 } from '../utils/pagination.utils';
-import { CreateGroupInput, UpdateGroupInput } from '../types/repository.types';
+import { CreateGroupInput } from '../types/repository.types';
 
 export interface IGroupRepository {
-  create(input: CreateGroupInput): Promise<Groups>;
-  update(id: string, input: UpdateGroupInput): Promise<Groups>;
-  delete(id: string): Promise<void>;
-  findById(id: string): Promise<Groups | null>;
-  findByIdWithDetails(id: string): Promise<GroupResponseDto | null>;
-  findByIdIncludingInactive(id: string): Promise<Groups | null>;
-  findAll(filters?: GroupListFilterDto): Promise<Groups[]>;
-  findAllPaginated(filters?: GroupListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
-  findByName(name: string): Promise<Groups | null>;
-  count(filters?: GroupListFilterDto): Promise<number>;
-  findActive(): Promise<Groups[]>;
-  findInactive(): Promise<Groups[]>;
+  create(t: TransactionTask, input: CreateGroupInput): Promise<Groups>;
+  update(t: TransactionTask, id: string, input: Groups): Promise<Groups>;
+  delete(t: TransactionTask, id: string): Promise<void>;
+  findById(t: TransactionTask, id: string): Promise<Groups | null>;
+  findByIdWithDetails(t: TransactionTask, id: string): Promise<GroupResponse | null>;
+  findByName(t: TransactionTask, name: string, isActive?: boolean): Promise<PaginatedResult<Groups>>;
+  findAllPaginated(t: TransactionTask, filters?: { isActive?: boolean; name?: string, code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
 }
 
-const ACTIVE_FILTER = `is_active = true`;
+export interface GroupResponse {
+  id: string;
+  name: string;
+  code: string;
+  description: string | null;
+  is_active: boolean;
+  roles: Array<{ id: string; name: string; code: string }>;
+  users: Array<{ id: string; name: string }>;
+  user_count?: number;
+  created_at: Date;
+  created_by: string | null;
+  created_by_name: string | null;
+}
 
 export class GroupRepository implements IGroupRepository {
   private tableName = 'groups';
 
-  constructor(private pool: InstanceType<typeof Pool>) { }
+  constructor(private db: IDatabase<unknown>) { }
 
-  protected async query<T extends QueryResultRow>(
-    text: string,
-    params?: unknown[]
-  ): Promise<{ rows: T[]; rowCount: number | null }> {
-    return this.pool.query<T>(text, params);
+  protected async query<T>(text: string, params?: unknown[], t?: ITask<unknown>): Promise<T[]> {
+    return (t ?? this.db).any<T>(text, params);
   }
 
-  async findById(id: string): Promise<Groups | null> {
-    const res = await this.query<Groups>(
-      `SELECT * FROM ${this.tableName} WHERE id = $1 AND ${ACTIVE_FILTER}`,
-      [id]
+  async findById(t: TransactionTask, id: string): Promise<Groups | null> {
+    const rows = await this.query<Groups>(
+      `SELECT * FROM ${this.tableName} WHERE id = $1`,
+      [id],
+      t
     );
-    return res.rows[0] ?? null;
+    return rows[0] ?? null;
   }
 
-  /**
-   * Find group by ID with JOINed roles, user count, and creator name
-   */
-  async findByIdWithDetails(id: string): Promise<GroupResponseDto | null> {
-    // Get the group with creator name and user count
-    const groupRes = await this.query<Groups & {
-      created_by_name: string | null;
-      user_count: string;
-    }>(
-      `SELECT 
-        g.*,
-        CASE 
-          WHEN u.id IS NOT NULL THEN COALESCE(u.first_name, '') || ' ' || u.last_name
-          ELSE NULL
-        END AS created_by_name,
-        (SELECT COUNT(*) FROM user_groups ug WHERE ug.group_id = g.id) AS user_count
-      FROM ${this.tableName} g
-      LEFT JOIN users u ON g.created_by = u.id
-      WHERE g.id = $1 AND g.${ACTIVE_FILTER}`,
-      [id]
+
+  async findByIdWithDetails(t: TransactionTask, id: string): Promise<GroupResponse | null> {
+    const groupRes = await this.query<
+      Groups & { created_by_name: string | null; user_count: string }
+    >(
+      `SELECT
+         g.*,
+         CASE
+           WHEN u.id IS NOT NULL
+           THEN COALESCE(u.first_name, '') || ' ' || u.last_name
+           ELSE NULL
+         END AS created_by_name,
+         (SELECT COUNT(*) FROM user_groups ug WHERE ug.group_id = g.id) AS user_count
+       FROM ${this.tableName} g
+       LEFT JOIN users u ON g.created_by = u.id
+       WHERE g.id = $1`,
+      [id],
+      t
     );
 
-    const group = groupRes.rows[0];
+    const group = groupRes[0];
     if (!group) return null;
 
-    // Get assigned roles
-    const rolesRes = await this.query<{ id: string; name: string; code: string }>(
+    const roles = await this.query<{ id: string; name: string; code: string }>(
       `SELECT r.id, r.name, r.code
        FROM roles r
        INNER JOIN group_roles gr ON r.id = gr.role_id
        WHERE gr.group_id = $1 AND r.is_active = true`,
-      [id]
+      [id],
+      t
+    );
+
+    const users = await this.query<{ id: string; name: string }>(
+      `SELECT u.id, u.username AS name
+       FROM users u
+       INNER JOIN user_groups ug ON u.id = ug.user_id
+       WHERE ug.group_id = $1 AND u.is_active = true`,
+      [id],
+      t
     );
 
     return {
@@ -87,7 +99,8 @@ export class GroupRepository implements IGroupRepository {
       code: group.code,
       description: group.description ?? null,
       is_active: group.is_active,
-      roles: rolesRes.rows,
+      roles,
+      users,
       user_count: parseInt(group.user_count, 10),
       created_at: group.created_at,
       created_by: group.created_by ?? null,
@@ -95,54 +108,49 @@ export class GroupRepository implements IGroupRepository {
     };
   }
 
-  async findByIdIncludingInactive(id: string): Promise<Groups | null> {
-    const res = await this.query<Groups>(
-      `SELECT * FROM ${this.tableName} WHERE id = $1`,
-      [id]
-    );
-    return res.rows[0] ?? null;
-  }
-
-  async findAll(filters?: GroupListFilterDto): Promise<Groups[]> {
-    let sql = `SELECT * FROM ${this.tableName} WHERE ${ACTIVE_FILTER}`;
-    sql += ` ORDER BY created_at DESC`;
-    const res = await this.query<Groups>(sql);
-    return res.rows;
-  }
-
-  async findAllPaginated(
-    filters?: GroupListFilterDto,
-    pagination?: Partial<PaginationParams>
+  async findByName(
+    t: TransactionTask,
+    name: string,
+    isActive = true,
+    pagination?: Partial<PaginationParams>,
   ): Promise<PaginatedResult<Groups>> {
-    const normalizedPagination = normalizePaginationParams(pagination);
-    const offset = getPaginationOffset(normalizedPagination.page, normalizedPagination.limit);
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
 
-    const total = await this.count(filters);
+    const params: unknown[] = [`%${name}%`, isActive];
 
-    let sql = `SELECT * FROM ${this.tableName} WHERE ${ACTIVE_FILTER}`;
-    sql += ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`;
-
-    const res = await this.query<Groups>(sql, [normalizedPagination.limit, offset]);
-    return buildPaginatedResult(res.rows, total, normalizedPagination);
-  }
-
-  async count(filters?: GroupListFilterDto): Promise<number> {
-    const sql = `SELECT COUNT(*) as count FROM ${this.tableName} WHERE ${ACTIVE_FILTER}`;
-    const res = await this.query<{ count: string }>(sql);
-    return parseInt(res.rows[0]?.count ?? '0', 10);
-  }
-
-  async findByName(name: string): Promise<Groups | null> {
-    const res = await this.query<Groups>(
-      `SELECT * FROM ${this.tableName} WHERE name = $1 AND ${ACTIVE_FILTER}`,
-      [name]
+    const totalRes = await this.query<{ count: string }>(
+      `SELECT COUNT(*)
+       FROM ${this.tableName}
+       WHERE name ILIKE $1 AND is_active = $2`,
+      params,
+      t
     );
-    return res.rows[0] ?? null;
+
+    params.push(p.limit, offset);
+
+    const res = await this.query<Groups>(
+      `SELECT *
+       FROM ${this.tableName}
+       WHERE name ILIKE $1 AND is_active = $2
+       ORDER BY created_at DESC
+       LIMIT $3 OFFSET $4`,
+      params,
+      t
+    );
+
+    return buildPaginatedResult(
+      res,
+      parseInt(totalRes[0]?.count ?? '0', 10),
+      p
+    );
   }
 
-  async create(input: CreateGroupInput): Promise<Groups> {
-    const res = await this.query<Groups>(
-      `INSERT INTO ${this.tableName} (name, code, description, is_active, created_by)
+
+  async create(t: TransactionTask, input: CreateGroupInput): Promise<Groups> {
+    return (t ?? this.db).one<Groups>(
+      `INSERT INTO ${this.tableName}
+       (name, code, description, is_active, created_by)
        VALUES ($1, $2, $3, COALESCE($4, true), $5)
        RETURNING *`,
       [
@@ -153,68 +161,92 @@ export class GroupRepository implements IGroupRepository {
         input.created_by ?? null
       ]
     );
-    if (!res.rows[0]) throw new Error('Group creation failed');
-    return res.rows[0];
   }
 
-  async update(id: string, input: UpdateGroupInput): Promise<Groups> {
-    const updates: string[] = [];
-    const values: unknown[] = [id];
-    let paramIdx = 2;
-
-    if (input.name !== undefined) {
-      updates.push(`name = $${paramIdx++}`);
-      values.push(input.name);
-    }
-    if (input.code !== undefined) {
-      updates.push(`code = $${paramIdx++}`);
-      values.push(input.code);
-    }
-    if (input.description !== undefined) {
-      updates.push(`description = $${paramIdx++}`);
-      values.push(input.description);
-    }
-    if (input.is_active !== undefined) {
-      updates.push(`is_active = $${paramIdx++}`);
-      values.push(input.is_active);
-    }
-
-    if (updates.length === 0) {
-      const existing = await this.findById(id);
-      if (!existing) throw new Error(`Group ${id} not found`);
-      return existing;
-    }
-
-    const res = await this.query<Groups>(
+  async update(t: TransactionTask, id: string, input: Groups): Promise<Groups> {
+    const row = await (t ?? this.db).oneOrNone<Groups>(
       `UPDATE ${this.tableName}
-       SET ${updates.join(', ')}
-       WHERE id = $1 AND ${ACTIVE_FILTER}
+       SET name = $1,
+           code = $2,
+           description = $3,
+           is_active = $4
+       WHERE id = $5
        RETURNING *`,
-      values
+      [
+        input.name,
+        input.code,
+        input.description ?? null,
+        input.is_active ?? null,
+        id
+      ]
     );
 
-    if (res.rows.length === 0) throw new Error(`Group ${id} not found for update`);
-    return res.rows[0]!;
+    if (!row) {
+      throw new Error(`Group ${id} not found for update`);
+    }
+
+    return row;
   }
 
-  async delete(id: string): Promise<void> {
-    await this.query(
-      `UPDATE ${this.tableName} SET is_active = false WHERE id = $1`,
+  async delete(t: TransactionTask, id: string): Promise<void> {
+    await (t ?? this.db).none(
+      `UPDATE ${this.tableName}
+       SET is_active = false
+       WHERE id = $1`,
       [id]
     );
   }
 
-  async findActive(): Promise<Groups[]> {
-    const res = await this.query<Groups>(
-      `SELECT * FROM ${this.tableName} WHERE ${ACTIVE_FILTER} ORDER BY created_at DESC`
-    );
-    return res.rows;
-  }
+  async findAllPaginated(
+    t: TransactionTask,
+    filters?: { isActive?: boolean; name?: string; code?: string },
+    pagination?: Partial<PaginationParams>
+  ): Promise<PaginatedResult<Groups>> {
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
 
-  async findInactive(): Promise<Groups[]> {
-    const res = await this.query<Groups>(
-      `SELECT * FROM ${this.tableName} WHERE is_active = false ORDER BY created_at DESC`
+    const params: unknown[] = [];
+    const where: string[] = [];
+
+    // isActive (default true)
+    params.push(filters?.isActive ?? true);
+    where.push(`is_active = $${params.length}`);
+
+    if (filters?.name) {
+      params.push(`%${filters.name}%`);
+      where.push(`name ILIKE $${params.length}`);
+    }
+
+    if (filters?.code) {
+      params.push(`%${filters.code}%`);
+      where.push(`code ILIKE $${params.length}`);
+    }
+
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    const totalRes = await this.query<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName} ${whereClause}`,
+      params,
+      t
     );
-    return res.rows;
+
+    params.push(p.limit, offset);
+
+    const res = await this.query<Groups>(
+      `SELECT *
+     FROM ${this.tableName}
+     ${whereClause}
+     ORDER BY created_at DESC
+     LIMIT $${params.length - 1}
+     OFFSET $${params.length}`,
+      params,
+      t
+    );
+
+    return buildPaginatedResult(
+      res,
+      parseInt(totalRes[0]?.count ?? '0', 10),
+      p
+    );
   }
 }

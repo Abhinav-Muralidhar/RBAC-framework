@@ -117,6 +117,8 @@ export interface UpdateUserRequestDto {
 
     aggregation_format?: string | null;
     signature?: string | null;
+    last_login_at?: Date | null;
+    password_changed_at?: Date | null;
 }
 
 // ============================================================================
@@ -128,14 +130,10 @@ export interface UpdateUserRequestDto {
  * Whitelisted query parameters for listing users
  */
 export interface UserListFilterDto {
-    id?: string;
-    username?: string;
-    status?: 'active' | 'inactive';
-    department?: string;
-    reports_to_user_id?: string;
-    city?: string;
-    state?: string;
-    country?: string;
+    status: string,
+    email: string,
+    username: string,
+    name: string
 }
 
 // ============================================================================

@@ -22,16 +22,6 @@ export interface UpdateSharingRuleRequestDto {
 }
 
 // ============================================================================
-// FILTER DTOs
-// ============================================================================
-
-export interface SharingRuleListFilterDto {
-    module_id?: string;
-    rule_type?: SharingRuleType;
-    is_active?: boolean;
-}
-
-// ============================================================================
 // RESPONSE DTOs
 // ============================================================================
 

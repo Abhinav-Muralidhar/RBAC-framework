@@ -1,6 +1,5 @@
-import { Pool, QueryResultRow } from 'pg';
+import { IDatabase, ITask } from 'pg-promise';
 import { Profiles } from '../models/profiles.model';
-import { ProfileListFilterDto, ProfileResponseDto } from '../dto/profile.dto';
 import { PermissionEffect } from '../models/profile_permissions.model';
 import {
   PaginationParams,
@@ -9,71 +8,110 @@ import {
   getPaginationOffset,
   buildPaginatedResult
 } from '../utils/pagination.utils';
-import { CreateProfileInput, UpdateProfileInput } from '../types/repository.types';
+import { CreateProfileInput } from '../types/repository.types';
 
-export interface IProfilesRepository {
-  create(input: CreateProfileInput): Promise<Profiles>;
-  update(id: string, input: UpdateProfileInput): Promise<Profiles>;
-  delete(id: string): Promise<void>;
-  findById(id: string): Promise<Profiles | null>;
-  findByIdWithDetails(id: string): Promise<ProfileResponseDto | null>;
-  findByIdIncludingInactive(id: string): Promise<Profiles | null>;
-  findByCode(code: string): Promise<Profiles | null>;
-  findAll(filters?: ProfileListFilterDto): Promise<Profiles[]>;
-  findAllPaginated(filters?: ProfileListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Profiles>>;
-  count(filters?: ProfileListFilterDto): Promise<number>;
-  findActive(): Promise<Profiles[]>;
+export interface ProfileDetail {
+  id: string;
+  name: string;
+  code: string;
+  description: string | null;
+  is_active: boolean;
+  permissions: Array<{
+    id: string;
+    action: string;
+    effect: PermissionEffect;
+    module_id: string;
+    module_name: string;
+    module_code: string;
+  }>;
+  role_count?: number;
+  created_at: Date;
+  created_by: string | null;
+  created_by_name: string | null;
 }
 
-const ACTIVE_FILTER = `is_active = true`;
+export interface IProfilesRepository {
+  create(t: ITask<unknown> | undefined, input: CreateProfileInput): Promise<Profiles>;
+  update(t: ITask<unknown> | undefined, id: string, input: Profiles): Promise<Profiles>;
+  findById(t: ITask<unknown> | undefined, id: string): Promise<Profiles | null>;
+  findByIdWithDetails(t: ITask<unknown> | undefined, id: string): Promise<ProfileDetail | null>;
+  findAllPaginated(
+    t: ITask<unknown> | undefined,
+    filters?: { is_active?: boolean; search?: string },
+    pagination?: Partial<PaginationParams>
+  ): Promise<PaginatedResult<Profiles>>;
+  findByIds(t: ITask<unknown> | undefined, ids: string[]): Promise<Profiles[]>;
+  findByRoles(t: ITask<unknown> | undefined, roleIds: string[]): Promise<Profiles[]>
+}
 
 export class ProfilesRepository implements IProfilesRepository {
   private tableName = 'profiles';
 
-  constructor(private pool: InstanceType<typeof Pool>) { }
+  constructor(private db: IDatabase<unknown>) { }
 
-  protected async query<T extends QueryResultRow>(
+  protected query<T>(
     text: string,
-    params?: unknown[]
-  ): Promise<{ rows: T[]; rowCount: number | null }> {
-    return this.pool.query<T>(text, params);
+    params?: unknown[],
+    t?: ITask<unknown>
+  ): Promise<T[]> {
+    return (t ?? this.db).any<T>(text, params);
   }
 
-  async findById(id: string): Promise<Profiles | null> {
-    const res = await this.query<Profiles>(
-      `SELECT * FROM ${this.tableName} WHERE id = $1 AND ${ACTIVE_FILTER}`,
+  async findByIds(
+    t: ITask<unknown> | undefined,
+    ids: string[]
+  ): Promise<Profiles[]> {
+    return (t ?? this.db).any<Profiles>(
+      `SELECT * FROM ${this.tableName} WHERE id = ANY($1)`,
+      [ids]
+    );
+  }
+
+  async findByRoles(t: ITask<unknown> | undefined, roleIds: string[]): Promise<Profiles[]> {
+    return (t ?? this.db).any<Profiles>(
+      `SELECT * FROM ${this.tableName} WHERE id = ANY($1)`,
+      [roleIds]
+    );
+  }
+
+
+  async findById(
+    t: ITask<unknown> | undefined,
+    id: string
+  ): Promise<Profiles | null> {
+    return (t ?? this.db).oneOrNone<Profiles>(
+      `SELECT * FROM ${this.tableName} WHERE id = $1`,
       [id]
     );
-    return res.rows[0] ?? null;
   }
 
   /**
-   * Find profile by ID with JOINed permissions (including module info), role count, and creator name
+   * Find profile by ID with JOINed permissions, role count, and creator name
    */
-  async findByIdWithDetails(id: string): Promise<ProfileResponseDto | null> {
-    // Get the profile with creator name and role count
-    const profileRes = await this.query<Profiles & {
+  async findByIdWithDetails(
+    t: ITask<unknown> | undefined,
+    id: string
+  ): Promise<ProfileDetail | null> {
+    const profile = await (t ?? this.db).oneOrNone<Profiles & {
       created_by_name: string | null;
       role_count: string;
     }>(
       `SELECT 
         p.*,
         CASE 
-          WHEN u.id IS NOT NULL THEN COALESCE(u.first_name, '') || ' ' || u.last_name
+          WHEN u.id IS NOT NULL THEN TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, ''))
           ELSE NULL
         END AS created_by_name,
         (SELECT COUNT(*) FROM role_profiles rp WHERE rp.profile_id = p.id) AS role_count
       FROM ${this.tableName} p
       LEFT JOIN users u ON p.created_by = u.id
-      WHERE p.id = $1 AND p.${ACTIVE_FILTER}`,
+      WHERE p.id = $1`,
       [id]
     );
 
-    const profile = profileRes.rows[0];
     if (!profile) return null;
 
-    // Get assigned permissions with module info
-    const permissionsRes = await this.query<{
+    const permissions = await this.query<{
       id: string;
       action: string;
       effect: PermissionEffect;
@@ -92,7 +130,8 @@ export class ProfilesRepository implements IProfilesRepository {
        INNER JOIN profile_permissions pp ON perm.id = pp.permission_id
        INNER JOIN modules m ON perm.module_id = m.id
        WHERE pp.profile_id = $1`,
-      [id]
+      [id],
+      t
     );
 
     return {
@@ -101,7 +140,7 @@ export class ProfilesRepository implements IProfilesRepository {
       code: profile.code,
       description: profile.description ?? null,
       is_active: profile.is_active,
-      permissions: permissionsRes.rows,
+      permissions,
       role_count: parseInt(profile.role_count, 10),
       created_at: profile.created_at,
       created_by: profile.created_by ?? null,
@@ -109,53 +148,51 @@ export class ProfilesRepository implements IProfilesRepository {
     };
   }
 
-  async findByIdIncludingInactive(id: string): Promise<Profiles | null> {
-    const res = await this.query<Profiles>(
-      `SELECT * FROM ${this.tableName} WHERE id = $1`,
-      [id]
-    );
-    return res.rows[0] ?? null;
-  }
-
-  async findByCode(code: string): Promise<Profiles | null> {
-    const res = await this.query<Profiles>(
-      `SELECT * FROM ${this.tableName} WHERE code = $1 AND ${ACTIVE_FILTER}`,
-      [code]
-    );
-    return res.rows[0] ?? null;
-  }
-
-  async findAll(filters?: ProfileListFilterDto): Promise<Profiles[]> {
-    let sql = `SELECT * FROM ${this.tableName} WHERE ${ACTIVE_FILTER}`;
-    sql += ` ORDER BY created_at DESC`;
-    const res = await this.query<Profiles>(sql);
-    return res.rows;
-  }
-
   async findAllPaginated(
-    filters?: ProfileListFilterDto,
+    t: ITask<unknown> | undefined,
+    filters?: { is_active?: boolean; search?: string },
     pagination?: Partial<PaginationParams>
   ): Promise<PaginatedResult<Profiles>> {
-    const normalizedPagination = normalizePaginationParams(pagination);
-    const offset = getPaginationOffset(normalizedPagination.page, normalizedPagination.limit);
+    const p = normalizePaginationParams(pagination);
+    const offset = getPaginationOffset(p.page, p.limit);
+    const conditions: string[] = [];
+    const values: unknown[] = [];
+    let idx = 1;
 
-    const total = await this.count(filters);
+    if (filters?.is_active !== undefined) {
+      conditions.push(`is_active = $${idx++}`);
+      values.push(filters.is_active);
+    }
+    if (filters?.search) {
+      conditions.push(`(name ILIKE $${idx} OR code ILIKE $${idx})`);
+      values.push(`%${filters.search}%`);
+      idx++;
+    }
 
-    let sql = `SELECT * FROM ${this.tableName} WHERE ${ACTIVE_FILTER}`;
-    sql += ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`;
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const res = await this.query<Profiles>(sql, [normalizedPagination.limit, offset]);
-    return buildPaginatedResult(res.rows, total, normalizedPagination);
+    const total = await (t ?? this.db).one<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName} ${whereClause}`,
+      values
+    );
+
+    const data = await this.query<Profiles>(
+      `SELECT * FROM ${this.tableName}
+       ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...values, p.limit, offset],
+      t
+    );
+
+    return buildPaginatedResult(data, parseInt(total.count, 10), p);
   }
 
-  async count(filters?: ProfileListFilterDto): Promise<number> {
-    const sql = `SELECT COUNT(*) as count FROM ${this.tableName} WHERE ${ACTIVE_FILTER}`;
-    const res = await this.query<{ count: string }>(sql);
-    return parseInt(res.rows[0]?.count ?? '0', 10);
-  }
-
-  async create(input: CreateProfileInput): Promise<Profiles> {
-    const res = await this.query<Profiles>(
+  async create(
+    t: ITask<unknown> | undefined,
+    input: CreateProfileInput
+  ): Promise<Profiles> {
+    return (t ?? this.db).one<Profiles>(
       `INSERT INTO ${this.tableName} (name, code, description, is_active, created_by)
        VALUES ($1, $2, $3, COALESCE($4, true), $5)
        RETURNING *`,
@@ -167,60 +204,30 @@ export class ProfilesRepository implements IProfilesRepository {
         input.created_by ?? null
       ]
     );
-    if (!res.rows[0]) throw new Error('Profile creation failed');
-    return res.rows[0];
   }
 
-  async update(id: string, input: UpdateProfileInput): Promise<Profiles> {
-    const updates: string[] = [];
-    const values: unknown[] = [id];
-    let paramIdx = 2;
-
-    if (input.name !== undefined) {
-      updates.push(`name = $${paramIdx++}`);
-      values.push(input.name);
-    }
-    if (input.code !== undefined) {
-      updates.push(`code = $${paramIdx++}`);
-      values.push(input.code);
-    }
-    if (input.description !== undefined) {
-      updates.push(`description = $${paramIdx++}`);
-      values.push(input.description);
-    }
-    if (input.is_active !== undefined) {
-      updates.push(`is_active = $${paramIdx++}`);
-      values.push(input.is_active);
-    }
-
-    if (updates.length === 0) {
-      const existing = await this.findById(id);
-      if (!existing) throw new Error(`Profile ${id} not found`);
-      return existing;
-    }
-
-    const res = await this.query<Profiles>(
+  async update(
+    t: ITask<unknown> | undefined,
+    id: string,
+    input: Profiles
+  ): Promise<Profiles> {
+    return (t ?? this.db).one<Profiles>(
       `UPDATE ${this.tableName}
-       SET ${updates.join(', ')}
-       WHERE id = $1 AND ${ACTIVE_FILTER}
+       SET name = $2,
+           code = $3,
+           description = $4,
+           is_active = $5,
+           created_by = $6
+       WHERE id = $1
        RETURNING *`,
-      values
+      [
+        id,
+        input.name,
+        input.code,
+        input.description ?? null,
+        input.is_active ?? null,
+        input.created_by ?? null
+      ]
     );
-    if (res.rows.length === 0) throw new Error(`Profile ${id} not found for update`);
-    return res.rows[0]!;
-  }
-
-  async delete(id: string): Promise<void> {
-    await this.query(
-      `UPDATE ${this.tableName} SET is_active = false WHERE id = $1`,
-      [id]
-    );
-  }
-
-  async findActive(): Promise<Profiles[]> {
-    const res = await this.query<Profiles>(
-      `SELECT * FROM ${this.tableName} WHERE ${ACTIVE_FILTER} ORDER BY created_at DESC`
-    );
-    return res.rows;
   }
 }
