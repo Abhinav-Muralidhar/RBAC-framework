@@ -172,7 +172,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
     });
 
     // GET /rbac/users/me
-    router.get('/users/me', async (req, res) => {
+    router.get('/users/me', requireAuth, async (req, res) => {
         const userId = req.user!.id; // from session middleware
 
         const user = await usersService.getById(userId, userId);
