@@ -145,8 +145,8 @@ export class UserService implements IUserService {
                 action: 'update',
                 entity_type: 'user',
                 entity_id: id,
-                old_values: oldUser ? { ...oldUser, password: '[REDACTED]' } : null,
-                new_values: { ...data, password: data.password ? '[REDACTED]' : undefined },
+                old_values: { ...oldUser, password: '[REDACTED]' },
+                new_values: { ...cleanData, password: cleanData.password ? '[REDACTED]' : undefined },
                 status: 'success'
             }).catch(console.error);
 

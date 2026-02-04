@@ -279,10 +279,10 @@ export const authApi = {
 
 export const organizationApi = {
     /**
-     * Get organization details (single org)
+     * Get organization details 
      */
     get: async (): Promise<Organization> => {
-        const response = await get<ApiResponse<Organization>>('/rbac/organization');
+        const response = await get<ApiResponse<Organization>>('/rbac/organizations');
         return response.data;
     },
 
