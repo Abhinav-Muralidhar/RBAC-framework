@@ -24,10 +24,12 @@ apiClient.interceptors.response.use(
         return response.data;
     },
     (error: AxiosError<{ error: { message: string; code: string } }>) => {
-        // Handle 401 - redirect to login
+        // Handle 401 - redirect to login (unless already there)
         if (error.response?.status === 401) {
-            // Clear any local state and redirect
-            window.location.href = '/login';
+            // Don't redirect if already on login page to prevent loops
+            if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
+            }
             return Promise.reject(error);
         }
 

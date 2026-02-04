@@ -1,49 +1,30 @@
 /**
  * Profiles Page
+ * 
+ * Manage permission profiles with forms and confirmation modals.
  */
 
-import { useState, useEffect } from 'react';
 import { profilesApi } from '../../../core/api/rbac.api';
 import type { Profile } from '../../../core/types/profile.types';
 import { Plus, Edit2, Trash2, Search, Key } from 'lucide-react';
+import { FormModal } from '../../../core/components/FormModal';
+import { ConfirmModal } from '../../../core/components/ConfirmModal';
+import { ProfileForm, submitProfileForm } from '../components/ProfileForm';
+import { useCrudPage } from '../../../core/hooks';
 import './SettingsPage.css';
 
 export function ProfilesPage() {
-    const [profiles, setProfiles] = useState<Profile[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [searchQuery, setSearchQuery] = useState('');
+    const crud = useCrudPage<Profile>({
+        listFn: profilesApi.list,
+        deleteFn: profilesApi.delete,
+        entityName: 'profiles',
+        initialLimit: 100,
+    });
 
-    useEffect(() => {
-        loadProfiles();
-    }, []);
-
-    const loadProfiles = async () => {
-        try {
-            setIsLoading(true);
-            const response = await profilesApi.list({ limit: 100 });
-            setProfiles(response.data || []);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load profiles');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const filteredProfiles = profiles.filter(profile =>
-        profile.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        profile.code.toLowerCase().includes(searchQuery.toLowerCase())
+    const filteredProfiles = crud.items.filter(profile =>
+        profile.name.toLowerCase().includes(crud.searchQuery.toLowerCase()) ||
+        profile.code.toLowerCase().includes(crud.searchQuery.toLowerCase())
     );
-
-    const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this profile?')) return;
-        try {
-            await profilesApi.delete(id);
-            loadProfiles();
-        } catch (err) {
-            alert(err instanceof Error ? err.message : 'Failed to delete profile');
-        }
-    };
 
     return (
         <div className="settings-page">
@@ -52,7 +33,7 @@ export function ProfilesPage() {
                     <h1>Profiles</h1>
                     <p>Manage permission profiles</p>
                 </div>
-                <button className="btn btn-primary">
+                <button className="btn btn-primary" onClick={crud.openCreate}>
                     <Plus size={18} />
                     Add Profile
                 </button>
@@ -64,15 +45,20 @@ export function ProfilesPage() {
                     <input
                         type="text"
                         placeholder="Search profiles..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        value={crud.searchQuery}
+                        onChange={(e) => crud.setSearchQuery(e.target.value)}
                     />
                 </div>
             </div>
 
-            {error && <div className="error-message">{error}</div>}
+            {crud.error && (
+                <div className="error-banner">
+                    {crud.error}
+                    <button onClick={crud.clearError}>×</button>
+                </div>
+            )}
 
-            {isLoading ? (
+            {crud.isLoading ? (
                 <div className="loading-state">Loading profiles...</div>
             ) : (
                 <div className="data-table-wrapper">
@@ -81,7 +67,7 @@ export function ProfilesPage() {
                             <tr>
                                 <th>Name</th>
                                 <th>Code</th>
-                                <th>Description</th>
+                                <th className="hide-mobile">Description</th>
                                 <th>Permissions</th>
                                 <th>Status</th>
                                 <th>Actions</th>
@@ -92,7 +78,7 @@ export function ProfilesPage() {
                                 <tr key={profile.id}>
                                     <td className="font-medium">{profile.name}</td>
                                     <td><code>{profile.code}</code></td>
-                                    <td>{profile.description || '-'}</td>
+                                    <td className="hide-mobile">{profile.description || '-'}</td>
                                     <td>
                                         <span className="permission-count">
                                             <Key size={14} />
@@ -106,10 +92,18 @@ export function ProfilesPage() {
                                     </td>
                                     <td>
                                         <div className="action-buttons">
-                                            <button className="btn-icon" title="Edit">
+                                            <button
+                                                className="btn-icon"
+                                                title="Edit"
+                                                onClick={() => crud.openEdit(profile)}
+                                            >
                                                 <Edit2 size={16} />
                                             </button>
-                                            <button className="btn-icon btn-danger" title="Delete" onClick={() => handleDelete(profile.id)}>
+                                            <button
+                                                className="btn-icon btn-danger"
+                                                title="Delete"
+                                                onClick={() => crud.openDelete(profile)}
+                                            >
                                                 <Trash2 size={16} />
                                             </button>
                                         </div>
@@ -125,6 +119,36 @@ export function ProfilesPage() {
                     </table>
                 </div>
             )}
+
+            {/* Create/Edit Modal */}
+            <FormModal
+                isOpen={crud.showFormModal}
+                title={crud.editingItem ? 'Edit Profile' : 'Add New Profile'}
+                isLoading={crud.formLoading}
+                onSubmit={() => submitProfileForm()}
+                onCancel={crud.closeForm}
+                size="md"
+            >
+                <ProfileForm
+                    profile={crud.editingItem}
+                    onSuccess={crud.handleFormSuccess}
+                    onError={crud.setError}
+                    setLoading={crud.setFormLoading}
+                />
+            </FormModal>
+
+            {/* Delete Confirmation */}
+            <ConfirmModal
+                isOpen={crud.showDeleteModal}
+                title="Delete Profile"
+                message="Are you sure you want to delete this profile? Roles using this profile will lose associated permissions."
+                itemName={crud.deletingItem?.name}
+                confirmLabel="Delete"
+                variant="danger"
+                isLoading={crud.deleteLoading}
+                onConfirm={crud.confirmDelete}
+                onCancel={crud.closeDelete}
+            />
         </div>
     );
 }

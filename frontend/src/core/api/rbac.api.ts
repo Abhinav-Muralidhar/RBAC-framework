@@ -11,6 +11,7 @@ import type { Profile, CreateProfileDto, UpdateProfileDto } from '../types/profi
 import type { Group, CreateGroupDto, UpdateGroupDto } from '../types/group.types';
 import type { AuditLog } from '../types/audit.types';
 import type { Session } from '../types/session.types';
+import type { Organization, UpdateOrganizationDto } from '../types/organization.types';
 
 export interface PaginationParams {
     page?: number;
@@ -192,5 +193,111 @@ export const sessionsApi = {
 
     revokeAllByUser: async (userId: string): Promise<void> => {
         await del(`/rbac/sessions/user/${userId}/all`);
+    },
+};
+
+// ============================================================================
+// SMTP Config
+// ============================================================================
+
+import type { SmtpConfig, CreateSmtpConfigDto, UpdateSmtpConfigDto } from '../types/smtp.types';
+
+export const smtpApi = {
+    list: async (): Promise<SmtpConfig[]> => {
+        const response = await get<ApiResponse<SmtpConfig[]>>('/rbac/smtp-configs');
+        return response.data;
+    },
+
+    getById: async (id: string): Promise<SmtpConfig> => {
+        const response = await get<ApiResponse<SmtpConfig>>(`/rbac/smtp-configs/${id}`);
+        return response.data;
+    },
+
+    getActive: async (): Promise<SmtpConfig | null> => {
+        try {
+            const response = await get<ApiResponse<SmtpConfig>>('/rbac/smtp-configs/active');
+            return response.data;
+        } catch {
+            return null;
+        }
+    },
+
+    create: async (data: CreateSmtpConfigDto): Promise<SmtpConfig> => {
+        const response = await post<ApiResponse<SmtpConfig>>('/rbac/smtp-configs', data);
+        return response.data;
+    },
+
+    update: async (id: string, data: UpdateSmtpConfigDto): Promise<SmtpConfig> => {
+        const response = await patch<ApiResponse<SmtpConfig>>(`/rbac/smtp-configs/${id}`, data);
+        return response.data;
+    },
+
+    delete: async (id: string): Promise<void> => {
+        await del(`/rbac/smtp-configs/${id}`);
+    },
+
+    activate: async (id: string): Promise<void> => {
+        await post(`/rbac/smtp-configs/${id}/activate`);
+    },
+};
+
+
+// ============================================================================
+// OTP Tokens
+// ============================================================================
+export const authApi = {
+    /**
+     * Triggers an OTP email to the user.
+     * Backend should handle rate limiting (e.g. max 5 attempts).
+     */
+    sendOtp: async (email: string): Promise<void> => {
+        // Adjust route based on your backend, e.g. '/auth/otp/send' or '/auth/challenge'
+        await post('/auth/otp/send', { email });
+    },
+
+    /**
+     * Verifies the code entered by the user.
+     * Throws an error if invalid.
+     */
+    verifyOtp: async (email: string, code: string): Promise<void> => {
+        // Adjust route based on your backend
+        await post('/auth/otp/verify', { email, code });
+    },
+
+    /**
+     * (Optional) If you want to handle the password update via Auth API 
+     * instead of Users API for stricter security checks.
+     */
+    resetPassword: async (token: string, newPassword: string): Promise<void> => {
+        await post('/auth/reset-password', { token, password: newPassword });
+    }
+};
+
+// ============================================================================
+// Organization
+// ============================================================================
+
+export const organizationApi = {
+    /**
+     * Get organization details (single org)
+     */
+    get: async (): Promise<Organization> => {
+        const response = await get<ApiResponse<Organization>>('/rbac/organization');
+        return response.data;
+    },
+
+    /**
+     * Update organization details
+     * (read/update only – no create/delete)
+     */
+    update: async (
+        id: string,
+        data: Partial<Organization>
+    ): Promise<Organization> => {
+        const response = await patch<ApiResponse<Organization>>(
+            `/rbac/organization/${id}`,
+            data
+        );
+        return response.data;
     },
 };

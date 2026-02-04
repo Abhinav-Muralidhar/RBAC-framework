@@ -1,0 +1,63 @@
+/**
+ * Entity Form Shared Styles
+ */
+
+.entity-form {
+    display: flex;
+    flex-direction: column;
+}
+
+.entity-form .form-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 480px) {
+    .entity-form .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Checkbox group for multi-select */
+.checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 0.25rem;
+    transition: background 0.15s;
+}
+
+.checkbox-item:hover {
+    background: #e2e8f0;
+}
+
+.checkbox-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #3b82f6;
+}
+
+.checkbox-item span {
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.text-muted {
+    color: #94a3b8;
+    font-size: 0.875rem;
+}

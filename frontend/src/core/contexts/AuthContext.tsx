@@ -7,7 +7,6 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { authApi } from '../api/auth.api';
-import { usersApi } from '../api/rbac.api';
 import type { User } from '../types/user.types';
 
 interface Permission {
@@ -40,23 +39,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
             setIsLoading(true);
             // Try to get current user using session cookie
-            const response = await usersApi.getById('me');
+            const response = await authApi.getCurrentUser();
             setUser(response);
 
             // Extract permissions from user's roles/profiles (if available)
             // This is just for UI - server validates all requests
-            const userPermissions: Permission[] = [];
-            if (response.roles) {
-                // In a real app, fetch user's effective permissions from backend
-                // For now, assume SETTINGS access for all logged-in users
-                userPermissions.push(
-                    { module: 'SETTINGS', action: 'read', effect: 'allow' },
-                    { module: 'SETTINGS', action: 'create', effect: 'allow' },
-                    { module: 'SETTINGS', action: 'update', effect: 'allow' },
-                    { module: 'SETTINGS', action: 'delete', effect: 'allow' }
-                );
-            }
+            // TEMP: Bypass RBAC for frontend testing - assume admin has full SETTINGS permissions
+            const userPermissions: Permission[] = [
+                { module: 'SETTINGS', action: 'read', effect: 'allow' },
+                { module: 'SETTINGS', action: 'create', effect: 'allow' },
+                { module: 'SETTINGS', action: 'update', effect: 'allow' },
+                { module: 'SETTINGS', action: 'delete', effect: 'allow' },
+            ] as Permission[]; // ✅ cast to Permission[] to satisfy TS
+
             setPermissions(userPermissions);
+
         } catch {
             // Not authenticated
             setUser(null);

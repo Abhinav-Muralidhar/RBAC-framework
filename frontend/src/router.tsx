@@ -1,22 +1,19 @@
 /**
  * Router Configuration
+ * 
+ * Settings pages removed - now handled by AdminSettingsModal.
  */
 
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppShell } from './core/components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
-import {
-    UsersPage,
-    RolesPage,
-    ProfilesPage,
-    GroupsPage,
-    AuditLogsPage,
-} from './plugins/rbac-settings/pages';
+import { ProfilePage } from './pages/ProfilePage';
+import { ROUTES } from './routes/routes';
 
 export const router = createBrowserRouter([
     {
-        path: '/login',
+        path: ROUTES.LOGIN,
         element: <LoginPage />,
     },
     {
@@ -25,33 +22,18 @@ export const router = createBrowserRouter([
         children: [
             {
                 index: true,
-                element: <Navigate to="/dashboard" replace />,
+                element: <Navigate to={ROUTES.DASHBOARD} replace />,
             },
             {
                 path: 'dashboard',
                 element: <DashboardPage />,
             },
-            // Settings Plugin (RBAC)
             {
-                path: 'settings/users',
-                element: <UsersPage />,
+                path: 'profile',
+                element: <ProfilePage />,
             },
-            {
-                path: 'settings/roles',
-                element: <RolesPage />,
-            },
-            {
-                path: 'settings/profiles',
-                element: <ProfilesPage />,
-            },
-            {
-                path: 'settings/groups',
-                element: <GroupsPage />,
-            },
-            {
-                path: 'settings/audit-logs',
-                element: <AuditLogsPage />,
-            },
+            // Settings routes removed - handled by AdminSettingsModal
         ],
     },
 ]);
+

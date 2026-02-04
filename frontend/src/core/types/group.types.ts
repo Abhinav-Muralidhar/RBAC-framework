@@ -17,10 +17,12 @@ export interface CreateGroupDto {
     name: string;
     code: string;
     description?: string;
+    role_ids: string[];
 }
 
 export interface UpdateGroupDto {
     name?: string;
     description?: string;
     is_active?: boolean;
+    role_ids?: string[];
 }
