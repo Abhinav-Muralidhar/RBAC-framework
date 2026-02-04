@@ -38,12 +38,14 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
         password: '',
     });
 
-    const [selectedRoles, setSelectedRoles] = useState<string[]>(
-        user?.roles?.map(r => r.id) || []
+    const [selectedRole, setSelectedRole] = useState<string>(
+        user?.rolesid || ''
     );
 
     const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const [roleSearch, setRoleSearch] = useState('');
 
     useEffect(() => {
         loadRoles();
@@ -66,11 +68,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
     };
 
     const toggleRole = (roleId: string) => {
-        setSelectedRoles(prev =>
-            prev.includes(roleId)
-                ? prev.filter(id => id !== roleId)
-                : [...prev, roleId]
-        );
+        setSelectedRole(prev => (prev === roleId ? null : roleId));
     };
 
     // ---------------- VALIDATION ----------------
@@ -117,7 +115,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     title: formData.title || undefined,
                     department: formData.department || undefined,
                     status: formData.status,
-                    role_ids: selectedRoles,
+                    rolesid: selectedRole,
                 };
 
                 if (formData.password) {
@@ -134,7 +132,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     last_name: formData.last_name,
                     title: formData.title || undefined,
                     department: formData.department || undefined,
-                    role_ids: selectedRoles,
+                    rolesid: selectedRole,
                 };
 
                 await usersApi.create(createData);
@@ -229,23 +227,45 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             <div className="form-field">
                 <label className="form-label">Assign Roles</label>
 
-                <div className="checkbox-group">
-                    {availableRoles.map(role => (
-                        <label key={role.id} className="checkbox-item">
-                            <input
-                                type="checkbox"
-                                checked={selectedRoles.includes(role.id)}
-                                onChange={() => toggleRole(role.id)}
-                            />
-                            <span>{role.name}</span>
-                        </label>
-                    ))}
+                {/* Search input */}
+                <input
+                    type="text"
+                    placeholder="Search roles..."
+                    value={roleSearch}
+                    onChange={e => setRoleSearch(e.target.value)}
+                    style={{ width: '100%', padding: '0.5rem', marginBottom: '0.25rem' }}
+                />
 
-                    {availableRoles.length === 0 && (
-                        <span className="text-muted">No roles available</span>
-                    )}
-                </div>
+                {/* Native select dropdown */}
+                <select className='form-select'
+                    value={selectedRole || ''}
+                    onChange={e => setSelectedRole(e.target.value)}
+                    size={Math.min(5, availableRoles.length)} // shows a few options, scrollable
+                >
+                    <option value="" disabled >
+                        Select a role
+                    </option>
+
+                    {availableRoles
+                        .filter(role =>
+                            role.name.toLowerCase().includes(roleSearch.toLowerCase())
+                        )
+                        .map(role => (
+                            <option
+                                key={role.id}
+                                value={role.id}
+                                disabled={role.id === user?.rolesid}
+                            >
+                                {role.name}
+                            </option>
+                        ))}
+                </select>
+
+                {availableRoles.length === 0 && (
+                    <span className="text-muted">No roles available</span>
+                )}
             </div>
+
 
             {/* Hidden submit button */}
             <button

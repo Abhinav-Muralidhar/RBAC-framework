@@ -6,7 +6,7 @@ export type UserStatus = 'active' | 'inactive' | 'deleted';
 export type SymbolPlacement = 'before' | 'after';
 export type TrailingZeroHandling = 'show' | 'hide';
 
-export interface Users {
+export interface User {
     id: string;
 
     username: string;
@@ -58,6 +58,8 @@ export interface Users {
 
     created_at: Date;
     created_by?: string | null;
+    rolesid: string;
+    rolesname: string;
 
     updated_at?: Date | null;
     last_login_at?: Date | null;
@@ -118,7 +120,7 @@ export interface CreateUserDto {
     signature?: string;
 
     rolesid: string;
-    rolesname: string;
+    rolesname?: string;
 }
 
 export interface UpdateUserDto {
@@ -167,6 +169,8 @@ export interface UpdateUserDto {
     signature?: string | null;
     last_login_at?: Date | null;
     password_changed_at?: Date | null;
+    rolesid: string;
+    rolesname?: string;
 }
 
 export interface UserSummaryDto {
