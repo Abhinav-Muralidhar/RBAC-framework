@@ -85,9 +85,9 @@ export class AuditService implements IAuditService {
         // Build strict input object - all required fields must have values
         const input = {
             action: data.action,
-            module_id: data.module_id || '',
+            module_id: data.module_id || null,
             entity_type: data.entity_type || '',
-            entity_id: data.entity_id || '',
+            entity_id: data.entity_id || null,
             ip_address: data.ip_address || '',
             user_agent: data.user_agent || '',
             status: data.status,
@@ -105,7 +105,6 @@ export class AuditService implements IAuditService {
         logId: string
     ): Promise<AuditLogWithDetailsRow> {
         return withTransaction(async (t: TransactionTask) => {
-            await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
             const log = await this.auditLogsRepository.findByIdWithDetails(t, logId);
             if (!log) {
                 throw new Error(`Audit log not found: ${logId}`);
@@ -116,7 +115,6 @@ export class AuditService implements IAuditService {
 
     async getAll(actingUserId: string, filters: AuditLogFilters = {}, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogWithDetailsRow>> {
         return withTransaction(async (t: TransactionTask) => {
-            await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
             return this.auditLogsRepository.findAllWithDetails(t, filters, pagination);
         });
     }

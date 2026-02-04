@@ -67,8 +67,8 @@ export class UserRoleRepository implements IUserRoleRepository {
 
   async revoke(t: TransactionTask | undefined, userId: string, roleId: string): Promise<void> {
     await this.getTask(t).none(
-      `DELETE FROM ${this.tableName} WHERE user_id = $1 AND role_id = $2`,
-      [userId, roleId]
+      `DELETE FROM ${this.tableName} WHERE user_id = $1`,
+      [userId]
     );
   }
 

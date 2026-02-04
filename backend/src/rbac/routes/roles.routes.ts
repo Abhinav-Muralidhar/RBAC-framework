@@ -19,6 +19,7 @@ import { ProfilePermissionsRepository } from '../repositories/profile_permission
 import { UsersRepository } from '../repositories/users.repository';
 import { parseId, parsePagination } from './_paramUtils';
 import { IDatabase } from 'pg-promise';
+import { requirePermission } from '../middleware/requirePermission.middleware';
 
 /**
  * Standard response envelope
@@ -70,7 +71,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      * GET /rbac/roles
      * List all roles (paginated)
      */
-    router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+    router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const pagination = parsePagination(req.query);
@@ -92,7 +93,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      * GET /rbac/roles/:id
      * Get role by ID with full details (JOINed data)
      */
-    router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const roleId = parseId(req.params.id, 'roleId');
             const role = await roleService.getById(req.user!.id, roleId);
@@ -109,7 +110,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      * POST /rbac/roles
      * Create new role
      */
-    router.post('/', async (req: Request, res: Response, next: NextFunction) => {
+    router.post('/', requirePermission('SETTINGS', 'create', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const role = await roleService.createRoleProfiles(actingUserId, req.body);
@@ -123,7 +124,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      * PATCH /rbac/roles/:id
      * Update role
      */
-    router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const roleId = parseId(req.params.id, 'roleId');
@@ -138,7 +139,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      * DELETE /rbac/roles/:id
      * Delete role (soft delete)
      */
-    router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const roleId = parseId(req.params.id, 'roleId');
@@ -153,7 +154,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      * PUT /rbac/roles/:id/profiles
      * Update role profiles
      */
-    router.put('/:id/profiles', async (req: Request, res: Response, next: NextFunction) => {
+    router.put('/:id/profiles', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const roleId = parseId(req.params.id, 'roleId');
@@ -169,7 +170,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      * DELETE /rbac/roles/:id/revoke/:userId
      * Revoke role from user
      */
-    router.delete('/:id/revoke/:userId', async (req: Request, res: Response, next: NextFunction) => {
+    router.delete('/:id/revoke/:userId', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const roleId = parseId(req.params.id, 'roleId');

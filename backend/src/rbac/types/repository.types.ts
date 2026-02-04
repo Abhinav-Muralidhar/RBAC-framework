@@ -235,9 +235,9 @@ export interface CreateSmtpConfigInput {
 /** Required fields for creating an audit log entry (from 16_audit_logs.js migration) */
 export interface CreateAuditLogInput {
     action: 'create' | 'update' | 'delete' | 'export';
-    module_id: string;
+    module_id: string | null;
     entity_type: string;
-    entity_id: string;
+    entity_id: string | null;
     ip_address: string;
     user_agent: string;
     status: 'success' | 'failure';

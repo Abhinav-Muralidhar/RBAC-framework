@@ -15,7 +15,7 @@ import { AuditService } from '../services/audit.service';
 import { AuditLogsRepository } from '../repositories/audit_logs.repository';
 import { EvaluationService } from '../services/evaluation.service';
 import { PermissionsRepository } from '../repositories/permissions.repository';
-
+import { requirePermission } from '../middleware/requirePermission.middleware';
 import {
     CreateOrganizationRequestDto,
     UpdateOrganizationRequestDto
@@ -74,7 +74,7 @@ export function createOrganizationsRouter(db: IDatabase<unknown>): Router {
      * GET /rbac/organizations
      * List organizations (paginated)
      */
-    router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+    router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const pagination = parsePagination(req.query);
             const filters = parseOrganizationFilters(req.query);
@@ -99,7 +99,7 @@ export function createOrganizationsRouter(db: IDatabase<unknown>): Router {
      * GET /rbac/organizations/:id
      * Get organization by ID
      */
-    router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const id = parseId(req.params.id, 'id');
             const organization = await organizationService.getOrganization(id);
@@ -131,7 +131,7 @@ export function createOrganizationsRouter(db: IDatabase<unknown>): Router {
      * PUT /rbac/organizations/:id
      * Update organization
      */
-    router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.put('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const id = parseId(req.params.id, 'id');
             const payload: UpdateOrganizationRequestDto = req.body;

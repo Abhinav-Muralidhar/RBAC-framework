@@ -10,10 +10,11 @@ import { Pool } from 'pg';
 import { AuthSessionService } from '../services/authSession.service';
 import { AuthSessionsRepository } from '../repositories/auth_sessions.repository';
 import { IAuditService } from '../services/audit.service';
-import { parseId } from './_paramUtils';
+import { getRequiredQuery, parseId } from './_paramUtils';
 import { IDatabase } from 'pg-promise';
 import { EvaluationService } from '../services/evaluation.service';
 import { PermissionsRepository } from '../repositories/permissions.repository';
+import { requirePermission } from '../middleware/requirePermission.middleware';
 
 /**
  * Standard response envelope
@@ -63,7 +64,7 @@ export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAudi
      * GET /rbac/sessions/user/:userId
      * Get all active sessions for a user (admin only)
      */
-    router.get('/user/:userId', async (req: Request, res: Response, next: NextFunction) => {
+    router.get('/user/:userId', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const userId = parseId(req.params.userId, 'userId');
             const sessions = await authSessionService.listActiveByUser(userId);
@@ -79,31 +80,12 @@ export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAudi
         }
     });
 
-    /**
-     * POST /rbac/sessions/logout
-     * Logout current session
-     */
-    router.post('/logout', async (req: Request, res: Response, next: NextFunction) => {
-        try {
-            const sessionId = req.user?.sessionId;
-            if (!sessionId) {
-                throw new Error('Session ID not found');
-            }
-            await authSessionService.logout(sessionId);
-
-            // Clear the session cookie
-            res.clearCookie('sessionId');
-            sendSuccess(res, { loggedOut: true });
-        } catch (error) {
-            next(error);
-        }
-    });
 
     /**
      * DELETE /rbac/sessions/:sessionId
      * Revoke a specific session (admin only)
      */
-    router.delete('/:sessionId', async (req: Request, res: Response, next: NextFunction) => {
+    router.delete('/:sessionId', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const sessionId = parseId(req.params.sessionId, 'sessionId');
@@ -121,7 +103,7 @@ export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAudi
     router.delete('/user/:userId/all', async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
-            const targetUserId = parseId(req.params.userId, 'userId');
+            const targetUserId = getRequiredQuery(req.params, 'userId');
             const count = await authSessionService.revokeAllByUser(actingUserId, targetUserId);
             sendSuccess(res, { revoked: true });
         } catch (error) {

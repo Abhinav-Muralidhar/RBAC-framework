@@ -19,6 +19,7 @@ import { UsersRepository } from '../repositories/users.repository';
 import { parseId, parsePagination } from './_paramUtils';
 import { PermissionEffect } from '../models/profile_permissions.model';
 import { IDatabase } from 'pg-promise';
+import { requirePermission } from '../middleware/requirePermission.middleware';
 /**
  * Standard response envelope
  */
@@ -68,7 +69,7 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      * GET /rbac/profiles
      * List all profiles (paginated)
      */
-    router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+    router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const pagination = parsePagination(req.query);
@@ -89,7 +90,7 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      * GET /rbac/profiles/:id
      * Get profile by ID with full details (JOINed data)
      */
-    router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const profileId = parseId(req.params.id, 'profileId');
             const profile = await profileService.getById(req.user!.id, profileId);
@@ -106,7 +107,7 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      * POST /rbac/profiles
      * Create new profile
      */
-    router.post('/', async (req: Request, res: Response, next: NextFunction) => {
+    router.post('/', requirePermission('SETTINGS', 'create', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const profile = await profileService.create(actingUserId, req.body);
@@ -120,7 +121,7 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      * PATCH /rbac/profiles/:id
      * Update profile
      */
-    router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const profileId = parseId(req.params.id, 'profileId');
@@ -135,7 +136,7 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      * DELETE /rbac/profiles/:id
      * Delete profile (soft delete)
      */
-    router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const profileId = parseId(req.params.id, 'profileId');

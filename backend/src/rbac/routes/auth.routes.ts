@@ -26,6 +26,7 @@ import { RoleProfilesRepository } from '../repositories/role_profiles.repository
 import { RoleRepository } from '../repositories/roles.repository';
 import { ModuleRepository } from '../repositories/modules.repository';
 import { PermissionEffect } from '../models/profile_permissions.model';
+import { UserRoleRepository } from '../repositories/user_roles.repository';
 import { PERMISSION_ACTIONS, PermissionAction } from '../models/permissions.model';
 // Cookie configuration
 const COOKIE_OPTIONS = {
@@ -67,12 +68,13 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
     const evaluationService = new EvaluationService(
         new PermissionsRepository(db)
     );
+    const userRolesRepository = new UserRoleRepository(db);
 
     // Services
     const auditService = new AuditService(auditLogsRepo, evaluationService);
     const authSessionService = new AuthSessionService(sessionsRepo, auditService, evaluationService);
     const requireAuth = createAuthenticateMiddleware(authSessionService);
-    const usersService = new UserService(usersRepo, evaluationService, auditService);
+    const usersService = new UserService(usersRepo, userRolesRepository, evaluationService, auditService);
     const permissionService = new PermissionService(permissionsRepository, profilesRepository, profilePermissionsRepository, roleProfilesRepository, moduleRepository, roleRepository, evaluationService, auditService);
 
     /**
@@ -117,7 +119,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
             res.cookie('sessionToken', session.session_token, COOKIE_OPTIONS);
 
             // Update last login
-            await usersService.update(req.user!.id, user.id, { last_login_at: new Date() });
+            await usersService.update(user.id, user.id, { last_login_at: new Date() });
 
             const userResponse = await usersService.getById(user.id, user.id);
 

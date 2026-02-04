@@ -40,8 +40,6 @@ export class UnifiedGroupService implements IUnifiedGroupService {
     ) { }
 
     async getById(actingUserId: string, groupId: string): Promise<GroupResponseDto> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-
         return withTransaction(async (t: TransactionTask) => {
             const group = await this.groupRepository.findByIdWithDetails(t, groupId);
             if (!group) throw new GroupNotFoundError(groupId);
@@ -54,16 +52,12 @@ export class UnifiedGroupService implements IUnifiedGroupService {
         filters?: { is_active?: boolean; name?: string; code?: string },
         pagination?: Partial<PaginationParams>
     ): Promise<PaginatedResult<Groups>> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-
         return withTransaction(async (t: TransactionTask) => {
             return this.groupRepository.findAllPaginated(t, filters, pagination);
         });
     }
 
     async create(actingUserId: string, data: GroupResponseDto): Promise<Groups> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
-
         if (!data.name) throw new Error('Group name is required');
         if (!data.code) throw new Error('Group code is required');
 
@@ -110,8 +104,6 @@ export class UnifiedGroupService implements IUnifiedGroupService {
         groupId: string,
         data: GroupResponseDto
     ): Promise<Groups> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
-
         return withTransaction(async (t: TransactionTask) => {
             const existing = await this.groupRepository.findById(t, groupId);
             if (!existing) throw new GroupNotFoundError(groupId);
@@ -153,7 +145,6 @@ export class UnifiedGroupService implements IUnifiedGroupService {
     }
 
     async delete(actingUserId: string, groupId: string): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
 
         return withTransaction(async (t: TransactionTask) => {
             const existing = await this.groupRepository.findById(t, groupId);

@@ -38,11 +38,20 @@ export function createAuthenticateMiddleware(authSessionService: IAuthSessionSer
 
             const session = await authSessionService.resolveSession(sessionToken);
 
-            // 3. Populate Context
+            if (!session) {
+                res.status(401).json({
+                    error: 'Unauthorized',
+                    message: 'Invalid or expired session',
+                    code: 'INVALID_SESSION'
+                });
+                return;
+            }
+
             req.user = {
                 id: session.user_id,
                 sessionId: session.id
             };
+
 
             next();
 

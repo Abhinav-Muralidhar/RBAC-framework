@@ -1,6 +1,6 @@
 /**
  * Audit Logs Page
- * (Centralized Hook Version)
+ * (Crash-proof, Centralized Hook Version)
  */
 
 import { Search, Filter } from 'lucide-react';
@@ -19,13 +19,14 @@ export function AuditLogsPage() {
         initialLimit: 20,
     });
 
-    const filteredLogs = crud.items.filter(log =>
-        log.action.toLowerCase().includes(crud.searchQuery.toLowerCase()) ||
-        log.entity_type.toLowerCase().includes(crud.searchQuery.toLowerCase()) ||
+    // Safe filter: default to empty array
+    const filteredLogs = (crud.items ?? []).filter(log =>
+        (log.action?.toLowerCase().includes(crud.searchQuery.toLowerCase()) ?? false) ||
+        (log.entity_type?.toLowerCase().includes(crud.searchQuery.toLowerCase()) ?? false) ||
         (log.user_name?.toLowerCase().includes(crud.searchQuery.toLowerCase()) ?? false)
     );
 
-    const getStatusColor = (status: string) => {
+    const getStatusColor = (status?: string) => {
         switch (status) {
             case 'success': return 'status-active';
             case 'failure': return 'status-inactive';
@@ -91,42 +92,44 @@ export function AuditLogsPage() {
                             </thead>
 
                             <tbody>
-                                {filteredLogs.map(log => (
-                                    <tr key={log.id}>
-                                        <td className="text-muted">
-                                            {format(new Date(log.created_at), 'MMM d, yyyy HH:mm:ss')}
-                                        </td>
+                                {filteredLogs.length > 0 ? (
+                                    filteredLogs.map(log => (
+                                        <tr key={log.id}>
+                                            <td className="text-muted">
+                                                {log.created_at
+                                                    ? format(new Date(log.created_at), 'MMM d, yyyy HH:mm:ss')
+                                                    : '-'}
+                                            </td>
 
-                                        <td>{log.user_name || log.user_email || '-'}</td>
+                                            <td>{log.user_name || log.user_email || '-'}</td>
 
-                                        <td>
-                                            <span className="action-badge">
-                                                {log.action}
-                                            </span>
-                                        </td>
+                                            <td>
+                                                <span className="action-badge">
+                                                    {log.action ?? '-'}
+                                                </span>
+                                            </td>
 
-                                        <td>
-                                            <code>{log.entity_type}</code>
-                                            <span className="text-muted">
-                                                {' '}#{log.entity_id.slice(0, 8)}
-                                            </span>
-                                        </td>
+                                            <td>
+                                                <code>{log.entity_type ?? '-'}</code>
+                                                <span className="text-muted">
+                                                    {' '}#{log.entity_id?.slice(0, 8) ?? '-'}
+                                                </span>
+                                            </td>
 
-                                        <td>
-                                            <span
-                                                className={`status-badge ${getStatusColor(log.status)}`}
-                                            >
-                                                {log.status}
-                                            </span>
-                                        </td>
+                                            <td>
+                                                <span
+                                                    className={`status-badge ${getStatusColor(log.status)}`}
+                                                >
+                                                    {log.status ?? '-'}
+                                                </span>
+                                            </td>
 
-                                        <td className="text-muted">
-                                            {log.ip_address}
-                                        </td>
-                                    </tr>
-                                ))}
-
-                                {filteredLogs.length === 0 && (
+                                            <td className="text-muted">
+                                                {log.ip_address ?? '-'}
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
                                     <tr>
                                         <td colSpan={6} className="empty-state">
                                             No audit logs found
@@ -147,11 +150,11 @@ export function AuditLogsPage() {
                         </button>
 
                         <span>
-                            Page {crud.page} of {crud.totalPages}
+                            Page {crud.page} of {crud.totalPages ?? 1}
                         </span>
 
                         <button
-                            disabled={crud.page >= crud.totalPages}
+                            disabled={crud.page >= (crud.totalPages ?? 1)}
                             onClick={crud.nextPage}
                         >
                             Next

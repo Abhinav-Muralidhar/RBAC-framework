@@ -15,6 +15,7 @@ import { IDatabase } from 'pg-promise';
 import { EvaluationService } from '../services/evaluation.service';
 import { PermissionsRepository } from '../repositories/permissions.repository';
 import { AuditLogListFilterDto } from '../dto/audit_log.dto';
+import { requirePermission } from '../middleware/requirePermission.middleware';
 
 /**
  * Standard response envelope
@@ -63,8 +64,9 @@ export function createAuditLogsRouter(db: IDatabase<unknown>): Router {
      * GET /rbac/audit-logs
      * List all audit logs with JOINed data (paginated)
      */
-    router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+    router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditLogService), async (req: Request, res: Response, next: NextFunction) => {
         try {
+
             const pagination = parsePagination(req.query);
             const logs = await auditLogService.getAll(req.user!.id, parseAuditLogFilters(req.query), pagination);
 
@@ -83,7 +85,7 @@ export function createAuditLogsRouter(db: IDatabase<unknown>): Router {
      * GET /rbac/audit-logs/:id
      * Get audit log by ID with JOINed data
      */
-    router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditLogService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const logId = parseId(req.params.id, 'id');
             const log = await auditLogService.getById(req.user!.id, logId);

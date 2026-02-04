@@ -21,6 +21,7 @@ import { createSessionsRouter } from './sessions.routes';
 import { IDatabase } from 'pg-promise';
 import { EvaluationService } from '../services/evaluation.service';
 import { PermissionsRepository } from '../repositories/permissions.repository';
+import { createOrganizationsRouter } from './org.routes';
 
 /**
  * Create the main RBAC router with all sub-routes
@@ -52,6 +53,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     router.use('/groups', createGroupsRouter(db));
     router.use('/audit-logs', createAuditLogsRouter(db));
     router.use('/sessions', createSessionsRouter(db, auditService));
+    router.use('/organizations', createOrganizationsRouter(db));
 
     return router;
 }

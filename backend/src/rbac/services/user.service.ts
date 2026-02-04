@@ -16,6 +16,7 @@ import { IAuditService } from './audit.service';
 import { UserListFilterDto, CreateUserRequestDto, UpdateUserRequestDto } from '../dto/user.dto';
 import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
 import { CreateUserInput, UpdateUserInput } from '../types/repository.types';
+import { IUserRoleRepository } from '../repositories/user_roles.repository';
 
 // Module code for RBAC operations
 const MODULE_CODE = 'SETTINGS';
@@ -33,6 +34,7 @@ export interface IUserService {
 export class UserService implements IUserService {
     constructor(
         private userRepository: IUsersRepository,
+        private userRolesRepository: IUserRoleRepository,
         private evaluationService: IEvaluationService,
         private auditService: IAuditService,
     ) { }
@@ -54,7 +56,6 @@ export class UserService implements IUserService {
         filters?: UserListFilterDto,
         pagination?: Partial<PaginationParams>
     ): Promise<PaginatedResult<Users>> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
         return withTransaction(async (t: TransactionTask) => {
             return this.userRepository.findAllPaginated(t, filters, pagination);
@@ -62,7 +63,6 @@ export class UserService implements IUserService {
     }
 
     async getById(actingUserId: string, id: string): Promise<UserDetail | null> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
         return withTransaction(async (t: TransactionTask) => {
             return this.userRepository.findByIdWithDetails(t, id);
@@ -70,7 +70,6 @@ export class UserService implements IUserService {
     }
 
     async create(actingUserId: string, data: CreateUserRequestDto): Promise<Users> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
         return withTransaction(async (t: TransactionTask) => {
             if (data.password) {
                 validatePassword(data.password);
@@ -87,6 +86,7 @@ export class UserService implements IUserService {
             };
 
             const user = await this.userRepository.create(t, userData);
+            const userRoles = await this.userRolesRepository.assign(t, user.id, data.rolesid);
 
             this.auditService.log(t, {
                 user_id: actingUserId,
@@ -102,27 +102,35 @@ export class UserService implements IUserService {
         });
     }
 
-    async update(actingUserId: string, id: string, data: UpdateUserRequestDto): Promise<Users> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
+    async update(
+        actingUserId: string,
+        id: string,
+        data: UpdateUserRequestDto
+    ): Promise<Users> {
 
-        return withTransaction(async (t: TransactionTask) => {
+        return withTransaction(async (t) => {
             const oldUser = await this.userRepository.findById(t, id);
+            if (!oldUser) throw new Error('User not found');
 
-            const userData = { ...data } as any;
+            const userData: any = { ...data };
 
             if (userData.password) {
                 validatePassword(userData.password);
                 userData.password = await hashPassword(userData.password);
             }
 
+            const cleanData = Object.fromEntries(
+                Object.entries(userData).filter(([_, v]) => v !== undefined)
+            );
+
             const updateUserData: Users = {
-                ...oldUser!,
-                ...data,
-                id: id,
-                created_at: oldUser!.created_at,
-                status: data.status ?? oldUser!.status,
-                last_login_at: null,
-                password_changed_at: null,
+                ...oldUser,
+                ...cleanData,
+                id,
+                created_at: oldUser.created_at,
+                status: data.status ?? oldUser.status,
+                last_login_at: oldUser.last_login_at ?? null,
+                password_changed_at: oldUser.password_changed_at ?? null,
             };
 
             const updatedUser = await this.userRepository.update(t, updateUserData);
@@ -132,8 +140,8 @@ export class UserService implements IUserService {
                 action: 'update',
                 entity_type: 'user',
                 entity_id: id,
-                old_values: oldUser ? { ...oldUser, password: '[REDACTED]' } : null,
-                new_values: { ...data, password: data.password ? '[REDACTED]' : undefined },
+                old_values: { ...oldUser, password: '[REDACTED]' },
+                new_values: { ...cleanData, password: cleanData.password ? '[REDACTED]' : undefined },
                 status: 'success'
             }).catch(console.error);
 
@@ -141,9 +149,8 @@ export class UserService implements IUserService {
         });
     }
 
-    async delete(actingUserId: string, id: string): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
 
+    async delete(actingUserId: string, id: string): Promise<void> {
         return withTransaction(async (t: TransactionTask) => {
             const oldUser = await this.userRepository.findById(t, id);
 
@@ -162,8 +169,6 @@ export class UserService implements IUserService {
     }
 
     async deactivate(actingUserId: string, id: string): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
-
         return withTransaction(async (t: TransactionTask) => {
             const oldUser = await this.userRepository.findById(t, id);
 

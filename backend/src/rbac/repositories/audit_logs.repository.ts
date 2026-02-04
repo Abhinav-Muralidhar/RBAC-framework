@@ -22,11 +22,11 @@ export interface AuditLogWithDetailsRow {
   role_id: string | null;
   role_name: string | null;
   action: AuditAction;
-  module_id: string;
+  module_id: string | null;
   module_name: string | null;
   module_code: string | null;
   entity_type: string;
-  entity_id: string;
+  entity_id: string | null;
   old_values: Record<string, unknown> | null;
   new_values: Record<string, unknown> | null;
   ip_address: string;

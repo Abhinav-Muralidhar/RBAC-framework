@@ -130,7 +130,6 @@ export class AuthSessionService implements IAuthSessionService {
 
     async revokeOneForUser(sessionId: string, userId: string, actingUserId: string): Promise<void> {
         return withTransaction(async (t: TransactionTask) => {
-            await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
             const session = await this.getById(sessionId);
             if (!session) {
                 throw new SessionNotFoundError(sessionId);
