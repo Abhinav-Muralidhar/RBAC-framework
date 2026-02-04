@@ -10,7 +10,7 @@ export interface AuditLogs {
   action: AuditAction;
   entity_type: string;
   entity_id: string;
-  module_id: string | null;
+  module_id: string;
 
   old_values: unknown | null;
   new_values: unknown | null;

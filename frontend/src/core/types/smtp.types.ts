@@ -26,7 +26,7 @@ export interface CreateSmtpConfigDto {
     encryption: SmtpEncryption;
     from_email: string;
     from_name?: string;
-    reply_to_email?: string;
+    reply_to_email?: string | null;
     is_active?: boolean;
 }
 

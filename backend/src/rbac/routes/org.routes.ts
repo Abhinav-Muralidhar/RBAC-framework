@@ -20,6 +20,7 @@ import {
     CreateOrganizationRequestDto,
     UpdateOrganizationRequestDto
 } from '../dto';
+import { ModuleRepository } from '../repositories/modules.repository';
 
 /**
  * Standard response envelope
@@ -61,7 +62,8 @@ export function createOrganizationsRouter(db: IDatabase<unknown>): Router {
     // --- Audit service ---
     const auditService = new AuditService(
         new AuditLogsRepository(db),
-        evaluationService
+        evaluationService,
+        new ModuleRepository(db)
     );
 
     // --- Organization service ---

@@ -22,6 +22,7 @@ import { IDatabase } from 'pg-promise';
 import { EvaluationService } from '../services/evaluation.service';
 import { PermissionsRepository } from '../repositories/permissions.repository';
 import { createOrganizationsRouter } from './org.routes';
+import { ModuleRepository } from '../repositories/modules.repository';
 
 /**
  * Create the main RBAC router with all sub-routes
@@ -35,9 +36,10 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     const evaluationService = new EvaluationService(
         new PermissionsRepository(db)
     );
+    const moduleRepository = new ModuleRepository(db);
 
     // Initialize services needed for middleware
-    const auditService = new AuditService(auditLogsRepository, evaluationService);
+    const auditService = new AuditService(auditLogsRepository, evaluationService, moduleRepository);
     const authSessionService = new AuthSessionService(authSessionsRepository, auditService, evaluationService);
 
     // Create authentication middleware
@@ -51,7 +53,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     router.use('/roles', createRolesRouter(db, auditService));
     router.use('/profiles', createProfilesRouter(db, auditService));
     router.use('/groups', createGroupsRouter(db));
-    router.use('/audit-logs', createAuditLogsRouter(db));
+    router.use('/audit-logs', createAuditLogsRouter(db, auditService, evaluationService));
     router.use('/sessions', createSessionsRouter(db, auditService));
     router.use('/organizations', createOrganizationsRouter(db));
 

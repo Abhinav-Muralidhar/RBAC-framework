@@ -14,6 +14,7 @@ export interface CreateGroupRequestDto {
     description?: string;
     is_active?: boolean;
     role_ids?: string[];  // Roles to assign
+    user_ids?: string[];  // Users to assign
 }
 
 export interface UpdateGroupRequestDto {
@@ -21,7 +22,8 @@ export interface UpdateGroupRequestDto {
     code?: string;
     description?: string | null;
     is_active?: boolean;
-    role_ids?: string[];  // Replace all roles
+    role_ids?: string[];  // Replace all roles  
+    user_ids?: string[];  // Replace all users
 }
 
 // ============================================================================

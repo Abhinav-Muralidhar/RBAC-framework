@@ -90,10 +90,17 @@ export class UserGroupsRepository implements IUserGroupsRepository {
     assignedBy?: string
   ): Promise<void> {
     const executor = t ?? this.db;
-    for (const userId of userIds) {
-      await this.addMember(executor as TransactionTask, userId, groupId, assignedBy);
-    }
+
+    await executor.none(
+      `
+    INSERT INTO ${this.tableName} (user_id, group_id, assigned_by)
+    SELECT unnest($1::uuid[]), $2, $3
+    ON CONFLICT DO NOTHING
+    `,
+      [userIds, groupId, assignedBy ?? null]
+    );
   }
+
 
 
   async replaceUsers(
@@ -107,8 +114,6 @@ export class UserGroupsRepository implements IUserGroupsRepository {
       `DELETE FROM ${this.tableName} WHERE group_id = $1`,
       [groupId]
     );
-    for (const userId of userIds) {
-      await this.addMember(executor as TransactionTask, userId, groupId, assignedBy);
-    }
+    await this.addMembers(executor as TransactionTask, groupId, userIds, assignedBy);
   }
 }

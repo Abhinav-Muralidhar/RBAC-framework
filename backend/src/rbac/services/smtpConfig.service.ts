@@ -16,7 +16,7 @@ import { RBACInternalError, SMTPConfigError, SMTPConfigNotFoundError } from '../
 import { SmtpConfigCreate } from '../dto/smtp_config.dto';
 import { IAuditService } from './audit.service';
 export type SmtpValidationError = string;
-
+const MODULE_CODE = 'SETTINGS';
 export interface ISmtpConfigService {
     getById(configId: string): Promise<SmtpConfig>;
     listAll(
@@ -32,6 +32,7 @@ export interface ISmtpConfigService {
         data: Partial<SmtpConfig>,
         actingUserId: string
     ): Promise<SmtpConfig>;
+    delete(configId: string, actingUserId: string): Promise<void>;
 }
 export function validateSmtpConfig(config: Partial<SmtpConfig>): SmtpValidationError[] {
     const errors: SmtpValidationError[] = [];
@@ -106,6 +107,7 @@ export class SmtpConfigService implements ISmtpConfigService {
             this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'create',
+                module_code: MODULE_CODE,
                 entity_type: 'smtp_config',
                 entity_id: config.id,
                 old_values: {},  // No old values for create
@@ -143,6 +145,7 @@ export class SmtpConfigService implements ISmtpConfigService {
             this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'update',
+                module_code: MODULE_CODE,
                 entity_type: 'smtp_config',
                 entity_id: configId,
                 old_values: { ...existing } as Record<string, unknown>,
@@ -150,6 +153,27 @@ export class SmtpConfigService implements ISmtpConfigService {
                 status: 'success'
             }).catch(console.error);
             return updatedConfig;
+        });
+    }
+
+    async delete(configId: string, actingUserId: string): Promise<void> {
+        return withTransaction(async (t: TransactionTask) => {
+            const existing = await this.smtpConfigRepository.findById(t, configId);
+            if (!existing) {
+                throw new RBACInternalError(`SMTP config not found: ${configId}`);
+            }
+
+            await this.smtpConfigRepository.delete(t, configId);
+            this.auditService.log(t, {
+                user_id: actingUserId,
+                action: 'delete',
+                module_code: MODULE_CODE,
+                entity_type: 'smtp_config',
+                entity_id: configId,
+                old_values: { ...existing } as Record<string, unknown>,
+                new_values: { is_deleted: true } as Record<string, unknown>,
+                status: 'success'
+            }).catch(console.error);
         });
     }
 }

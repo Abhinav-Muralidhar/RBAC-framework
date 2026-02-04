@@ -12,6 +12,7 @@ import { AuditLogFilters } from '../types/repository.types';
 import { IEvaluationService } from './evaluation.service';
 import { TransactionTask, withTransaction } from '../utils/transaction.utils'; // adjust path if needed
 import { IDatabase } from 'pg-promise';
+import { IModuleRepository } from '../repositories/modules.repository';
 const MODULE_CODE = 'SETTINGS';
 
 export interface IAuditService {
@@ -28,6 +29,7 @@ export interface IAuditService {
             role_id?: string;
             action: AuditAction;
             module_id?: string;
+            module_code?: string;
             entity_type?: string;
             entity_id?: string;
             old_values?: Record<string, unknown> | null;
@@ -64,6 +66,7 @@ export class AuditService implements IAuditService {
     constructor(
         private readonly auditLogsRepository: IAuditLogsRepository,
         private evaluationService: IEvaluationService,
+        private modulesRepository: IModuleRepository,
     ) { }
 
     async log(
@@ -73,6 +76,7 @@ export class AuditService implements IAuditService {
             role_id?: string;
             action: AuditAction;
             module_id?: string;
+            module_code?: string;
             entity_type?: string;
             entity_id?: string;
             old_values?: Record<string, unknown> | null;
@@ -82,12 +86,17 @@ export class AuditService implements IAuditService {
             status: AuditStatus;
         }
     ): Promise<AuditLogs> {
+
+        const module = await this.modulesRepository.findByCode(
+            t,
+            data.module_code as string
+        );
         // Build strict input object - all required fields must have values
         const input = {
             action: data.action,
-            module_id: data.module_id || null,
-            entity_type: data.entity_type || '',
-            entity_id: data.entity_id || null,
+            module_id: module?.id ?? null,
+            entity_type: data.entity_type ?? '',
+            entity_id: data.entity_id ?? null,
             ip_address: data.ip_address || '',
             user_agent: data.user_agent || '',
             status: data.status,

@@ -18,6 +18,7 @@ import { AuditLogsRepository } from '../repositories/audit_logs.repository';
 
 import { requirePermission } from '../middleware/requirePermission.middleware';
 import { parseId, parsePagination } from './_paramUtils';
+import { ModuleRepository } from '../repositories/modules.repository';
 
 /* -------------------------------------------------------------------------- */
 /* Response helpers                                                            */
@@ -58,10 +59,11 @@ export function createSharingRulesRouter(db: IDatabase<unknown>): Router {
     const sharingRulesRepository = new SharingRulesRepository(db);
     const permissionsRepository = new PermissionsRepository(db);
     const auditRepository = new AuditLogsRepository(db);
+    const moduleRepository = new ModuleRepository(db);
 
     /* ----------------------------- services ---------------------------------- */
     const evaluationService = new EvaluationService(permissionsRepository);
-    const auditService = new AuditService(auditRepository, evaluationService);
+    const auditService = new AuditService(auditRepository, evaluationService, moduleRepository);
 
     const sharingRuleService = new SharingRuleService(
         sharingRulesRepository,

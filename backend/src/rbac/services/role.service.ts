@@ -121,6 +121,7 @@ export class RoleService implements IRoleService {
             this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'create',
+                module_code: MODULE_CODE,
                 entity_type: 'role',
                 entity_id: role.id,
                 old_values: null,
@@ -163,6 +164,7 @@ export class RoleService implements IRoleService {
             this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'update',
+                module_code: MODULE_CODE,
                 entity_type: 'role',
                 entity_id: roleId,
                 old_values: { ...existing },
@@ -186,6 +188,7 @@ export class RoleService implements IRoleService {
             this.auditService.log(t, {
                 user_id: actingUserId,
                 action: 'delete',
+                module_code: MODULE_CODE,
                 entity_type: 'role',
                 entity_id: roleId,
                 old_values: { ...existing },

@@ -66,7 +66,8 @@ export function createGroupsRouter(db: IDatabase<unknown>): Router {
     );
     const auditService = new AuditService(
         auditRepository,
-        evaluationService
+        evaluationService,
+        moduleRepository
     );
     const groupService = new UnifiedGroupService(
         groupRepository,

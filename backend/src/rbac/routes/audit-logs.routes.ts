@@ -16,6 +16,7 @@ import { EvaluationService } from '../services/evaluation.service';
 import { PermissionsRepository } from '../repositories/permissions.repository';
 import { AuditLogListFilterDto } from '../dto/audit_log.dto';
 import { requirePermission } from '../middleware/requirePermission.middleware';
+import { ModuleRepository } from '../repositories/modules.repository';
 
 /**
  * Standard response envelope
@@ -45,20 +46,8 @@ export function parseAuditLogFilters(query: any): AuditLogListFilterDto {
 }
 
 
-export function createAuditLogsRouter(db: IDatabase<unknown>): Router {
+export function createAuditLogsRouter(db: IDatabase<unknown>, auditLogService: AuditService, evaluationService: EvaluationService): Router {
     const router = Router();
-
-
-    const evaluationService = new EvaluationService(
-        new PermissionsRepository(db)
-    );
-
-    // --- Audit service ---
-    const auditLogService = new AuditService(
-        new AuditLogsRepository(db),
-        evaluationService,
-    );
-
 
     /**
      * GET /rbac/audit-logs
