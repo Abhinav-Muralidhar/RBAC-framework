@@ -51,6 +51,7 @@ export interface UpdateOrganizationDto {
     company_logo?: string | null;
 
     address?: string;
+    gstin?: string;
     city?: string;
     state?: string;
     postal_code?: string;
@@ -99,4 +100,11 @@ export interface OrganizationSummaryDto {
     id: string;
     company_name: string;
     is_active: boolean;
+}
+
+export interface OrganizationListFilterDto {
+    is_active?: boolean;
+    country?: string;
+    state?: string;
+    city?: string;
 }

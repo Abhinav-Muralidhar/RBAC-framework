@@ -25,3 +25,33 @@ export interface AuditLog {
     status: AuditStatus;
     created_at: string;
 }
+
+// ============================================================================
+// FILTER DTOs
+// ============================================================================
+
+export interface AuditLogListFilterDto {
+    user_id?: string;
+    action?: AuditAction;
+    entity_type?: string;
+    entity_id?: string;
+    status?: AuditStatus;
+    start_date?: Date;
+    end_date?: Date;
+}
+
+// ============================================================================
+// RESPONSE DTOs
+// ============================================================================
+
+/**
+ * Minimal audit log summary for lists
+ */
+export interface AuditLogSummaryDto {
+    id: string;
+    action: AuditAction;
+    entity_type: string;
+    user_name: string | null;
+    status: AuditStatus;
+    created_at: Date;
+}

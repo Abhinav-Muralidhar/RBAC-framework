@@ -43,6 +43,25 @@ export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAudi
     });
 
 
+    router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const sessions = await authSessionService.findAll();
+            sendSuccess(res, sessions.data, {
+                page: sessions.pagination.page,
+                limit: sessions.pagination.limit,
+                total: sessions.pagination.total,
+                totalPages: sessions.pagination.totalPages
+            });
+        } catch (error) {
+            next(error);
+        }
+    });
+
+
+
+
+
+
     /**
      * GET /rbac/sessions/current
      * Get current user's active session info

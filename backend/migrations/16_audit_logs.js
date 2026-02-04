@@ -8,7 +8,7 @@ exports.up = async function (knex) {
         table.bigInteger('user_id').nullable().references('id').inTable('users').onDelete('SET NULL');
         table.bigInteger('role_id').nullable().references('id').inTable('roles').onDelete('SET NULL');
         table.string('action').notNullable().checkIn(['create', 'update', 'delete', 'export']);
-        table.bigInteger('module_id').nullable().references('id').inTable('modules');
+        table.bigInteger('module_id').notNullable().references('id').inTable('modules');
         table.string('entity_type').notNullable();
         table.bigInteger('entity_id').notNullable();
         table.json('old_values').nullable();

@@ -171,4 +171,25 @@ export class SmtpConfigService implements ISmtpConfigService {
             status: 'success'
         })
     }
+
+    async delete(configId: string, actingUserId: string): Promise<void> {
+        return withTransaction(async (t: TransactionTask) => {
+            const existing = await this.smtpConfigRepository.findById(t, configId);
+            if (!existing) {
+                throw new RBACInternalError(`SMTP config not found: ${configId}`);
+            }
+
+            await this.smtpConfigRepository.delete(t, configId);
+            this.auditService.log(t, {
+                user_id: actingUserId,
+                action: 'delete',
+                module_code: MODULE_CODE,
+                entity_type: 'smtp_config',
+                entity_id: configId,
+                old_values: { ...existing } as Record<string, unknown>,
+                new_values: { is_deleted: true } as Record<string, unknown>,
+                status: 'success'
+            }).catch(console.error);
+        });
+    }
 }
