@@ -67,6 +67,9 @@ export interface CreateUserRequestDto {
     // Other
     aggregation_format?: string;
     signature?: string;
+
+    rolesid: string;
+    rolesname: string;
 }
 
 /**

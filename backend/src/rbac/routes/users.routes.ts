@@ -59,7 +59,7 @@ export function createUsersRouter(db: IDatabase<unknown>, auditService: IAuditSe
         permissionsRepository
 
     );
-    const userService = new UserService(usersRepository, evaluationService, auditService);
+    const userService = new UserService(usersRepository, userRoleRepository, evaluationService, auditService);
 
     /**
      * GET /rbac/users

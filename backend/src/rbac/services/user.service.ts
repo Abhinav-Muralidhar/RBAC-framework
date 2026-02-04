@@ -16,6 +16,7 @@ import { IAuditService } from './audit.service';
 import { UserListFilterDto, CreateUserRequestDto, UpdateUserRequestDto } from '../dto/user.dto';
 import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
 import { CreateUserInput, UpdateUserInput } from '../types/repository.types';
+import { IUserRoleRepository } from '../repositories/user_roles.repository';
 
 // Module code for RBAC operations
 const MODULE_CODE = 'SETTINGS';
@@ -33,6 +34,7 @@ export interface IUserService {
 export class UserService implements IUserService {
     constructor(
         private userRepository: IUsersRepository,
+        private userRolesRepository: IUserRoleRepository,
         private evaluationService: IEvaluationService,
         private auditService: IAuditService,
     ) { }
@@ -87,6 +89,7 @@ export class UserService implements IUserService {
             };
 
             const user = await this.userRepository.create(t, userData);
+            const userRoles = await this.userRolesRepository.assign(t, user.id, data.rolesid);
 
             this.auditService.log(t, {
                 user_id: actingUserId,
