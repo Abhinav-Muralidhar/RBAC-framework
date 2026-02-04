@@ -1,43 +1,28 @@
 /**
  * Audit Logs Page
+ * (Centralized Hook Version)
  */
 
-import { useState, useEffect } from 'react';
-import { auditLogsApi } from '../../../core/api/rbac.api';
-import type { AuditLog } from '../../../core/types/audit.types';
 import { Search, Filter } from 'lucide-react';
 import { format } from 'date-fns';
+import type { AuditLog } from '../../../core/types/audit.types';
+import { auditLogsApi } from '../../../core/api/rbac.api';
+import { useCrudPage } from '../../../core/hooks';
 import './SettingsPage.css';
 
 export function AuditLogsPage() {
-    const [logs, setLogs] = useState<AuditLog[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
 
-    useEffect(() => {
-        loadLogs();
-    }, [page]);
+    const crud = useCrudPage<AuditLog>({
+        listFn: auditLogsApi.list,
+        deleteFn: async () => { },
+        entityName: 'audit logs',
+        initialLimit: 20,
+    });
 
-    const loadLogs = async () => {
-        try {
-            setIsLoading(true);
-            const response = await auditLogsApi.list({ page, limit: 20 });
-            setLogs(response.data || []);
-            setTotalPages(response.meta?.totalPages || 1);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load audit logs');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const filteredLogs = logs.filter(log =>
-        log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.entity_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (log.user_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+    const filteredLogs = crud.items.filter(log =>
+        log.action.toLowerCase().includes(crud.searchQuery.toLowerCase()) ||
+        log.entity_type.toLowerCase().includes(crud.searchQuery.toLowerCase()) ||
+        (log.user_name?.toLowerCase().includes(crud.searchQuery.toLowerCase()) ?? false)
     );
 
     const getStatusColor = (status: string) => {
@@ -51,35 +36,47 @@ export function AuditLogsPage() {
 
     return (
         <div className="settings-page">
+
+            {/* Header */}
             <header className="page-header">
                 <div>
                     <h1>Audit Logs</h1>
                     <p>View system activity and changes</p>
                 </div>
+
                 <button className="btn btn-secondary">
                     <Filter size={18} />
                     Filters
                 </button>
             </header>
 
+            {/* Search */}
             <div className="page-toolbar">
                 <div className="search-box">
                     <Search size={18} />
                     <input
                         type="text"
                         placeholder="Search logs..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        value={crud.searchQuery}
+                        onChange={(e) => crud.setSearchQuery(e.target.value)}
                     />
                 </div>
             </div>
 
-            {error && <div className="error-message">{error}</div>}
+            {/* Error */}
+            {crud.error && (
+                <div className="error-banner">
+                    {crud.error}
+                    <button onClick={crud.clearError}>×</button>
+                </div>
+            )}
 
-            {isLoading ? (
+            {/* Loading */}
+            {crud.isLoading ? (
                 <div className="loading-state">Loading audit logs...</div>
             ) : (
                 <>
+                    {/* Table */}
                     <div className="data-table-wrapper">
                         <table className="data-table">
                             <thead>
@@ -92,41 +89,73 @@ export function AuditLogsPage() {
                                     <th>IP Address</th>
                                 </tr>
                             </thead>
+
                             <tbody>
                                 {filteredLogs.map(log => (
                                     <tr key={log.id}>
                                         <td className="text-muted">
                                             {format(new Date(log.created_at), 'MMM d, yyyy HH:mm:ss')}
                                         </td>
+
                                         <td>{log.user_name || log.user_email || '-'}</td>
+
                                         <td>
-                                            <span className="action-badge">{log.action}</span>
+                                            <span className="action-badge">
+                                                {log.action}
+                                            </span>
                                         </td>
+
                                         <td>
                                             <code>{log.entity_type}</code>
-                                            <span className="text-muted"> #{log.entity_id.slice(0, 8)}</span>
+                                            <span className="text-muted">
+                                                {' '}#{log.entity_id.slice(0, 8)}
+                                            </span>
                                         </td>
+
                                         <td>
-                                            <span className={`status-badge ${getStatusColor(log.status)}`}>
+                                            <span
+                                                className={`status-badge ${getStatusColor(log.status)}`}
+                                            >
                                                 {log.status}
                                             </span>
                                         </td>
-                                        <td className="text-muted">{log.ip_address}</td>
+
+                                        <td className="text-muted">
+                                            {log.ip_address}
+                                        </td>
                                     </tr>
                                 ))}
+
                                 {filteredLogs.length === 0 && (
                                     <tr>
-                                        <td colSpan={6} className="empty-state">No audit logs found</td>
+                                        <td colSpan={6} className="empty-state">
+                                            No audit logs found
+                                        </td>
                                     </tr>
                                 )}
                             </tbody>
                         </table>
                     </div>
 
+                    {/* Pagination */}
                     <div className="pagination">
-                        <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</button>
-                        <span>Page {page} of {totalPages}</span>
-                        <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
+                        <button
+                            disabled={crud.page <= 1}
+                            onClick={crud.prevPage}
+                        >
+                            Previous
+                        </button>
+
+                        <span>
+                            Page {crud.page} of {crud.totalPages}
+                        </span>
+
+                        <button
+                            disabled={crud.page >= crud.totalPages}
+                            onClick={crud.nextPage}
+                        >
+                            Next
+                        </button>
                     </div>
                 </>
             )}

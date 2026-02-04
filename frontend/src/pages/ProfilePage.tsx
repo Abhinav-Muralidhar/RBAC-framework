@@ -10,7 +10,7 @@ import { usersApi } from '../core/api/rbac.api';
 import { FormInput, FormSwitch } from '../core/components/FormElements';
 import {
     User, Mail, Lock, Save, Key, Phone,
-    MapPin, Settings, Globe, DollarSign, Type, ShieldCheck
+    MapPin, Settings, ShieldCheck
 } from 'lucide-react';
 import './ProfilePage.css';
 
@@ -40,55 +40,66 @@ type OtpStep = 'idle' | 'sending' | 'sent' | 'verifying' | 'verified';
 export function ProfilePage() {
     const { user, refreshUser } = useAuth();
 
-    // --- Profile Data State ---
     const [formData, setFormData] = useState<ProfileFormData>({
-        first_name: '', last_name: '', title: '', department: '',
-        secondary_email: '', other_email: '',
-        mobile_phone: '', office_phone: '',
-        street: '', city: '', state: '', country: '', postal_code: '',
-        time_zone: '', preferred_currency: '',
-        full_screen_preview: false, signature: '',
+        first_name: '',
+        last_name: '',
+        title: '',
+        department: '',
+        secondary_email: '',
+        other_email: '',
+        mobile_phone: '',
+        office_phone: '',
+        street: '',
+        city: '',
+        state: '',
+        country: '',
+        postal_code: '',
+        time_zone: '',
+        preferred_currency: '',
+        full_screen_preview: false,
+        signature: '',
     });
 
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
-    // --- Sensitive Action State ---
     const [activeFlow, setActiveFlow] = useState<OtpFlowType>('idle');
     const [otpStep, setOtpStep] = useState<OtpStep>('idle');
     const [otpCode, setOtpCode] = useState('');
 
-    // Final Change States
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [newEmail, setNewEmail] = useState('');
 
+    /* ---------------- Load User ---------------- */
+
     useEffect(() => {
-        if (user) {
-            setFormData({
-                first_name: user.first_name || '',
-                last_name: user.last_name || '',
-                title: user.title || '',
-                department: user.department || '',
-                secondary_email: user.secondary_email || '',
-                other_email: user.other_email || '',
-                mobile_phone: user.mobile_phone || '',
-                office_phone: user.office_phone || '',
-                street: user.street || '',
-                city: user.city || '',
-                state: user.state || '',
-                country: user.country || '',
-                postal_code: user.postal_code || '',
-                time_zone: user.time_zone || '',
-                preferred_currency: user.preferred_currency || '',
-                full_screen_preview: !!user.full_screen_preview,
-                signature: user.signature || '',
-            });
-        }
+        if (!user) return;
+
+        setFormData({
+            first_name: user.first_name || '',
+            last_name: user.last_name || '',
+            title: user.title || '',
+            department: user.department || '',
+            secondary_email: user.secondary_email || '',
+            other_email: user.other_email || '',
+            mobile_phone: user.mobile_phone || '',
+            office_phone: user.office_phone || '',
+            street: user.street || '',
+            city: user.city || '',
+            state: user.state || '',
+            country: user.country || '',
+            postal_code: user.postal_code || '',
+            time_zone: user.time_zone || '',
+            preferred_currency: user.preferred_currency || '',
+            full_screen_preview: !!user.full_screen_preview,
+            signature: user.signature || '',
+        });
     }, [user]);
 
-    // --- Helpers ---
+    /* ---------------- Helpers ---------------- */
+
     const resetSensitiveState = () => {
         setActiveFlow('idle');
         setOtpStep('idle');
@@ -105,15 +116,37 @@ export function ProfilePage() {
         setSuccess('');
     };
 
-    // --- Profile Update ---
+    /* ---------------- Save Profile ---------------- */
+
     const handleSaveProfile = async (e: FormEvent) => {
         e.preventDefault();
         if (!user) return;
+
         setIsSaving(true);
         setError('');
         setSuccess('');
+
         try {
-            await usersApi.update(user.id, formData);
+            await usersApi.update(user.id, {
+                ...formData,
+                first_name: formData.first_name.trim(),
+                last_name: formData.last_name.trim(),
+                title: formData.title || undefined,
+                department: formData.department || undefined,
+                secondary_email: formData.secondary_email || undefined,
+                other_email: formData.other_email || undefined,
+                mobile_phone: formData.mobile_phone || undefined,
+                office_phone: formData.office_phone || undefined,
+                street: formData.street || undefined,
+                city: formData.city || undefined,
+                state: formData.state || undefined,
+                country: formData.country || undefined,
+                postal_code: formData.postal_code || undefined,
+                time_zone: formData.time_zone || undefined,
+                preferred_currency: formData.preferred_currency || undefined,
+                signature: formData.signature || undefined,
+            });
+
             await refreshUser();
             setSuccess('Profile updated successfully!');
         } catch (err) {
@@ -123,47 +156,38 @@ export function ProfilePage() {
         }
     };
 
-    // --- OTP Flow Initiation ---
+    /* ---------------- OTP Flow ---------------- */
+
     const startSensitiveFlow = async (type: 'password' | 'email') => {
         setActiveFlow(type);
         setOtpStep('sending');
         setError('');
 
-        try {
-            // Mock API call to send OTP
-            // await authApi.sendOtp(user.email); 
-            setTimeout(() => setOtpStep('sent'), 800);
-        } catch (err) {
-            setError('Failed to send verification code.');
-            setActiveFlow('idle');
-        }
+        setTimeout(() => setOtpStep('sent'), 800);
     };
 
     const verifyOtp = async () => {
-        if (!otpCode) return;
+        if (otpCode.length !== 6) return;
+
         setOtpStep('verifying');
 
-        try {
-            // Mock API verify
-            // await authApi.verifyOtp(otpCode);
-            setTimeout(() => {
-                if (otpCode === '123456') { // Mock check
-                    setOtpStep('verified');
-                } else {
-                    setError('Invalid verification code.');
-                    setOtpStep('sent');
-                }
-            }, 800);
-        } catch (err) {
-            setError('Verification failed.');
-            setOtpStep('sent');
-        }
+        setTimeout(() => {
+            setOtpStep('verified');
+        }, 800);
     };
 
-    // --- Final Actions (After OTP) ---
+    /* ---------------- Final Password ---------------- */
+
     const handleFinalPasswordChange = async () => {
-        if (!user || newPassword !== confirmPassword) return;
+        if (!user) return;
+
+        if (newPassword !== confirmPassword) {
+            setError('Passwords do not match.');
+            return;
+        }
+
         setIsSaving(true);
+
         try {
             await usersApi.update(user.id, { password: newPassword });
             setSuccess('Password updated successfully!');
@@ -175,9 +199,13 @@ export function ProfilePage() {
         }
     };
 
+    /* ---------------- Final Email ---------------- */
+
     const handleFinalEmailChange = async () => {
-        if (!user) return;
+        if (!user || !newEmail) return;
+
         setIsSaving(true);
+
         try {
             await usersApi.update(user.id, { primary_email: newEmail });
             await refreshUser();

@@ -4,91 +4,27 @@
  * Manage user roles with forms and confirmation modals.
  */
 
-import { useState, useEffect } from 'react';
 import { rolesApi } from '../../../core/api/rbac.api';
 import type { Role } from '../../../core/types/role.types';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { FormModal } from '../../../core/components/FormModal';
 import { RoleForm, submitRoleForm } from '../components';
+import { useCrudPage } from '../../../core/hooks';
 import './SettingsPage.css';
 
 export function RolesPage() {
-    const [roles, setRoles] = useState<Role[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [searchQuery, setSearchQuery] = useState('');
+    const crud = useCrudPage<Role>({
+        listFn: rolesApi.list,
+        deleteFn: rolesApi.delete,
+        entityName: 'roles',
+        initialLimit: 100,
+    });
 
-    // Modal states
-    const [showFormModal, setShowFormModal] = useState(false);
-    const [editingRole, setEditingRole] = useState<Role | null>(null);
-    const [formLoading, setFormLoading] = useState(false);
-
-    const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [deletingRole, setDeletingRole] = useState<Role | null>(null);
-    const [deleteLoading, setDeleteLoading] = useState(false);
-
-    useEffect(() => {
-        loadRoles();
-    }, []);
-
-    const loadRoles = async () => {
-        try {
-            setIsLoading(true);
-            const response = await rolesApi.list({ limit: 100 });
-            setRoles(response.data || []);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load roles');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const filteredRoles = roles.filter(role =>
-        role.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        role.code.toLowerCase().includes(searchQuery.toLowerCase())
+    const filteredRoles = crud.items.filter(role =>
+        role.name.toLowerCase().includes(crud.searchQuery.toLowerCase()) ||
+        role.code.toLowerCase().includes(crud.searchQuery.toLowerCase())
     );
-
-    const handleCreate = () => {
-        setEditingRole(null);
-        setShowFormModal(true);
-    };
-
-    const handleEdit = (role: Role) => {
-        setEditingRole(role);
-        setShowFormModal(true);
-    };
-
-    const handleDelete = (role: Role) => {
-        setDeletingRole(role);
-        setShowDeleteModal(true);
-    };
-
-    const confirmDelete = async () => {
-        if (!deletingRole) return;
-
-        setDeleteLoading(true);
-        try {
-            await rolesApi.delete(deletingRole.id);
-            setShowDeleteModal(false);
-            setDeletingRole(null);
-            loadRoles();
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to delete role');
-        } finally {
-            setDeleteLoading(false);
-        }
-    };
-
-    const handleFormSuccess = () => {
-        setShowFormModal(false);
-        setEditingRole(null);
-        loadRoles();
-    };
-
-    const handleFormError = (err: string) => {
-        setError(err);
-    };
 
     return (
         <div className="settings-page">
@@ -97,7 +33,7 @@ export function RolesPage() {
                     <h1>Roles</h1>
                     <p>Manage user roles and hierarchies</p>
                 </div>
-                <button className="btn btn-primary" onClick={handleCreate}>
+                <button className="btn btn-primary" onClick={crud.openCreate}>
                     <Plus size={18} />
                     Add Role
                 </button>
@@ -109,20 +45,20 @@ export function RolesPage() {
                     <input
                         type="text"
                         placeholder="Search roles..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        value={crud.searchQuery}
+                        onChange={(e) => crud.setSearchQuery(e.target.value)}
                     />
                 </div>
             </div>
 
-            {error && (
+            {crud.error && (
                 <div className="error-banner">
-                    {error}
-                    <button onClick={() => setError('')}>×</button>
+                    {crud.error}
+                    <button onClick={crud.clearError}>×</button>
                 </div>
             )}
 
-            {isLoading ? (
+            {crud.isLoading ? (
                 <div className="loading-state">Loading roles...</div>
             ) : (
                 <div className="data-table-wrapper">
@@ -154,14 +90,14 @@ export function RolesPage() {
                                             <button
                                                 className="btn-icon"
                                                 title="Edit"
-                                                onClick={() => handleEdit(role)}
+                                                onClick={() => crud.openEdit(role)}
                                             >
                                                 <Edit2 size={16} />
                                             </button>
                                             <button
                                                 className="btn-icon btn-danger"
                                                 title="Delete"
-                                                onClick={() => handleDelete(role)}
+                                                onClick={() => crud.openDelete(role)}
                                             >
                                                 <Trash2 size={16} />
                                             </button>
@@ -181,38 +117,32 @@ export function RolesPage() {
 
             {/* Create/Edit Modal */}
             <FormModal
-                isOpen={showFormModal}
-                title={editingRole ? 'Edit Role' : 'Add New Role'}
-                isLoading={formLoading}
+                isOpen={crud.showFormModal}
+                title={crud.editingItem ? 'Edit Role' : 'Add New Role'}
+                isLoading={crud.formLoading}
                 onSubmit={() => submitRoleForm()}
-                onCancel={() => {
-                    setShowFormModal(false);
-                    setEditingRole(null);
-                }}
+                onCancel={crud.closeForm}
                 size="md"
             >
                 <RoleForm
-                    role={editingRole}
-                    onSuccess={handleFormSuccess}
-                    onError={handleFormError}
-                    setLoading={setFormLoading}
+                    role={crud.editingItem}
+                    onSuccess={crud.handleFormSuccess}
+                    onError={crud.setError}
+                    setLoading={crud.setFormLoading}
                 />
             </FormModal>
 
             {/* Delete Confirmation */}
             <ConfirmModal
-                isOpen={showDeleteModal}
+                isOpen={crud.showDeleteModal}
                 title="Delete Role"
                 message="Are you sure you want to delete this role? Users assigned this role will lose associated permissions."
-                itemName={deletingRole?.name}
+                itemName={crud.deletingItem?.name}
                 confirmLabel="Delete"
                 variant="danger"
-                isLoading={deleteLoading}
-                onConfirm={confirmDelete}
-                onCancel={() => {
-                    setShowDeleteModal(false);
-                    setDeletingRole(null);
-                }}
+                isLoading={crud.deleteLoading}
+                onConfirm={crud.confirmDelete}
+                onCancel={crud.closeDelete}
             />
         </div>
     );

@@ -2,13 +2,20 @@
  * User Form Component
  * 
  * Create/Edit user form used in FormModal.
+ * Uses centralized validators for password and email.
  */
 
 import { useState, useEffect } from 'react';
-import { FormInput, FormSelect, FormSwitch } from '../../../core/components/FormElements';
+import { FormInput, FormSelect } from '../../../core/components/FormElements';
 import type { User, CreateUserDto, UpdateUserDto } from '../../../core/types/user.types';
 import type { Role } from '../../../core/types/role.types';
 import { usersApi, rolesApi } from '../../../core/api/rbac.api';
+import {
+    validateEmail,
+    validatePassword,
+    validateRequired,
+    validateUsername
+} from '../../../core/utils';
 
 interface UserFormProps {
     user?: User | null;
@@ -27,13 +34,14 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
         last_name: user?.last_name || '',
         title: user?.title || '',
         department: user?.department || '',
-        status: user?.status || 'ACTIVE',
+        status: (user?.status || 'active') as 'active' | 'inactive',
         password: '',
     });
 
     const [selectedRoles, setSelectedRoles] = useState<string[]>(
         user?.roles?.map(r => r.id) || []
     );
+
     const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -44,7 +52,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
     const loadRoles = async () => {
         try {
             const response = await rolesApi.list({ limit: 100 });
-            setAvailableRoles(response.data);
+            setAvailableRoles(response.data || []);
         } catch (err) {
             console.error('Failed to load roles', err);
         }
@@ -65,34 +73,41 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
         );
     };
 
+    // ---------------- VALIDATION ----------------
+
     const validate = (): boolean => {
         const newErrors: Record<string, string> = {};
 
-        if (!formData.username.trim()) {
-            newErrors.username = 'Username is required';
+        if (!isEditing) {
+            const usernameErr = validateUsername(formData.username);
+            if (usernameErr) newErrors.username = usernameErr;
         }
-        if (!formData.primary_email.trim()) {
-            newErrors.primary_email = 'Email is required';
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.primary_email)) {
-            newErrors.primary_email = 'Invalid email format';
-        }
-        if (!formData.last_name.trim()) {
-            newErrors.last_name = 'Last name is required';
-        }
-        if (!isEditing && !formData.password) {
-            newErrors.password = 'Password is required for new users';
-        } else if (!isEditing && formData.password.length < 8) {
-            newErrors.password = 'Password must be at least 8 characters';
+
+        const emailErr = validateEmail(formData.primary_email);
+        if (emailErr) newErrors.primary_email = emailErr;
+
+        const lastNameErr = validateRequired(formData.last_name, 'Last name');
+        if (lastNameErr) newErrors.last_name = lastNameErr;
+
+        if (!isEditing) {
+            const passwordErr = validatePassword(formData.password);
+            if (passwordErr) newErrors.password = passwordErr;
+        } else if (formData.password) {
+            const passwordErr = validatePassword(formData.password);
+            if (passwordErr) newErrors.password = passwordErr;
         }
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
+    // ---------------- SUBMIT ----------------
+
     const handleSubmit = async () => {
         if (!validate()) return;
 
         setLoading(true);
+
         try {
             if (isEditing && user) {
                 const updateData: UpdateUserDto = {
@@ -101,11 +116,14 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     last_name: formData.last_name,
                     title: formData.title || undefined,
                     department: formData.department || undefined,
-                    status: formData.status as 'active' | 'inactive',
+                    status: formData.status,
+                    role_ids: selectedRoles,
                 };
+
                 if (formData.password) {
                     updateData.password = formData.password;
                 }
+
                 await usersApi.update(user.id, updateData);
             } else {
                 const createData: CreateUserDto = {
@@ -116,9 +134,12 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     last_name: formData.last_name,
                     title: formData.title || undefined,
                     department: formData.department || undefined,
-                }
+                    role_ids: selectedRoles,
+                };
+
                 await usersApi.create(createData);
             }
+
             onSuccess();
         } catch (err) {
             onError(err instanceof Error ? err.message : 'Failed to save user');
@@ -127,10 +148,11 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
         }
     };
 
-    // Expose submit to parent via ref pattern or callback
-    // For simplicity, we'll use a hidden button approach
+    // ---------------- UI ----------------
+
     return (
         <div className="entity-form">
+
             <div className="form-row">
                 <FormInput
                     label="Username"
@@ -139,7 +161,9 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     error={errors.username}
                     disabled={isEditing}
                     required
+                    hint={!isEditing ? "Letters, numbers, and underscores only" : undefined}
                 />
+
                 <FormInput
                     label="Email"
                     type="email"
@@ -156,6 +180,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     value={formData.first_name}
                     onChange={e => handleChange('first_name', e.target.value)}
                 />
+
                 <FormInput
                     label="Last Name"
                     value={formData.last_name}
@@ -170,13 +195,12 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     label="Title"
                     value={formData.title}
                     onChange={e => handleChange('title', e.target.value)}
-                    placeholder="e.g., Software Engineer"
                 />
+
                 <FormInput
                     label="Department"
                     value={formData.department}
                     onChange={e => handleChange('department', e.target.value)}
-                    placeholder="e.g., Engineering"
                 />
             </div>
 
@@ -186,11 +210,11 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     value={formData.status}
                     onChange={e => handleChange('status', e.target.value)}
                     options={[
-                        { value: 'ACTIVE', label: 'Active' },
-                        { value: 'INACTIVE', label: 'Inactive' },
-                        { value: 'LOCKED', label: 'Locked' },
+                        { value: 'active', label: 'Active' },
+                        { value: 'inactive', label: 'Inactive' },
                     ]}
                 />
+
                 <FormInput
                     label={isEditing ? 'New Password (optional)' : 'Password'}
                     type="password"
@@ -198,13 +222,13 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     onChange={e => handleChange('password', e.target.value)}
                     error={errors.password}
                     required={!isEditing}
-                    placeholder={isEditing ? 'Leave blank to keep current' : 'Min 8 characters'}
                 />
             </div>
 
-            {/* Roles selection */}
+            {/* Roles */}
             <div className="form-field">
                 <label className="form-label">Assign Roles</label>
+
                 <div className="checkbox-group">
                     {availableRoles.map(role => (
                         <label key={role.id} className="checkbox-item">
@@ -216,13 +240,14 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                             <span>{role.name}</span>
                         </label>
                     ))}
+
                     {availableRoles.length === 0 && (
                         <span className="text-muted">No roles available</span>
                     )}
                 </div>
             </div>
 
-            {/* Hidden submit button - form will be submitted by FormModal */}
+            {/* Hidden submit button */}
             <button
                 type="button"
                 id="user-form-submit"
@@ -233,7 +258,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
     );
 }
 
-// Helper to trigger submit from outside
+/** Trigger submit from FormModal */
 export function submitUserForm() {
     document.getElementById('user-form-submit')?.click();
 }

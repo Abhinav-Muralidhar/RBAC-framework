@@ -2,12 +2,19 @@
  * SMTP Form Component
  * 
  * Create/Edit SMTP configuration form.
+ * Uses centralized validators.
  */
 
 import { useState } from 'react';
 import { FormInput, FormSelect, FormSwitch } from '../../../core/components/FormElements';
-import type { SmtpConfig, CreateSmtpConfigDto, UpdateSmtpConfigDto, SmtpEncryption } from '../../../core/types/smtp.types';
+import type {
+    SmtpConfig,
+    CreateSmtpConfigDto,
+    UpdateSmtpConfigDto,
+    SmtpEncryption
+} from '../../../core/types/smtp.types';
 import { smtpApi } from '../../../core/api/rbac.api';
+import { validateRequired, validateEmail, validatePort } from '../../../core/utils';
 
 interface SmtpFormProps {
     config?: SmtpConfig | null;
@@ -22,10 +29,10 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
     const [formData, setFormData] = useState({
         name: config?.name || '',
         host: config?.host || '',
-        port: config?.port?.toString() || '587',
+        port: config?.port ? String(config.port) : '587',
         username: config?.username || '',
         password: '',
-        encryption: config?.encryption || 'tls' as SmtpEncryption,
+        encryption: (config?.encryption ?? 'tls') as SmtpEncryption,
         from_email: config?.from_email || '',
         from_name: config?.from_name || '',
         reply_to_email: config?.reply_to_email || '',
@@ -41,35 +48,39 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
         }
     };
 
+    // ---------------- VALIDATION ----------------
+
     const validate = (): boolean => {
         const newErrors: Record<string, string> = {};
 
-        if (!formData.name.trim()) {
-            newErrors.name = 'Name is required';
-        }
-        if (!formData.host.trim()) {
-            newErrors.host = 'Host is required';
-        }
-        if (!formData.port || isNaN(Number(formData.port))) {
-            newErrors.port = 'Valid port is required';
-        }
-        if (!formData.from_email.trim()) {
-            newErrors.from_email = 'From email is required';
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.from_email)) {
-            newErrors.from_email = 'Invalid email format';
-        }
-        if (formData.reply_to_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.reply_to_email)) {
-            newErrors.reply_to_email = 'Invalid email format';
+        const nameErr = validateRequired(formData.name, 'Name');
+        if (nameErr) newErrors.name = nameErr;
+
+        const hostErr = validateRequired(formData.host, 'Host');
+        if (hostErr) newErrors.host = hostErr;
+
+        const portErr = validatePort(Number(formData.port));
+        if (portErr) newErrors.port = portErr;
+
+        const fromEmailErr = validateEmail(formData.from_email);
+        if (fromEmailErr) newErrors.from_email = fromEmailErr;
+
+        if (formData.reply_to_email) {
+            const replyErr = validateEmail(formData.reply_to_email);
+            if (replyErr) newErrors.reply_to_email = replyErr;
         }
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
+    // ---------------- SUBMIT ----------------
+
     const handleSubmit = async () => {
         if (!validate()) return;
 
         setLoading(true);
+
         try {
             if (isEditing && config) {
                 const updateData: UpdateSmtpConfigDto = {
@@ -77,15 +88,17 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
                     host: formData.host,
                     port: Number(formData.port),
                     username: formData.username || undefined,
-                    encryption: formData.encryption as SmtpEncryption,
+                    encryption: formData.encryption,
                     from_email: formData.from_email,
                     from_name: formData.from_name || undefined,
                     reply_to_email: formData.reply_to_email || undefined,
                     is_active: formData.is_active,
                 };
+
                 if (formData.password) {
                     updateData.password = formData.password;
                 }
+
                 await smtpApi.update(config.id, updateData);
             } else {
                 const createData: CreateSmtpConfigDto = {
@@ -94,14 +107,16 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
                     port: Number(formData.port),
                     username: formData.username || undefined,
                     password: formData.password || undefined,
-                    encryption: formData.encryption as SmtpEncryption,
+                    encryption: formData.encryption,
                     from_email: formData.from_email,
                     from_name: formData.from_name || undefined,
                     reply_to_email: formData.reply_to_email || undefined,
                     is_active: formData.is_active,
                 };
+
                 await smtpApi.create(createData);
             }
+
             onSuccess();
         } catch (err) {
             onError(err instanceof Error ? err.message : 'Failed to save SMTP config');
@@ -110,15 +125,17 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
         }
     };
 
+    // ---------------- UI ----------------
+
     return (
         <div className="entity-form">
+
             <FormInput
                 label="Configuration Name"
                 value={formData.name}
                 onChange={e => handleChange('name', e.target.value)}
                 error={errors.name}
                 required
-                placeholder="e.g., Primary Email Server"
             />
 
             <div className="form-row">
@@ -128,8 +145,8 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
                     onChange={e => handleChange('host', e.target.value)}
                     error={errors.host}
                     required
-                    placeholder="e.g., smtp.example.com"
                 />
+
                 <FormInput
                     label="Port"
                     type="number"
@@ -145,14 +162,13 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
                     label="Username"
                     value={formData.username}
                     onChange={e => handleChange('username', e.target.value)}
-                    placeholder="SMTP username (if required)"
                 />
+
                 <FormInput
                     label={isEditing ? 'Password (leave blank to keep)' : 'Password'}
                     type="password"
                     value={formData.password}
                     onChange={e => handleChange('password', e.target.value)}
-                    placeholder="SMTP password (if required)"
                 />
             </div>
 
@@ -175,13 +191,12 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
                     onChange={e => handleChange('from_email', e.target.value)}
                     error={errors.from_email}
                     required
-                    placeholder="noreply@example.com"
                 />
+
                 <FormInput
                     label="From Name"
                     value={formData.from_name}
                     onChange={e => handleChange('from_name', e.target.value)}
-                    placeholder="e.g., RBAC System"
                 />
             </div>
 
@@ -191,14 +206,12 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
                 value={formData.reply_to_email}
                 onChange={e => handleChange('reply_to_email', e.target.value)}
                 error={errors.reply_to_email}
-                placeholder="support@example.com (optional)"
             />
 
             <FormSwitch
                 label="Set as Active"
                 checked={formData.is_active}
                 onChange={checked => handleChange('is_active', checked)}
-                hint="Only one SMTP configuration can be active at a time"
             />
 
             <button

@@ -1,5 +1,7 @@
 /**
  * Sessions Page
+ * 
+ * Manage user sessions with confirmation modals.
  */
 
 import { useState, useEffect } from 'react';
@@ -8,6 +10,8 @@ import type { Session } from '../../../core/types/session.types';
 import { Search, LogOut, ShieldAlert } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '../../../core/contexts/AuthContext';
+import { useModal } from '../../../core/hooks';
+import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import './SettingsPage.css';
 
 export function SessionsPage() {
@@ -17,19 +21,15 @@ export function SessionsPage() {
     const [error, setError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
 
-    // In a real app we'd fetch all active sessions for admin
-    // For now, we'll just fetch the current user's sessions as an example
-    // OR if we had an endpoint for "all active sessions system-wide" we'd use that here.
-    // Assuming this page is for admins to view USER sessions, we might need to pick a user first.
-    // BUT for simplicity, let's just list the current user's active sessions for now, 
-    // or add a "User ID" search input to look up someone's sessions.
-
     const { user } = useAuth();
-    // State for user ID lookup (admin feature)
     const [targetUserId, setTargetUserId] = useState('');
 
+    // Modal hooks for confirmations
+    const revokeModal = useModal<Session>();
+    const revokeAllModal = useModal();
+    const [revokeLoading, setRevokeLoading] = useState(false);
+
     useEffect(() => {
-        // Load current session initially
         loadCurrentSession();
         if (user?.id) {
             setTargetUserId(user.id);
@@ -50,32 +50,7 @@ export function SessionsPage() {
         try {
             setIsLoading(true);
             setError('');
-            // The API returns a Axios response, need to check if it's unwrapped or not based on client.ts
-            // client.ts interceptor unwraps response.data
-            // sessionsApi.getByUser returns response (not response.data) based on rbac.api.ts definition?
-            // Let's check rbac.api.ts. 
-            // It says: getByUser: async (userId: string) => { const response = ...; return response; },
-            // And client.ts unwraps it. So 'response' here is response body from backend.
-            // Backend response is { data: Session[], error: null, meta: ... }
-            // So response.data is Session[]
-
             const response = await sessionsApi.getByUser(userId);
-            // Verify response structure. The client interceptor returns "response.data".
-            // Backend returns { data: ..., error: ..., meta: ... }
-            // So if client returns response.data, that is the whole envelope?
-            // No, client.ts says: return response.data; 
-            // Axios response.data IS the body.
-            // So client returns the body: { data: ..., error: ..., meta: ... }
-
-            // Wait, let's look at client.ts again to be sure.
-            // "return response.data" -> This is the Body of the response.
-            // The Body is { data: T, error: ..., meta: ... }
-            // So `response.data` in the component is the `data` field of the envelope? 
-            // OR is `response` the envelope?
-
-            // If the interceptor returns `response.data`, then the return value of `apiClient.get` is the body.
-            // So `response` variable here IS the body: { data: Session[], ... }
-
             if (response && Array.isArray(response.data)) {
                 setSessions(response.data);
             } else {
@@ -89,24 +64,31 @@ export function SessionsPage() {
         }
     };
 
-    const handleRevoke = async (sessionId: string) => {
-        if (!confirm('Are you sure you want to revoke this session? The user will be logged out.')) return;
+    const handleRevoke = async () => {
+        if (!revokeModal.data) return;
+        setRevokeLoading(true);
         try {
-            await sessionsApi.revoke(sessionId);
+            await sessionsApi.revoke(revokeModal.data.id);
+            revokeModal.close();
             if (targetUserId) loadUserSessions(targetUserId);
         } catch (err) {
-            alert(err instanceof Error ? err.message : 'Failed to revoke session');
+            setError(err instanceof Error ? err.message : 'Failed to revoke session');
+        } finally {
+            setRevokeLoading(false);
         }
     };
 
     const handleRevokeAll = async () => {
         if (!targetUserId) return;
-        if (!confirm('Are you sure you want to revoke ALL sessions for this user?')) return;
+        setRevokeLoading(true);
         try {
             await sessionsApi.revokeAllByUser(targetUserId);
+            revokeAllModal.close();
             loadUserSessions(targetUserId);
         } catch (err) {
-            alert(err instanceof Error ? err.message : 'Failed to revoke sessions');
+            setError(err instanceof Error ? err.message : 'Failed to revoke sessions');
+        } finally {
+            setRevokeLoading(false);
         }
     };
 
@@ -126,7 +108,11 @@ export function SessionsPage() {
                     <p>Manage active sessions and security</p>
                 </div>
                 <div className="header-actions">
-                    <button className="btn btn-danger" onClick={handleRevokeAll} disabled={!sessions.length}>
+                    <button
+                        className="btn btn-danger"
+                        onClick={() => revokeAllModal.open()}
+                        disabled={!sessions.length}
+                    >
                         <ShieldAlert size={18} />
                         Revoke All
                     </button>
@@ -145,7 +131,12 @@ export function SessionsPage() {
                 </form>
             </div>
 
-            {error && <div className="error-message">{error}</div>}
+            {error && (
+                <div className="error-banner">
+                    {error}
+                    <button onClick={() => setError('')}>×</button>
+                </div>
+            )}
 
             <div className="session-info-bar">
                 <p>Showing sessions for User ID: <strong>{targetUserId || 'None'}</strong></p>
@@ -189,7 +180,7 @@ export function SessionsPage() {
                                             <button
                                                 className="btn-icon btn-danger"
                                                 title="Revoke Session"
-                                                onClick={() => handleRevoke(session.id)}
+                                                onClick={() => revokeModal.open(session)}
                                                 disabled={isCurrent}
                                             >
                                                 <LogOut size={16} />
@@ -207,6 +198,31 @@ export function SessionsPage() {
                     </table>
                 </div>
             )}
+
+            {/* Revoke Single Session Confirmation */}
+            <ConfirmModal
+                isOpen={revokeModal.isOpen}
+                title="Revoke Session"
+                message="Are you sure you want to revoke this session? The user will be logged out."
+                itemName={revokeModal.data?.id.slice(0, 8) + '...'}
+                confirmLabel="Revoke"
+                variant="danger"
+                isLoading={revokeLoading}
+                onConfirm={handleRevoke}
+                onCancel={revokeModal.close}
+            />
+
+            {/* Revoke All Sessions Confirmation */}
+            <ConfirmModal
+                isOpen={revokeAllModal.isOpen}
+                title="Revoke All Sessions"
+                message="Are you sure you want to revoke ALL sessions for this user? They will be logged out of all devices."
+                confirmLabel="Revoke All"
+                variant="danger"
+                isLoading={revokeLoading}
+                onConfirm={handleRevokeAll}
+                onCancel={revokeAllModal.close}
+            />
         </div>
     );
 }

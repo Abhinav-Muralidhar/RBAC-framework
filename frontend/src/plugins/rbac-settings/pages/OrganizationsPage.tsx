@@ -2,67 +2,81 @@
  * Organization Page
  *
  * View & update organization details.
- * No create / delete for now.
+ * Uses centralized async hooks.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { organizationApi } from '../../../core/api/rbac.api';
 import type { Organization } from '../../../core/types/organization.types';
 import { Save, Building2, Globe, Phone, MapPin } from 'lucide-react';
 import { FormInput } from '../../../core/components/FormElements';
+import { useAsync, useAsyncCallback } from '../../../core/hooks';
 import './SettingsPage.css';
 
 export function OrganizationPage() {
-    const [org, setOrg] = useState<Organization | null>(null);
     const [formData, setFormData] = useState<Partial<Organization>>({});
-    const [isLoading, setIsLoading] = useState(true);
-    const [isSaving, setIsSaving] = useState(false);
-    const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
+    /* ---------------------------
+       Load Organization
+    ----------------------------*/
+    const loadAsync = useAsync(async () => {
+        return organizationApi.get();
+    });
+
+    /* ---------------------------
+       Save Organization
+    ----------------------------*/
+    const saveAsync = useAsyncCallback(
+        useCallback(async (data: Partial<Organization>, id: string) => {
+            return organizationApi.update(id, data);
+        }, [])
+    );
+
     useEffect(() => {
-        loadOrganization();
+        loadAsync.execute();
     }, []);
 
-    const loadOrganization = async () => {
-        try {
-            setIsLoading(true);
-            const response = await organizationApi.get(); // single org
-            setOrg(response);
-            setFormData(response);
-        } catch (err) {
-            setError('Failed to load organization details');
-        } finally {
-            setIsLoading(false);
+    useEffect(() => {
+        if (loadAsync.data) {
+            setFormData(loadAsync.data);
         }
-    };
+    }, [loadAsync.data]);
 
     const handleChange = (field: keyof Organization, value: string | number) => {
         setFormData(prev => ({ ...prev, [field]: value }));
-        setError('');
         setSuccess('');
     };
 
     const handleSave = async () => {
-        if (!org) return;
+        if (!loadAsync.data) return;
 
-        try {
-            setIsSaving(true);
-            await organizationApi.update(org.id, formData);
+        setSuccess('');
+
+        const result = await saveAsync.execute(formData, loadAsync.data.id);
+
+        if (result) {
             setSuccess('Organization details updated successfully');
-            loadOrganization();
-        } catch (err) {
-            setError('Failed to update organization');
-        } finally {
-            setIsSaving(false);
+            loadAsync.execute(); // refresh data
         }
     };
 
-    if (isLoading) {
+    /* ---------------------------
+       Render States
+    ----------------------------*/
+    if (loadAsync.isLoading) {
         return <div className="loading-state">Loading organization...</div>;
     }
 
-    if (!org) {
+    if (loadAsync.error) {
+        return (
+            <div className="error-message">
+                {loadAsync.error}
+            </div>
+        );
+    }
+
+    if (!loadAsync.data) {
         return <div className="error-message">Organization not found</div>;
     }
 
@@ -73,25 +87,36 @@ export function OrganizationPage() {
                     <h1>Organization</h1>
                     <p>Manage organization details and branding</p>
                 </div>
+
                 <button
                     className="btn btn-primary"
                     onClick={handleSave}
-                    disabled={isSaving}
+                    disabled={saveAsync.isLoading}
                 >
                     <Save size={18} />
-                    {isSaving ? 'Saving...' : 'Save Changes'}
+                    {saveAsync.isLoading ? 'Saving...' : 'Save Changes'}
                 </button>
             </header>
 
-            {error && (
+            {loadAsync.error && (
                 <div className="error-banner">
-                    {error}
-                    <button onClick={() => setError('')}>×</button>
+                    {loadAsync.error}
                 </div>
             )}
 
-            {success && <div className="success-banner">{success}</div>}
+            {saveAsync.error && (
+                <div className="error-banner">
+                    {saveAsync.error}
+                </div>
+            )}
 
+            {success && (
+                <div className="success-banner">
+                    {success}
+                </div>
+            )}
+
+            {/* ------------------ Basic Info ------------------ */}
             <div className="form-section">
                 <h2>
                     <Building2 size={18} />
@@ -122,6 +147,7 @@ export function OrganizationPage() {
                 </div>
             </div>
 
+            {/* ------------------ Address ------------------ */}
             <div className="form-section">
                 <h2>
                     <MapPin size={18} />
@@ -129,39 +155,16 @@ export function OrganizationPage() {
                 </h2>
 
                 <div className="form-grid">
-                    <FormInput
-                        label="Address"
-                        value={formData.address || ''}
-                        onChange={e => handleChange('address', e.target.value)}
-                    />
-                    <FormInput
-                        label="City"
-                        value={formData.city || ''}
-                        onChange={e => handleChange('city', e.target.value)}
-                    />
-                    <FormInput
-                        label="State"
-                        value={formData.state || ''}
-                        onChange={e => handleChange('state', e.target.value)}
-                    />
-                    <FormInput
-                        label="Postal Code"
-                        value={formData.postal_code || ''}
-                        onChange={e => handleChange('postal_code', e.target.value)}
-                    />
-                    <FormInput
-                        label="Country"
-                        value={formData.country || ''}
-                        onChange={e => handleChange('country', e.target.value)}
-                    />
-                    <FormInput
-                        label="Country Code"
-                        value={formData.country_code || ''}
-                        onChange={e => handleChange('country_code', e.target.value)}
-                    />
+                    <FormInput label="Address" value={formData.address || ''} onChange={e => handleChange('address', e.target.value)} />
+                    <FormInput label="City" value={formData.city || ''} onChange={e => handleChange('city', e.target.value)} />
+                    <FormInput label="State" value={formData.state || ''} onChange={e => handleChange('state', e.target.value)} />
+                    <FormInput label="Postal Code" value={formData.postal_code || ''} onChange={e => handleChange('postal_code', e.target.value)} />
+                    <FormInput label="Country" value={formData.country || ''} onChange={e => handleChange('country', e.target.value)} />
+                    <FormInput label="Country Code" value={formData.country_code || ''} onChange={e => handleChange('country_code', e.target.value)} />
                 </div>
             </div>
 
+            {/* ------------------ Contact ------------------ */}
             <div className="form-section">
                 <h2>
                     <Phone size={18} />
@@ -169,19 +172,12 @@ export function OrganizationPage() {
                 </h2>
 
                 <div className="form-grid">
-                    <FormInput
-                        label="Phone"
-                        value={formData.phone || ''}
-                        onChange={e => handleChange('phone', e.target.value)}
-                    />
-                    <FormInput
-                        label="Fax"
-                        value={formData.fax || ''}
-                        onChange={e => handleChange('fax', e.target.value)}
-                    />
+                    <FormInput label="Phone" value={formData.phone || ''} onChange={e => handleChange('phone', e.target.value)} />
+                    <FormInput label="Fax" value={formData.fax || ''} onChange={e => handleChange('fax', e.target.value)} />
                 </div>
             </div>
 
+            {/* ------------------ Social & Business ------------------ */}
             <div className="form-section">
                 <h2>
                     <Globe size={18} />
@@ -189,21 +185,9 @@ export function OrganizationPage() {
                 </h2>
 
                 <div className="form-grid">
-                    <FormInput
-                        label="Facebook"
-                        value={formData.facebook || ''}
-                        onChange={e => handleChange('facebook', e.target.value)}
-                    />
-                    <FormInput
-                        label="Twitter"
-                        value={formData.twitter || ''}
-                        onChange={e => handleChange('twitter', e.target.value)}
-                    />
-                    <FormInput
-                        label="LinkedIn"
-                        value={formData.linkedin || ''}
-                        onChange={e => handleChange('linkedin', e.target.value)}
-                    />
+                    <FormInput label="Facebook" value={formData.facebook || ''} onChange={e => handleChange('facebook', e.target.value)} />
+                    <FormInput label="Twitter" value={formData.twitter || ''} onChange={e => handleChange('twitter', e.target.value)} />
+                    <FormInput label="LinkedIn" value={formData.linkedin || ''} onChange={e => handleChange('linkedin', e.target.value)} />
                     <FormInput
                         label="Financial Year Start Month"
                         type="number"
@@ -211,7 +195,10 @@ export function OrganizationPage() {
                         max={12}
                         value={formData.financial_year_start_month || ''}
                         onChange={e =>
-                            handleChange('financial_year_start_month', Number(e.target.value))
+                            handleChange(
+                                'financial_year_start_month',
+                                Number(e.target.value)
+                            )
                         }
                     />
                 </div>

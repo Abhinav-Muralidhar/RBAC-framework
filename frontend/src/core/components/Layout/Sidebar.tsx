@@ -3,13 +3,13 @@
  * 
  * Dynamic navigation based on user permissions.
  * Settings opens a modal from the footer section.
- * Collapsible with localStorage persistence.
+ * Collapsible with localStorage persistence and mobile responsiveness.
  */
 
-import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAdminSettings } from '../../contexts/AdminSettingsContext';
+import { useSidebar } from '../../hooks';
 import { ROUTES } from '../../../routes/routes';
 import {
     LayoutDashboard,
@@ -17,8 +17,6 @@ import {
     LogOut,
     User,
     Shield,
-    ChevronLeft,
-    ChevronRight,
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -38,20 +36,10 @@ const navItems: NavItem[] = [
     },
 ];
 
-const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
-
 export function Sidebar() {
     const { user, hasPermission, logout } = useAuth();
     const { openSettings } = useAdminSettings();
-    const [isCollapsed, setIsCollapsed] = useState(() => {
-        const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-        return stored === 'true';
-    });
-
-    // Persist collapsed state
-    useEffect(() => {
-        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isCollapsed));
-    }, [isCollapsed]);
+    const { isCollapsed, toggle } = useSidebar();
 
     const handleLogout = async () => {
         await logout();
@@ -62,28 +50,24 @@ export function Sidebar() {
         openSettings();
     };
 
-    const toggleCollapsed = () => {
-        setIsCollapsed(!isCollapsed);
-    };
-
     // Check if user can access settings
     const canAccessSettings = hasPermission('SETTINGS', 'read');
 
     return (
         <aside className={`sidebar ${isCollapsed ? 'sidebar--collapsed' : ''}`}>
             <div className="sidebar-header">
-                <div className="sidebar-logo">
+                <div
+                    className="sidebar-logo"
+                    onClick={toggle}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === 'Enter' && toggle()}
+                    aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                    title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                >
                     <Shield size={28} />
                     {!isCollapsed && <span>RBAC</span>}
                 </div>
-                <button
-                    className="sidebar-toggle"
-                    onClick={toggleCollapsed}
-                    aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                    title={isCollapsed ? 'Expand' : 'Collapse'}
-                >
-                    {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-                </button>
             </div>
 
             <nav className="sidebar-nav">

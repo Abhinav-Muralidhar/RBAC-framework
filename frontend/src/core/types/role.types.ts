@@ -18,10 +18,12 @@ export interface CreateRoleDto {
     code: string;
     description?: string;
     parent_role_id?: string;
+    profile_ids?: string[];
 }
 
 export interface UpdateRoleDto {
     name?: string;
     description?: string;
     is_active?: boolean;
+    profile_ids?: string[];
 }

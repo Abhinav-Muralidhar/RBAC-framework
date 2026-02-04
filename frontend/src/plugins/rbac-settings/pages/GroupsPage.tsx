@@ -4,91 +4,27 @@
  * Manage user groups with forms and confirmation modals.
  */
 
-import { useState, useEffect } from 'react';
 import { groupsApi } from '../../../core/api/rbac.api';
 import type { Group } from '../../../core/types/group.types';
 import { Plus, Edit2, Trash2, Search, Users } from 'lucide-react';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { FormModal } from '../../../core/components/FormModal';
 import { GroupForm, submitGroupForm } from '../components';
+import { useCrudPage } from '../../../core/hooks';
 import './SettingsPage.css';
 
 export function GroupsPage() {
-    const [groups, setGroups] = useState<Group[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [searchQuery, setSearchQuery] = useState('');
+    const crud = useCrudPage<Group>({
+        listFn: groupsApi.list,
+        deleteFn: groupsApi.delete,
+        entityName: 'groups',
+        initialLimit: 100,
+    });
 
-    // Modal states
-    const [showFormModal, setShowFormModal] = useState(false);
-    const [editingGroup, setEditingGroup] = useState<Group | null>(null);
-    const [formLoading, setFormLoading] = useState(false);
-
-    const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [deletingGroup, setDeletingGroup] = useState<Group | null>(null);
-    const [deleteLoading, setDeleteLoading] = useState(false);
-
-    useEffect(() => {
-        loadGroups();
-    }, []);
-
-    const loadGroups = async () => {
-        try {
-            setIsLoading(true);
-            const response = await groupsApi.list({ limit: 100 });
-            setGroups(response.data || []);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load groups');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const filteredGroups = groups.filter(group =>
-        group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (group.code ?? '').toLowerCase().includes(searchQuery.toLowerCase())
+    const filteredGroups = crud.items.filter(group =>
+        group.name.toLowerCase().includes(crud.searchQuery.toLowerCase()) ||
+        (group.code ?? '').toLowerCase().includes(crud.searchQuery.toLowerCase())
     );
-
-    const handleCreate = () => {
-        setEditingGroup(null);
-        setShowFormModal(true);
-    };
-
-    const handleEdit = (group: Group) => {
-        setEditingGroup(group);
-        setShowFormModal(true);
-    };
-
-    const handleDelete = (group: Group) => {
-        setDeletingGroup(group);
-        setShowDeleteModal(true);
-    };
-
-    const confirmDelete = async () => {
-        if (!deletingGroup) return;
-
-        setDeleteLoading(true);
-        try {
-            await groupsApi.delete(deletingGroup.id);
-            setShowDeleteModal(false);
-            setDeletingGroup(null);
-            loadGroups();
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to delete group');
-        } finally {
-            setDeleteLoading(false);
-        }
-    };
-
-    const handleFormSuccess = () => {
-        setShowFormModal(false);
-        setEditingGroup(null);
-        loadGroups();
-    };
-
-    const handleFormError = (err: string) => {
-        setError(err);
-    };
 
     return (
         <div className="settings-page">
@@ -97,7 +33,7 @@ export function GroupsPage() {
                     <h1>Groups</h1>
                     <p>Manage user groups and their roles</p>
                 </div>
-                <button className="btn btn-primary" onClick={handleCreate}>
+                <button className="btn btn-primary" onClick={crud.openCreate}>
                     <Plus size={18} />
                     Add Group
                 </button>
@@ -109,20 +45,20 @@ export function GroupsPage() {
                     <input
                         type="text"
                         placeholder="Search groups..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        value={crud.searchQuery}
+                        onChange={(e) => crud.setSearchQuery(e.target.value)}
                     />
                 </div>
             </div>
 
-            {error && (
+            {crud.error && (
                 <div className="error-banner">
-                    {error}
-                    <button onClick={() => setError('')}>×</button>
+                    {crud.error}
+                    <button onClick={crud.clearError}>×</button>
                 </div>
             )}
 
-            {isLoading ? (
+            {crud.isLoading ? (
                 <div className="loading-state">Loading groups...</div>
             ) : (
                 <div className="data-table-wrapper">
@@ -163,14 +99,14 @@ export function GroupsPage() {
                                             <button
                                                 className="btn-icon"
                                                 title="Edit"
-                                                onClick={() => handleEdit(group)}
+                                                onClick={() => crud.openEdit(group)}
                                             >
                                                 <Edit2 size={16} />
                                             </button>
                                             <button
                                                 className="btn-icon btn-danger"
                                                 title="Delete"
-                                                onClick={() => handleDelete(group)}
+                                                onClick={() => crud.openDelete(group)}
                                             >
                                                 <Trash2 size={16} />
                                             </button>
@@ -192,38 +128,32 @@ export function GroupsPage() {
 
             {/* Create/Edit Modal */}
             <FormModal
-                isOpen={showFormModal}
-                title={editingGroup ? 'Edit Group' : 'Add New Group'}
-                isLoading={formLoading}
+                isOpen={crud.showFormModal}
+                title={crud.editingItem ? 'Edit Group' : 'Add New Group'}
+                isLoading={crud.formLoading}
                 onSubmit={() => submitGroupForm()}
-                onCancel={() => {
-                    setShowFormModal(false);
-                    setEditingGroup(null);
-                }}
+                onCancel={crud.closeForm}
                 size="md"
             >
                 <GroupForm
-                    group={editingGroup}
-                    onSuccess={handleFormSuccess}
-                    onError={handleFormError}
-                    setLoading={setFormLoading}
+                    group={crud.editingItem}
+                    onSuccess={crud.handleFormSuccess}
+                    onError={crud.setError}
+                    setLoading={crud.setFormLoading}
                 />
             </FormModal>
 
             {/* Delete Confirmation */}
             <ConfirmModal
-                isOpen={showDeleteModal}
+                isOpen={crud.showDeleteModal}
                 title="Delete Group"
                 message="Are you sure you want to delete this group? Users in this group may lose associated role permissions."
-                itemName={deletingGroup?.name}
+                itemName={crud.deletingItem?.name}
                 confirmLabel="Delete"
                 variant="danger"
-                isLoading={deleteLoading}
-                onConfirm={confirmDelete}
-                onCancel={() => {
-                    setShowDeleteModal(false);
-                    setDeletingGroup(null);
-                }}
+                isLoading={crud.deleteLoading}
+                onConfirm={crud.confirmDelete}
+                onCancel={crud.closeDelete}
             />
         </div>
     );

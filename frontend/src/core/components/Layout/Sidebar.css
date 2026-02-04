@@ -24,14 +24,13 @@
 .sidebar-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   padding: 1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   min-height: 64px;
 }
 
 .sidebar--collapsed .sidebar-header {
-  justify-content: center;
   padding: 1rem 0.75rem;
 }
 
@@ -42,6 +41,20 @@
   font-size: 1.5rem;
   font-weight: 700;
   color: #fff;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  transition: background 0.2s ease;
+  user-select: none;
+}
+
+.sidebar-logo:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-logo:focus {
+  outline: 2px solid rgba(59, 130, 246, 0.5);
+  outline-offset: 2px;
 }
 
 .sidebar--collapsed .sidebar-logo {
@@ -50,36 +63,6 @@
 
 .sidebar--collapsed .sidebar-logo span {
   display: none;
-}
-
-/* Toggle button */
-.sidebar-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  border-radius: 6px;
-  color: #94a3b8;
-  cursor: pointer;
-  transition: all 0.2s;
-  flex-shrink: 0;
-}
-
-.sidebar-toggle:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #e2e8f0;
-}
-
-.sidebar--collapsed .sidebar-toggle {
-  position: absolute;
-  right: -14px;
-  top: 24px;
-  background: #1e293b;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .sidebar-nav {
@@ -261,4 +244,44 @@
 
 .logout-btn:hover {
   background: rgba(239, 68, 68, 0.2);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .sidebar {
+    width: var(--sidebar-collapsed-width);
+  }
+
+  .sidebar .sidebar-logo span,
+  .sidebar .nav-item span,
+  .sidebar .settings-btn span,
+  .sidebar .user-info,
+  .sidebar .logout-btn span {
+    display: none;
+  }
+
+  .sidebar .sidebar-header,
+  .sidebar .sidebar-footer {
+    padding: 0.75rem;
+  }
+
+  .sidebar .nav-item {
+    justify-content: center;
+    padding: 0.75rem;
+  }
+
+  .sidebar .settings-btn,
+  .sidebar .logout-btn,
+  .sidebar .user-menu {
+    justify-content: center;
+  }
+
+  .sidebar .sidebar-logo {
+    gap: 0;
+  }
+
+  .sidebar .nav-item.active {
+    border-right: none;
+    border-left: 3px solid #3b82f6;
+  }
 }
