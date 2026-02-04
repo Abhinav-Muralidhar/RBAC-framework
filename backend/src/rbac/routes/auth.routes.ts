@@ -117,7 +117,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
             res.cookie('sessionToken', session.session_token, COOKIE_OPTIONS);
 
             // Update last login
-            await usersService.update(req.user!.id, user.id, { last_login_at: new Date() });
+            await usersService.update(user.id, user.id, { last_login_at: new Date() });
 
             const userResponse = await usersService.getById(user.id, user.id);
 

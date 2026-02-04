@@ -12,9 +12,10 @@ import { normalizePaginationParams, PaginatedResult, PaginationParams } from '..
 
 import { SmtpConfig, SmtpEncryption } from '../models/smtp_config.model';
 import { ISmtpConfigRepository } from '../repositories/smtp_config.repository';
-import { RBACInternalError } from '../errors/rbac.errors';
+import { RBACInternalError, SMTPConfigError, SMTPConfigNotFoundError } from '../errors/rbac.errors';
 import { SmtpConfigCreate } from '../dto/smtp_config.dto';
 import { IAuditService } from './audit.service';
+export type SmtpValidationError = string;
 
 export interface ISmtpConfigService {
     getById(configId: string): Promise<SmtpConfig>;
@@ -32,6 +33,35 @@ export interface ISmtpConfigService {
         actingUserId: string
     ): Promise<SmtpConfig>;
 }
+export function validateSmtpConfig(config: Partial<SmtpConfig>): SmtpValidationError[] {
+    const errors: SmtpValidationError[] = [];
+
+    // Host
+    if (!config.host || typeof config.host !== 'string') {
+        errors.push('Host is required and must be a string.');
+    }
+
+    // Port
+    if (!config.port || typeof config.port !== 'number' || config.port <= 0 || config.port > 65535) {
+        errors.push('Port is required and must be a valid number between 1 and 65535.');
+    }
+
+    // Encryption
+    if (!['none', 'ssl', 'tls'].includes(config.encryption ?? '')) {
+        errors.push("Encryption must be one of 'none', 'ssl', or 'tls'.");
+    }
+
+    // Email checks
+    if (!config.from_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.from_email)) {
+        errors.push('from_email must be a valid email.');
+    }
+    if (config.reply_to_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.reply_to_email)) {
+        errors.push('reply_to_email must be a valid email if provided.');
+    }
+
+    return errors;
+}
+
 
 export class SmtpConfigService implements ISmtpConfigService {
 
@@ -44,7 +74,7 @@ export class SmtpConfigService implements ISmtpConfigService {
         return withTransaction(async (t: TransactionTask) => {
             const config = await this.smtpConfigRepository.findById(t, configId);
             if (!config) {
-                throw new RBACInternalError(`SMTP config not found: ${configId}`);
+                throw new SMTPConfigNotFoundError(`SMTP config not found: ${configId}`);
             }
             return config;
         });
@@ -65,6 +95,13 @@ export class SmtpConfigService implements ISmtpConfigService {
         actingUserId: string
     ): Promise<SmtpConfig> {
         return withTransaction(async (t: TransactionTask) => {
+            const errors = validateSmtpConfig(data);
+            if (errors.length > 0) {
+                throw new SMTPConfigError(
+                    `Invalid SMTP config: ${errors.join(' ')}`
+                );
+            }
+
             const config = await this.smtpConfigRepository.create(t, data);
             this.auditService.log(t, {
                 user_id: actingUserId,
@@ -91,18 +128,16 @@ export class SmtpConfigService implements ISmtpConfigService {
             }
 
             const updated: SmtpConfig = {
-                id: configId,
-                name: data.name ?? existing.name as string,
-                host: data.host ?? existing.host as string,
-                port: data.port ?? existing.port as number,
-                username: data.username ?? existing.username as string,
-                password: data.password ?? existing.password as string,
-                encryption: data.encryption ?? existing.encryption as SmtpEncryption,
-                from_email: data.from_email ?? existing.from_email as string,
-                from_name: data.from_name ?? existing.from_name as string,
-                reply_to_email: data.reply_to_email ?? existing.reply_to_email as string,
-                is_active: data.is_active ?? existing.is_active as boolean
+                ...existing,
+                ...data,
+                id: existing.id,
             };
+            const errors = validateSmtpConfig(updated);
+            if (errors.length > 0) {
+                throw new RBACInternalError(
+                    `Invalid SMTP config update: ${errors.join(' ')}`
+                );
+            }
 
             const updatedConfig = await this.smtpConfigRepository.update(t, configId, updated);
             this.auditService.log(t, {

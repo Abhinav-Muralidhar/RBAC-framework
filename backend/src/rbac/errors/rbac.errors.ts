@@ -109,6 +109,22 @@ export class UserNotFoundError extends RBACError {
     }
 }
 
+export class SMTPConfigError extends RBACError {
+    constructor(
+        public readonly str: string
+    ) {
+        super(str);
+    }
+}
+
+export class SMTPConfigNotFoundError extends RBACError {
+    constructor(
+        public readonly str: string
+    ) {
+        super(str);
+    }
+}
+
 /**
  * RoleNotFoundError
  */
