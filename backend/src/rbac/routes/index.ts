@@ -37,6 +37,9 @@ import { GroupRoleRepository } from '../repositories/group_roles.repository';
 import { UserGroupsRepository } from '../repositories/user_groups.repository';
 import { OrganizationService } from '../services/organization.service';
 import { OrganizationRepository } from '../repositories/organizations.repository';
+import { createSmtpRouter } from './smtp.routes';
+import { SmtpConfigRepository } from '../repositories/smtp_config.repository';
+import { SmtpConfigService } from '../services/smtpConfig.service';
 
 /**
  * Create the main RBAC router with all sub-routes
@@ -64,6 +67,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     const groupRoleRepository = new GroupRoleRepository(db);
     const userGroupsRepository = new UserGroupsRepository(db);
     const organizationRepository = new OrganizationRepository(db);
+    const smtpConfigRepository = new SmtpConfigRepository(db);
     // ============================
     // Services
     // ============================
@@ -76,6 +80,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     const roleService = new RoleService(roleRepository, userRolesRepository, roleProfilesRepository, evaluationService, auditService);
     const profileService = new ProfileService(profilesRepository, profilePermissionsRepository, permissionsRepository, evaluationService, auditService);
     const organizationService = new OrganizationService(organizationRepository, auditService);
+    const smtpConfigService = new SmtpConfigService(smtpConfigRepository, auditService);
     // ============================
     // Middleware
     // ============================
@@ -94,6 +99,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     router.use('/audit-logs', createAuditLogsRouter(db, auditService, evaluationService));
     router.use('/sessions', createSessionsRouter(db, auditService, evaluationService, authSessionService));
     router.use('/organizations', createOrganizationsRouter(db, evaluationService, auditService, organizationService));
+    router.use('/smtpconfig', createSmtpRouter(db, auditService, evaluationService, smtpConfigService))
 
     return router;
 }

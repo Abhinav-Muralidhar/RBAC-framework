@@ -40,7 +40,7 @@ function parseFilters(query: any): { isActive?: boolean } {
     return {};
 }
 
-export function createSmtpConfigRouter(db: IDatabase<unknown>, auditService: AuditService, evaluationService: EvaluationService, smtpService: SmtpConfigService): Router {
+export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditService, evaluationService: EvaluationService, smtpService: SmtpConfigService): Router {
     const router = Router();
     // --- List all SMTP configs ---
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
