@@ -44,7 +44,7 @@ export class GroupRoleRepository implements IGroupRoleRepository {
         }).join(', ');
 
         await tx.none(
-          `INSERT INTO ${this.tableName} (group_id, role_id, assigned_by) VALUES ${placeholders}`,
+          `INSERT INTO ${this.tableName} (group_id, role_id, assigned_by) VALUES ${placeholders} ON CONFLICT (group_id, role_id) DO NOTHING`,
           values
         );
       }

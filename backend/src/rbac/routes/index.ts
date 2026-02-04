@@ -53,7 +53,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     router.use('/roles', createRolesRouter(db, auditService));
     router.use('/profiles', createProfilesRouter(db, auditService));
     router.use('/groups', createGroupsRouter(db));
-    router.use('/audit-logs', createAuditLogsRouter(db));
+    router.use('/audit-logs', createAuditLogsRouter(db, auditService, evaluationService));
     router.use('/sessions', createSessionsRouter(db, auditService));
     router.use('/organizations', createOrganizationsRouter(db));
 

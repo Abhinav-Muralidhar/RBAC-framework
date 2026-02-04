@@ -15,7 +15,7 @@ import {
     GroupNotFoundError,
     DuplicateAssignmentError
 } from '../errors/rbac.errors';
-import { GroupResponseDto } from '../dto/group.dto';
+import { CreateGroupRequestDto, GroupResponseDto } from '../dto/group.dto';
 import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
 import { IUserGroupsRepository } from '../repositories/user_groups.repository';
 
@@ -24,9 +24,9 @@ const MODULE_CODE = 'SETTINGS';
 
 export interface IUnifiedGroupService {
     getById(actingUserId: string, groupId: string): Promise<GroupResponseDto>;
-    create(actingUserId: string, data: GroupResponseDto): Promise<Groups>;
+    create(actingUserId: string, data: CreateGroupRequestDto): Promise<Groups>;
     delete(actingUserId: string, groupId: string): Promise<void>;
-    update(actingUserId: string, groupId: string, data: GroupResponseDto): Promise<Groups>;
+    update(actingUserId: string, groupId: string, data: CreateGroupRequestDto): Promise<Groups>;
     listAll(actingUserId: string, filters?: { is_active?: boolean; name?: string; code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
 }
 
@@ -57,7 +57,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
         });
     }
 
-    async create(actingUserId: string, data: GroupResponseDto): Promise<Groups> {
+    async create(actingUserId: string, data: CreateGroupRequestDto): Promise<Groups> {
         if (!data.name) throw new Error('Group name is required');
         if (!data.code) throw new Error('Group code is required');
 
@@ -75,12 +75,12 @@ export class UnifiedGroupService implements IUnifiedGroupService {
                 created_by: actingUserId
             });
 
-            const roles = data.roles.map(r => r.id);
+            const roles: string[] = data.role_ids ?? [];
             if (roles.length > 0) {
                 await this.groupRoleRepository.replaceRoles(t, group.id, roles, actingUserId);
             }
 
-            const users = data.users.map(u => u.id);
+            const users: string[] = data.user_ids ?? [];
             if (users.length > 0) {
                 await this.userGroupsRepository.replaceUsers(t, group.id, users, actingUserId);
             }
@@ -103,7 +103,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
     async update(
         actingUserId: string,
         groupId: string,
-        data: GroupResponseDto
+        data: CreateGroupRequestDto
     ): Promise<Groups> {
         return withTransaction(async (t: TransactionTask) => {
             const existing = await this.groupRepository.findById(t, groupId);
@@ -121,12 +121,12 @@ export class UnifiedGroupService implements IUnifiedGroupService {
 
             const result = await this.groupRepository.update(t, groupId, updated);
 
-            const roles = data.roles.map(r => r.id);
+            const roles: string[] = data.role_ids ?? [];
             if (roles.length > 0) {
                 await this.groupRoleRepository.replaceRoles(t, groupId, roles, actingUserId);
             }
 
-            const users = data.users.map(u => u.id);
+            const users: string[] = data.user_ids ?? [];
             if (users.length > 0) {
                 await this.userGroupsRepository.replaceUsers(t, groupId, users, actingUserId);
             }

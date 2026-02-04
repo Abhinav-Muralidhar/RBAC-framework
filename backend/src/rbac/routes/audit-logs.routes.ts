@@ -46,21 +46,8 @@ export function parseAuditLogFilters(query: any): AuditLogListFilterDto {
 }
 
 
-export function createAuditLogsRouter(db: IDatabase<unknown>): Router {
+export function createAuditLogsRouter(db: IDatabase<unknown>, auditLogService: AuditService, evaluationService: EvaluationService): Router {
     const router = Router();
-
-
-    const evaluationService = new EvaluationService(
-        new PermissionsRepository(db)
-    );
-
-    // --- Audit service ---
-    const auditLogService = new AuditService(
-        new AuditLogsRepository(db),
-        evaluationService,
-        new ModuleRepository(db),
-    );
-
 
     /**
      * GET /rbac/audit-logs
