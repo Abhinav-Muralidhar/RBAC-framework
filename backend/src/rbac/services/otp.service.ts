@@ -52,11 +52,6 @@ export class OtpService implements IOtpService {
         const count = await this.otpRepo.incrementAttempts(userId, t);
         return false;
       }
-      const success = await this.otpRepo.deleteOnSuccess(userId, otpHash, t);
-      if (!success) {
-        const count = await this.otpRepo.incrementAttempts(userId, t);
-        return false;
-      }
       return true;
     }
     )

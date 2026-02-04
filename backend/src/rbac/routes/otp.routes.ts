@@ -26,6 +26,14 @@ function sendError(res: Response, status: number, message: string, code?: string
         meta: {}
     });
 }
+function generateAlphaNumericOtp(length: number = 6): string {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let otp = '';
+    for (let i = 0; i < length; i++) {
+        otp += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return otp;
+}
 
 /**
  * OTP router
@@ -60,9 +68,7 @@ export function createOtpRouter(db: IDatabase<unknown>, auditService: AuditServi
             if (!user) {
                 throw sendError(res, 404, 'User not found');
             }
-
-            // TODO: generate OTP hash (example using 6-digit random code)
-            const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+            const otpCode = generateAlphaNumericOtp(6);
             const otpHash = await hashPassword(otpCode);
 
 
@@ -98,7 +104,7 @@ export function createOtpRouter(db: IDatabase<unknown>, auditService: AuditServi
                 return sendError(res, 400, 'Invalid or expired OTP');
             }
 
-            sendSuccess(res, { message: 'OTP verified successfully' });
+            sendSuccess(res, { otp: code, message: 'OTP verified successfully' });
         } catch (error: any) {
             next(error);
         }

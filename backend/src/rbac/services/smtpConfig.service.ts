@@ -13,7 +13,7 @@ import { normalizePaginationParams, PaginatedResult, PaginationParams } from '..
 import { SmtpConfig, SmtpEncryption } from '../models/smtp_config.model';
 import { ISmtpConfigRepository } from '../repositories/smtp_config.repository';
 import { RBACInternalError, SMTPConfigError, SMTPConfigNotFoundError } from '../errors/rbac.errors';
-import { SmtpConfigCreate } from '../dto/smtp_config.dto';
+import { SmtpConfigCreate, SmtpConfigUpdate } from '../dto/smtp_config.dto';
 import { IAuditService } from './audit.service';
 export type SmtpValidationError = string;
 const MODULE_CODE = 'SETTINGS';
@@ -120,7 +120,7 @@ export class SmtpConfigService implements ISmtpConfigService {
 
     async update(
         configId: string,
-        data: Partial<SmtpConfig>,
+        data: SmtpConfigUpdate,
         actingUserId: string
     ): Promise<SmtpConfig> {
         return withTransaction(async (t: TransactionTask) => {

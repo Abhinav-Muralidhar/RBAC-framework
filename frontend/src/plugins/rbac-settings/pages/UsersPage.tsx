@@ -85,7 +85,7 @@ export function UsersPage() {
                                                 {user.status}
                                             </span>
                                         </td>
-                                        <td className="hide-mobile">{user.roles?.map(r => r.name).join(', ') || '-'}</td>
+                                        <td className="hide-mobile">{user.rolesname}</td>
                                         <td>
                                             <div className="action-buttons">
                                                 <button
