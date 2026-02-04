@@ -1,209 +1,128 @@
 /**
  * Organization Page
  *
- * View & update organization details.
- * Uses centralized async hooks.
+ * Singleton settings page with Profiles-style UI/UX.
  */
 
 import { useEffect, useState, useCallback } from 'react';
 import { organizationApi } from '../../../core/api/rbac.api';
 import type { Organization } from '../../../core/types/organization.types';
-import { Save, Building2, Globe, Phone, MapPin } from 'lucide-react';
-import { FormInput } from '../../../core/components/FormElements';
-import { useAsync, useAsyncCallback } from '../../../core/hooks';
+import { Edit2, Building2 } from 'lucide-react';
+import { FormModal } from '../../../core/components/FormModal';
+import { OrganizationForm, submitOrganizationForm } from '../components/OrganizationForm';
 import './SettingsPage.css';
 
 export function OrganizationPage() {
-    const [formData, setFormData] = useState<Partial<Organization>>({});
-    const [success, setSuccess] = useState('');
-
-    /* ---------------------------
-       Load Organization
-    ----------------------------*/
-    const loadAsync = useAsync(async () => {
-        return organizationApi.get();
-    });
-
-    /* ---------------------------
-       Save Organization
-    ----------------------------*/
-    const saveAsync = useAsyncCallback(
-        useCallback(async (data: Partial<Organization>, id: string) => {
-            return organizationApi.update(id, data);
-        }, [])
-    );
+    const [organization, setOrganization] = useState<Organization | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        loadAsync.execute();
+        loadOrganization();
     }, []);
 
-    useEffect(() => {
-        if (loadAsync.data) {
-            setFormData(loadAsync.data);
-        }
-    }, [loadAsync.data]);
-
-    const handleChange = (field: keyof Organization, value: string | number) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
-        setSuccess('');
-    };
-
-    const handleSave = async () => {
-        if (!loadAsync.data) return;
-
-        setSuccess('');
-
-        const result = await saveAsync.execute(formData, loadAsync.data.id);
-
-        if (result) {
-            setSuccess('Organization details updated successfully');
-            loadAsync.execute(); // refresh data
+    const loadOrganization = async () => {
+        try {
+            setIsLoading(true);
+            setError(null);
+            const data = await organizationApi.get();
+            setOrganization(data);
+        } catch {
+            setError('Failed to load organization details');
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    /* ---------------------------
-       Render States
-    ----------------------------*/
-    if (loadAsync.isLoading) {
-        return <div className="loading-state">Loading organization...</div>;
-    }
+    const handleFormSuccess = (updated?: Organization) => {
+        // Update local state instead of refetching
+        if (updated) {
+            setOrganization(updated);
+        }
+        setShowForm(false);
+    };
 
-    if (loadAsync.error) {
-        return (
-            <div className="error-message">
-                {loadAsync.error}
-            </div>
-        );
-    }
-
-    if (!loadAsync.data) {
-        return <div className="error-message">Organization not found</div>;
-    }
+    const [showForm, setShowForm] = useState(false);
 
     return (
         <div className="settings-page">
+            {/* Header — identical structure to Profiles */}
             <header className="page-header">
                 <div>
                     <h1>Organization</h1>
                     <p>Manage organization details and branding</p>
                 </div>
-
-                <button
-                    className="btn btn-primary"
-                    onClick={handleSave}
-                    disabled={saveAsync.isLoading}
-                >
-                    <Save size={18} />
-                    {saveAsync.isLoading ? 'Saving...' : 'Save Changes'}
-                </button>
+                {organization && (
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => setShowForm(true)}
+                    >
+                        <Edit2 size={18} />
+                        Edit Organization
+                    </button>
+                )}
             </header>
 
-            {loadAsync.error && (
+            {/* Error banner */}
+            {error && (
                 <div className="error-banner">
-                    {loadAsync.error}
+                    {error}
+                    <button onClick={() => setError(null)}>×</button>
                 </div>
             )}
 
-            {saveAsync.error && (
-                <div className="error-banner">
-                    {saveAsync.error}
+            {/* Loading */}
+            {isLoading ? (
+                <div className="loading-state">Loading organization...</div>
+            ) : !organization ? (
+                <div className="empty-state">
+                    <Building2 size={32} />
+                    <p>No organization data found</p>
+                </div>
+            ) : (
+                /**
+                 * Summary content instead of table
+                 * Visually replaces Profiles data-table
+                 */
+                <div className="data-table-wrapper">
+                    <div className="details-card">
+                        <div className="details-grid">
+                            <div>
+                                <label>Company Name</label>
+                                <span>{organization.company_name}</span>
+                            </div>
+                            <div>
+                                <label>Website</label>
+                                <span>{organization.website || '-'}</span>
+                            </div>
+                            <div>
+                                <label>Phone</label>
+                                <span>{organization.phone || '-'}</span>
+                            </div>
+                            <div>
+                                <label>Country</label>
+                                <span>{organization.country || '-'}</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 
-            {success && (
-                <div className="success-banner">
-                    {success}
-                </div>
-            )}
-
-            {/* ------------------ Basic Info ------------------ */}
-            <div className="form-section">
-                <h2>
-                    <Building2 size={18} />
-                    Basic Information
-                </h2>
-
-                <div className="form-grid">
-                    <FormInput
-                        label="Company Name"
-                        value={formData.company_name || ''}
-                        onChange={e => handleChange('company_name', e.target.value)}
-                        required
-                    />
-
-                    <FormInput
-                        label="Company Logo URL"
-                        value={formData.company_logo || ''}
-                        onChange={e => handleChange('company_logo', e.target.value)}
-                        placeholder="https://..."
-                    />
-
-                    <FormInput
-                        label="Website"
-                        value={formData.website || ''}
-                        onChange={e => handleChange('website', e.target.value)}
-                        placeholder="https://..."
-                    />
-                </div>
-            </div>
-
-            {/* ------------------ Address ------------------ */}
-            <div className="form-section">
-                <h2>
-                    <MapPin size={18} />
-                    Address
-                </h2>
-
-                <div className="form-grid">
-                    <FormInput label="Address" value={formData.address || ''} onChange={e => handleChange('address', e.target.value)} />
-                    <FormInput label="City" value={formData.city || ''} onChange={e => handleChange('city', e.target.value)} />
-                    <FormInput label="State" value={formData.state || ''} onChange={e => handleChange('state', e.target.value)} />
-                    <FormInput label="Postal Code" value={formData.postal_code || ''} onChange={e => handleChange('postal_code', e.target.value)} />
-                    <FormInput label="Country" value={formData.country || ''} onChange={e => handleChange('country', e.target.value)} />
-                    <FormInput label="Country Code" value={formData.country_code || ''} onChange={e => handleChange('country_code', e.target.value)} />
-                </div>
-            </div>
-
-            {/* ------------------ Contact ------------------ */}
-            <div className="form-section">
-                <h2>
-                    <Phone size={18} />
-                    Contact
-                </h2>
-
-                <div className="form-grid">
-                    <FormInput label="Phone" value={formData.phone || ''} onChange={e => handleChange('phone', e.target.value)} />
-                    <FormInput label="Fax" value={formData.fax || ''} onChange={e => handleChange('fax', e.target.value)} />
-                </div>
-            </div>
-
-            {/* ------------------ Social & Business ------------------ */}
-            <div className="form-section">
-                <h2>
-                    <Globe size={18} />
-                    Social & Business
-                </h2>
-
-                <div className="form-grid">
-                    <FormInput label="Facebook" value={formData.facebook || ''} onChange={e => handleChange('facebook', e.target.value)} />
-                    <FormInput label="Twitter" value={formData.twitter || ''} onChange={e => handleChange('twitter', e.target.value)} />
-                    <FormInput label="LinkedIn" value={formData.linkedin || ''} onChange={e => handleChange('linkedin', e.target.value)} />
-                    <FormInput
-                        label="Financial Year Start Month"
-                        type="number"
-                        min={1}
-                        max={12}
-                        value={formData.financial_year_start_month || ''}
-                        onChange={e =>
-                            handleChange(
-                                'financial_year_start_month',
-                                Number(e.target.value)
-                            )
-                        }
-                    />
-                </div>
-
-            </div>
+            {/* Edit Modal — identical pattern to Profiles */}
+            <FormModal
+                isOpen={showForm}
+                title="Edit Organization"
+                onSubmit={() => submitOrganizationForm()}
+                onCancel={() => setShowForm(false)}
+                size="lg"
+            >
+                <OrganizationForm
+                    organization={organization}
+                    onSuccess={(updated) => handleFormSuccess(updated)}
+                    onError={setError}
+                    setLoading={setIsLoading}
+                />
+            </FormModal>
         </div>
     );
 }
