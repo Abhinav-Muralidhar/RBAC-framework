@@ -169,7 +169,7 @@ export interface UpdateUserDto {
     signature?: string | null;
     last_login_at?: Date | null;
     password_changed_at?: Date | null;
-    rolesid: string;
+    rolesid?: string;
     rolesname?: string;
 }
 

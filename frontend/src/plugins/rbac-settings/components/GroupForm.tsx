@@ -9,7 +9,8 @@ import { useState, useEffect } from 'react';
 import { FormInput } from '../../../core/components/FormElements';
 import type { Group, CreateGroupDto, UpdateGroupDto } from '../../../core/types/group.types';
 import type { Role } from '../../../core/types/role.types';
-import { groupsApi, rolesApi } from '../../../core/api/rbac.api';
+import type { User } from '../../../core/types/user.types';
+import { usersApi, groupsApi, rolesApi } from '../../../core/api/rbac.api';
 import { validateRequired, validateCode } from '../../../core/utils';
 
 interface GroupFormProps {
@@ -35,6 +36,12 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
     const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
+    const [selectedUsers, setSelectedUsers] = useState<string[]>(
+        group?.users?.map(u => u.id) || []
+    );
+
+    const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+
     // ---------------- LOAD ROLES ----------------
 
     useEffect(() => {
@@ -47,6 +54,21 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
             setAvailableRoles(response.data);
         } catch (err) {
             console.error('Failed to load roles', err);
+        }
+    };
+
+    // ---------------- LOAD USERS ----------------
+
+    useEffect(() => {
+        loadUsers();
+    }, []);
+
+    const loadUsers = async () => {
+        try {
+            const response = await usersApi.list({ limit: 100 });
+            setAvailableUsers(response.data);
+        } catch (err) {
+            console.error('Failed to load users', err);
         }
     };
 
@@ -64,6 +86,14 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
             prev.includes(roleId)
                 ? prev.filter(id => id !== roleId)
                 : [...prev, roleId]
+        );
+    };
+
+    const toggleUser = (userId: string) => {
+        setSelectedUsers(prev =>
+            prev.includes(userId)
+                ? prev.filter(id => id !== userId)
+                : [...prev, userId]
         );
     };
 
@@ -101,7 +131,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
                 const updateData: UpdateGroupDto = {
                     name: formData.name.trim(),
                     description: formData.description || undefined,
-                    role_ids: selectedRoles, // ✅ FIX
+                    role_ids: selectedRoles,
                 };
 
                 await groupsApi.update(group.id, updateData);
@@ -110,7 +140,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
                     name: formData.name.trim(),
                     code: formData.code.trim(),
                     description: formData.description || undefined,
-                    role_ids: selectedRoles, // ✅ FIX
+                    role_ids: selectedRoles,
                 };
 
                 await groupsApi.create(createData);
@@ -185,6 +215,27 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
 
                     {availableRoles.length === 0 && (
                         <span className="text-muted">No roles available</span>
+                    )}
+                </div>
+            </div>
+
+            <div className="form-field">
+                <label className="form-label">Assign Users to Group Members</label>
+
+                <div className="checkbox-group">
+                    {availableUsers.map(user => (
+                        <label key={user.id} className="checkbox-item">
+                            <input
+                                type="checkbox"
+                                checked={selectedUsers.includes(user.id)}
+                                onChange={() => toggleUser(user.id)}
+                            />
+                            <span>{user.username}</span>
+                        </label>
+                    ))}
+
+                    {availableUsers.length === 0 && (
+                        <span className="text-muted">No users available</span>
                     )}
                 </div>
             </div>

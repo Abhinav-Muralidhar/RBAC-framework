@@ -162,6 +162,7 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
                     label="Username"
                     value={formData.username}
                     onChange={e => handleChange('username', e.target.value)}
+                    required
                 />
 
                 <FormInput
@@ -169,6 +170,7 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
                     type="password"
                     value={formData.password}
                     onChange={e => handleChange('password', e.target.value)}
+                    required
                 />
             </div>
 
@@ -197,6 +199,7 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
                     label="From Name"
                     value={formData.from_name}
                     onChange={e => handleChange('from_name', e.target.value)}
+                    required
                 />
             </div>
 
