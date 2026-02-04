@@ -20,6 +20,7 @@ import {
 } from '../errors/rbac.errors';
 import { CreateProfileRequestDto, ProfileResponseDto, UpdateProfileRequestDto } from '../dto/profile.dto';
 import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
+import { Permissions } from '../models/permissions.model';
 
 // Module code for RBAC operations
 const MODULE_CODE = 'SETTINGS';

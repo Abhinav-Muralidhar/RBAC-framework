@@ -89,7 +89,8 @@ export class UserService implements IUserService {
             status: 'success'
         })
 
-        return user;
+            return user;
+        });
     }
 
     async update(
@@ -139,7 +140,18 @@ export class UserService implements IUserService {
             status: 'success'
         })
 
-        return updatedUser;
+            this.auditService.log(t, {
+                user_id: actingUserId,
+                action: 'update',
+                entity_type: 'user',
+                entity_id: id,
+                old_values: oldUser ? { ...oldUser, password: '[REDACTED]' } : null,
+                new_values: { ...data, password: data.password ? '[REDACTED]' : undefined },
+                status: 'success'
+            }).catch(console.error);
+
+            return updatedUser;
+        });
     }
 
 

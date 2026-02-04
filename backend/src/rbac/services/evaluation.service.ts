@@ -92,7 +92,18 @@ export class EvaluationService implements IEvaluationService {
                     userId,
                     moduleCode,
                     action,
-                    `No permission found for '${action}' on '${moduleCode}'`,
+                    `No explicit permission for '${action}' on '${moduleCode}'`,
+                    false,
+                    false
+                );
+
+            } catch (error) {
+                console.error('EvaluationService.evaluate error:', error);
+                return createDenyDecision(
+                    userId,
+                    moduleCode,
+                    action,
+                    'Permission evaluation failed due to internal error',
                     false,
                     false
                 );
