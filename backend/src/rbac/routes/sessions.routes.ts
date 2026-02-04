@@ -6,14 +6,11 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { Pool } from 'pg';
 import { AuthSessionService } from '../services/authSession.service';
-import { AuthSessionsRepository } from '../repositories/auth_sessions.repository';
 import { IAuditService } from '../services/audit.service';
 import { getRequiredQuery, parseId } from './_paramUtils';
 import { IDatabase } from 'pg-promise';
 import { EvaluationService } from '../services/evaluation.service';
-import { PermissionsRepository } from '../repositories/permissions.repository';
 import { requirePermission } from '../middleware/requirePermission.middleware';
 
 /**
@@ -23,17 +20,8 @@ function sendSuccess<T>(res: Response, data: T, meta?: Record<string, unknown>) 
     res.json({ data, error: null, meta: meta ?? {} });
 }
 
-export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAuditService): Router {
+export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAuditService, evaluationService: EvaluationService, authSessionService: AuthSessionService): Router {
     const router = Router();
-
-    // Initialize repository and service
-    const authSessionsRepository = new AuthSessionsRepository(db);
-    // Initialize services
-    const permissionsRepository = new PermissionsRepository(db);
-    const evaluationService = new EvaluationService(
-        permissionsRepository
-    );
-    const authSessionService = new AuthSessionService(authSessionsRepository, auditService, evaluationService);
 
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {

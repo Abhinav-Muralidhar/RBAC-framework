@@ -10,15 +10,10 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { IDatabase } from 'pg-promise';
 
 import { SharingRuleService } from '../services/sharingRule.service';
-import { SharingRulesRepository } from '../repositories/sharing_rules.repository';
 import { EvaluationService } from '../services/evaluation.service';
 import { AuditService } from '../services/audit.service';
-import { PermissionsRepository } from '../repositories/permissions.repository';
-import { AuditLogsRepository } from '../repositories/audit_logs.repository';
-
 import { requirePermission } from '../middleware/requirePermission.middleware';
 import { parseId, parsePagination } from './_paramUtils';
-import { ModuleRepository } from '../repositories/modules.repository';
 
 /* -------------------------------------------------------------------------- */
 /* Response helpers                                                            */
@@ -48,28 +43,8 @@ function parseFilter(query: any): { is_active?: boolean } {
     return filter;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Router Factory                                                              */
-/* -------------------------------------------------------------------------- */
-
-export function createSharingRulesRouter(db: IDatabase<unknown>): Router {
+export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: AuditService, evaluationService: EvaluationService, sharingRuleService: SharingRuleService): Router {
     const router = Router();
-
-    /* --------------------------- repositories -------------------------------- */
-    const sharingRulesRepository = new SharingRulesRepository(db);
-    const permissionsRepository = new PermissionsRepository(db);
-    const auditRepository = new AuditLogsRepository(db);
-    const moduleRepository = new ModuleRepository(db);
-
-    /* ----------------------------- services ---------------------------------- */
-    const evaluationService = new EvaluationService(permissionsRepository);
-    const auditService = new AuditService(auditRepository, evaluationService, moduleRepository);
-
-    const sharingRuleService = new SharingRuleService(
-        sharingRulesRepository,
-        evaluationService,
-        auditService
-    );
 
     /* -------------------------------------------------------------------------- */
     /* GET /rbac/sharing-rules                                                     */

@@ -10,17 +10,12 @@ import { IDatabase } from 'pg-promise';
 
 import { parseId, parsePagination } from './_paramUtils';
 import { OrganizationService } from '../services/organization.service';
-import { OrganizationRepository } from '../repositories/organizations.repository';
 import { AuditService } from '../services/audit.service';
-import { AuditLogsRepository } from '../repositories/audit_logs.repository';
 import { EvaluationService } from '../services/evaluation.service';
-import { PermissionsRepository } from '../repositories/permissions.repository';
 import { requirePermission } from '../middleware/requirePermission.middleware';
 import {
-    CreateOrganizationRequestDto,
     UpdateOrganizationRequestDto
 } from '../dto';
-import { ModuleRepository } from '../repositories/modules.repository';
 
 /**
  * Standard response envelope
@@ -51,26 +46,8 @@ function parseOrganizationFilters(query: any) {
     return filter;
 }
 
-export function createOrganizationsRouter(db: IDatabase<unknown>): Router {
+export function createOrganizationsRouter(db: IDatabase<unknown>, evaluationService: EvaluationService, auditService: AuditService, organizationService: OrganizationService): Router {
     const router = Router();
-
-    // --- Evaluation / permissions ---
-    const evaluationService = new EvaluationService(
-        new PermissionsRepository(db)
-    );
-
-    // --- Audit service ---
-    const auditService = new AuditService(
-        new AuditLogsRepository(db),
-        evaluationService,
-        new ModuleRepository(db)
-    );
-
-    // --- Organization service ---
-    const organizationService = new OrganizationService(
-        new OrganizationRepository(db),
-        auditService
-    );
 
     /**
      * GET /rbac/organizations

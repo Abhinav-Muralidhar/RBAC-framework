@@ -19,9 +19,7 @@ function sendError(res: Response, status: number, message: string, code?: string
     });
 }
 
-export function createEmailRouter(
-    authSessionService: AuthSessionService
-): Router {
+export function createEmailRouter(authSessionService: AuthSessionService): Router {
     const router = Router();
     const requireAuth = createAuthenticateMiddleware(authSessionService);
 

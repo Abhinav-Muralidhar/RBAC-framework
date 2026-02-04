@@ -204,18 +204,18 @@ import type { SmtpConfig, CreateSmtpConfigDto, UpdateSmtpConfigDto } from '../ty
 
 export const smtpApi = {
     list: async (): Promise<SmtpConfig[]> => {
-        const response = await get<ApiResponse<SmtpConfig[]>>('/rbac/smtp-configs');
+        const response = await get<ApiResponse<SmtpConfig[]>>('/rbac/smtpconfig');
         return response.data;
     },
 
     getById: async (id: string): Promise<SmtpConfig> => {
-        const response = await get<ApiResponse<SmtpConfig>>(`/rbac/smtp-configs/${id}`);
+        const response = await get<ApiResponse<SmtpConfig>>(`/rbac/smtpconfig/${id}`);
         return response.data;
     },
 
     getActive: async (): Promise<SmtpConfig | null> => {
         try {
-            const response = await get<ApiResponse<SmtpConfig>>('/rbac/smtp-configs/active');
+            const response = await get<ApiResponse<SmtpConfig>>('/rbac/smtpconfig/active');
             return response.data;
         } catch {
             return null;
@@ -223,21 +223,21 @@ export const smtpApi = {
     },
 
     create: async (data: CreateSmtpConfigDto): Promise<SmtpConfig> => {
-        const response = await post<ApiResponse<SmtpConfig>>('/rbac/smtp-configs', data);
+        const response = await post<ApiResponse<SmtpConfig>>('/rbac/smtpconfig', data);
         return response.data;
     },
 
     update: async (id: string, data: UpdateSmtpConfigDto): Promise<SmtpConfig> => {
-        const response = await patch<ApiResponse<SmtpConfig>>(`/rbac/smtp-configs/${id}`, data);
+        const response = await patch<ApiResponse<SmtpConfig>>(`/rbac/smtpconfig/${id}`, data);
         return response.data;
     },
 
     delete: async (id: string): Promise<void> => {
-        await del(`/rbac/smtp-configs/${id}`);
+        await del(`/rbac/smtpconfig/${id}`);
     },
 
     activate: async (id: string): Promise<void> => {
-        await post(`/rbac/smtp-configs/${id}/activate`);
+        await post(`/rbac/smtpconfig/${id}/activate`);
     },
 };
 

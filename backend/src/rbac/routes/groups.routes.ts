@@ -6,22 +6,11 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { Pool } from 'pg';
 import { UnifiedGroupService } from '../services/group.service';
-import { GroupRepository } from '../repositories/groups.repository';
-import { GroupRoleRepository } from '../repositories/group_roles.repository';
 import { EvaluationService } from '../services/evaluation.service';
 import { AuditService, IAuditService } from '../services/audit.service';
-import { PermissionsRepository } from '../repositories/permissions.repository';
-import { ModuleRepository } from '../repositories/modules.repository';
-import { RoleProfilesRepository } from '../repositories/role_profiles.repository';
-import { UserRoleRepository } from '../repositories/user_roles.repository';
-import { ProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
-import { UsersRepository } from '../repositories/users.repository';
 import { parseId, parsePagination } from './_paramUtils';
 import { IDatabase } from 'pg-promise';
-import { AuditLogsRepository } from '../repositories/audit_logs.repository';
-import { UserGroupsRepository } from '../repositories/user_groups.repository';
 import { requirePermission } from '../middleware/requirePermission.middleware';
 
 /**
@@ -46,36 +35,8 @@ function parseFilter(query: any): any {
     return filter;
 }
 
-export function createGroupsRouter(db: IDatabase<unknown>): Router {
+export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: EvaluationService, auditService: AuditService, groupService: UnifiedGroupService): Router {
     const router = Router();
-
-    // Initialize repositories
-    const groupRepository = new GroupRepository(db);
-    const groupRoleRepository = new GroupRoleRepository(db);
-    const permissionsRepository = new PermissionsRepository(db);
-    const moduleRepository = new ModuleRepository(db);
-    const roleProfilesRepository = new RoleProfilesRepository(db);
-    const userRoleRepository = new UserRoleRepository(db);
-    const profilePermissionsRepository = new ProfilePermissionsRepository(db);
-    const usersRepository = new UsersRepository(db);
-    const auditRepository = new AuditLogsRepository(db);
-    const userGroupsRepository = new UserGroupsRepository(db);
-    // Initialize services
-    const evaluationService = new EvaluationService(
-        permissionsRepository,
-    );
-    const auditService = new AuditService(
-        auditRepository,
-        evaluationService,
-        moduleRepository
-    );
-    const groupService = new UnifiedGroupService(
-        groupRepository,
-        groupRoleRepository,
-        evaluationService,
-        auditService,
-        userGroupsRepository
-    );
 
     /**
      * GET /rbac/groups

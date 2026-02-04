@@ -8,15 +8,12 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { parseId, parsePagination, getRequiredParam } from './_paramUtils';
+import { parseId, parsePagination } from './_paramUtils';
 import { AuditService } from '../services/audit.service';
-import { AuditLogsRepository } from '../repositories/audit_logs.repository';
 import { IDatabase } from 'pg-promise';
 import { EvaluationService } from '../services/evaluation.service';
-import { PermissionsRepository } from '../repositories/permissions.repository';
 import { AuditLogListFilterDto } from '../dto/audit_log.dto';
 import { requirePermission } from '../middleware/requirePermission.middleware';
-import { ModuleRepository } from '../repositories/modules.repository';
 
 /**
  * Standard response envelope

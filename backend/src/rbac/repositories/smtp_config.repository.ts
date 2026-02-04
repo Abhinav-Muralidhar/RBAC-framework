@@ -13,7 +13,7 @@ export interface ISmtpConfigRepository {
 }
 
 export class SmtpConfigRepository implements ISmtpConfigRepository {
-  private tableName = 'smtp_configs';
+  private tableName = 'smtp_config';
 
   constructor(private db: IDatabase<unknown>) { }
 

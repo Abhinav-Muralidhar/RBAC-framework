@@ -40,16 +40,8 @@ function parseFilters(query: any): { isActive?: boolean } {
     return {};
 }
 
-export function createSmtpConfigRouter(db: IDatabase<unknown>, auditService: AuditService): Router {
+export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditService, evaluationService: EvaluationService, smtpService: SmtpConfigService): Router {
     const router = Router();
-    const permissionsRepository = new PermissionsRepository(db);
-    const evaluationService = new EvaluationService(
-        permissionsRepository
-    );
-
-    const smtpRepo = new SmtpConfigRepository(db);
-    const smtpService = new SmtpConfigService(smtpRepo, auditService);
-
     // --- List all SMTP configs ---
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {

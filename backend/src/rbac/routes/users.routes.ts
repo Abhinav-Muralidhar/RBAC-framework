@@ -6,7 +6,6 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { Pool } from 'pg';
 import { UserService } from '../services/user.service';
 import { UsersRepository } from '../repositories/users.repository';
 import { EvaluationService } from '../services/evaluation.service';
@@ -43,23 +42,8 @@ function parseFilters(query: any): any {
     return filters;
 }
 
-export function createUsersRouter(db: IDatabase<unknown>, auditService: IAuditService): Router {
+export function createUsersRouter(db: IDatabase<unknown>, userService: UserService): Router {
     const router = Router();
-
-    // Initialize repositories
-    const usersRepository = new UsersRepository(db);
-    const permissionsRepository = new PermissionsRepository(db);
-    const moduleRepository = new ModuleRepository(db);
-    const userRoleRepository = new UserRoleRepository(db);
-    const roleProfilesRepository = new RoleProfilesRepository(db);
-    const profilePermissionsRepository = new ProfilePermissionsRepository(db);
-
-    // Initialize services
-    const evaluationService = new EvaluationService(
-        permissionsRepository
-
-    );
-    const userService = new UserService(usersRepository, userRoleRepository, evaluationService, auditService);
 
     /**
      * GET /rbac/users
