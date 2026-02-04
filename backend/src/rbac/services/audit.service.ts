@@ -105,7 +105,6 @@ export class AuditService implements IAuditService {
         logId: string
     ): Promise<AuditLogWithDetailsRow> {
         return withTransaction(async (t: TransactionTask) => {
-            await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
             const log = await this.auditLogsRepository.findByIdWithDetails(t, logId);
             if (!log) {
                 throw new Error(`Audit log not found: ${logId}`);
@@ -116,7 +115,6 @@ export class AuditService implements IAuditService {
 
     async getAll(actingUserId: string, filters: AuditLogFilters = {}, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogWithDetailsRow>> {
         return withTransaction(async (t: TransactionTask) => {
-            await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
             return this.auditLogsRepository.findAllWithDetails(t, filters, pagination);
         });
     }

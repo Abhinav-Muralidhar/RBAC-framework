@@ -22,6 +22,7 @@ import { parseId, parsePagination } from './_paramUtils';
 import { IDatabase } from 'pg-promise';
 import { AuditLogsRepository } from '../repositories/audit_logs.repository';
 import { UserGroupsRepository } from '../repositories/user_groups.repository';
+import { requirePermission } from '../middleware/requirePermission.middleware';
 
 /**
  * Standard response envelope
@@ -79,7 +80,7 @@ export function createGroupsRouter(db: IDatabase<unknown>): Router {
      * GET /rbac/groups
      * List all groups (paginated)
      */
-    router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+    router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const pagination = parsePagination(req.query);
@@ -101,7 +102,7 @@ export function createGroupsRouter(db: IDatabase<unknown>): Router {
      * GET /rbac/groups/:id
      * Get group by ID with full details (JOINed data)
      */
-    router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const groupId = parseId(req.params.id, 'groupId');
             const group = await groupService.getById(req.user!.id, groupId);
@@ -118,7 +119,7 @@ export function createGroupsRouter(db: IDatabase<unknown>): Router {
      * POST /rbac/groups
      * Create new group
      */
-    router.post('/', async (req: Request, res: Response, next: NextFunction) => {
+    router.post('/', requirePermission('SETTINGS', 'create', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const group = await groupService.create(actingUserId, req.body);
@@ -132,7 +133,7 @@ export function createGroupsRouter(db: IDatabase<unknown>): Router {
      * PATCH /rbac/groups/:id
      * Update group
      */
-    router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const groupId = parseId(req.params.id, 'groupId');
@@ -147,7 +148,7 @@ export function createGroupsRouter(db: IDatabase<unknown>): Router {
      * DELETE /rbac/groups/:id
      * Delete group (soft delete)
      */
-    router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const actingUserId = req.user!.id;
             const groupId = parseId(req.params.id, 'groupId');

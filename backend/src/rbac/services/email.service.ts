@@ -1,4 +1,5 @@
 import nodemailer, { Transporter } from 'nodemailer';
+import { SmtpConfigCreate } from '../dto/smtp_config.dto';
 import { SmtpConfig } from '../models/smtp_config.model';
 import { RBACInternalError } from '../errors/rbac.errors';
 
@@ -12,35 +13,58 @@ export interface SendEmailOptions {
 export class EmailService {
     private transporter: Transporter;
 
-    constructor(private smtpConfig: SmtpConfig) {
-        this.transporter = this.createTransporter(smtpConfig);
+    constructor(config: SmtpConfig | SmtpConfigCreate) {
+        this.transporter = this.createTransporter(config);
     }
 
-    private createTransporter(config: SmtpConfig): Transporter {
+    private createTransporter(
+        config: SmtpConfig | SmtpConfigCreate
+    ): Transporter {
         try {
             return nodemailer.createTransport({
                 host: config.host,
                 port: config.port,
-                secure: config.encryption === 'ssl', // true for SSL (465)
+                secure: config.encryption === 'ssl',
                 auth: {
                     user: config.username,
                     pass: config.password
                 }
             });
-        } catch (err) {
+        } catch {
             throw new RBACInternalError('Failed to create SMTP transporter');
         }
     }
 
-    async sendMail(options: SendEmailOptions): Promise<void> {
+    /**
+     * Verify SMTP connectivity (no email sent)
+     */
+    async verifyConnection(): Promise<void> {
+        try {
+            await this.transporter.verify();
+        } catch {
+            throw new RBACInternalError('SMTP connection verification failed');
+        }
+    }
+
+    /**
+     * Send an email
+     */
+    async sendMail(
+        options: SendEmailOptions,
+        configMeta?: Pick<
+            SmtpConfig,
+            'from_email' | 'from_name' | 'reply_to_email'
+        >
+    ): Promise<void> {
         await this.transporter.sendMail({
-            from: `"${this.smtpConfig.from_name}" <${this.smtpConfig.from_email}>`,
+            from: configMeta
+                ? `"${configMeta.from_name}" <${configMeta.from_email}>`
+                : undefined,
             to: options.to,
             subject: options.subject,
             text: options.text,
             html: options.html,
-            replyTo: this.smtpConfig.reply_to_email ?? undefined
+            replyTo: configMeta?.reply_to_email ?? undefined
         });
-
     }
 }

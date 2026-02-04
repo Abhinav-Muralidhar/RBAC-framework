@@ -48,7 +48,6 @@ export class RoleService implements IRoleService {
     ) { }
 
     async getById(actingUserId: string, roleId: string): Promise<RoleResponseDto | RoleNotFoundError> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
         return withTransaction(async (t: TransactionTask) => {
             const role = await this.roleRepository.findByIdWithDetails(t, roleId);
             if (!role) throw new RoleNotFoundError(roleId);
@@ -57,7 +56,6 @@ export class RoleService implements IRoleService {
     }
 
     async assignRoleToUser(actingUserId: string, roleId: string, userId: string): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
         return withTransaction(async (t: TransactionTask) => {
             const existing = await this.userRoleRepository.hasRole(t, userId, roleId);
             if (existing) throw new DuplicateAssignmentError(`role '${roleId}' to user '${userId}'`);
@@ -66,7 +64,6 @@ export class RoleService implements IRoleService {
     }
 
     async unassignRoleFromUser(actingUserId: string, roleId: string, userId: string): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
         return withTransaction(async (t: TransactionTask) => {
             await this.userRoleRepository.revoke(t, userId, roleId);
         });
@@ -77,7 +74,6 @@ export class RoleService implements IRoleService {
         filters?: { parent_role_id?: string; is_active?: boolean; search?: string },
         pagination?: Partial<PaginationParams>
     ): Promise<PaginatedResult<Roles>> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
         return withTransaction(async (t: TransactionTask) => {
             const params = normalizePaginationParams(pagination);
             const result = await this.roleRepository.findAllPaginated(t, filters, params);
@@ -86,21 +82,18 @@ export class RoleService implements IRoleService {
     }
 
     async getAncestors(actingUserId: string, roleId: string): Promise<Roles[]> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
         return withTransaction(async (t: TransactionTask) => {
             return this.roleRepository.findAncestors(t, roleId);
         });
     }
 
     async getChildren(actingUserId: string, roleId: string): Promise<Roles[]> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
         return withTransaction(async (t: TransactionTask) => {
             return this.roleRepository.findChildRoles(t, roleId);
         });
     }
 
     async createRoleProfiles(actingUserId: string, data: CreateRoleRequestDto): Promise<Roles> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
         return withTransaction(async (t: TransactionTask) => {
             const existing = await this.roleRepository.findByCode(t, data.code);
             if (existing) throw new DuplicateAssignmentError(`role code '${data.code}'`);
@@ -140,7 +133,6 @@ export class RoleService implements IRoleService {
     }
 
     async updateRoleProfiles(actingUserId: string, roleId: string, data: UpdateRoleRequestDto): Promise<Roles> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
         return withTransaction(async (t: TransactionTask) => {
             const existing = await this.roleRepository.findById(t, roleId);
             if (!existing) throw new RoleNotFoundError(roleId);

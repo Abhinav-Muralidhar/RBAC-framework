@@ -49,7 +49,7 @@ export class ProfileService implements IProfileService {
     ) { }
 
     async getById(actingUserId: string, profileId: string): Promise<ProfileResponseDto> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
+
         return withTransaction(async (t: TransactionTask) => {
             const profile = await this.profilesRepository.findByIdWithDetails(t, profileId);
             if (!profile) throw new ProfileNotFoundError(profileId);
@@ -62,13 +62,11 @@ export class ProfileService implements IProfileService {
         filters?: { is_active?: boolean, code?: string },
         pagination?: Partial<PaginationParams>
     ): Promise<PaginatedResult<Profiles>> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
         return withTransaction(async (t: TransactionTask) => this.profilesRepository.findAllPaginated(t, filters, pagination));
     }
 
     //create profile as well as do thing like update its premissions wiht default allow
     async create(actingUserId: string, data: CreateProfileRequestDto): Promise<Profiles> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
         return withTransaction(async (t: TransactionTask) => {
             const existing = await this.profilesRepository.findAllPaginated(t, { search: data.code as string });
             if (existing.data.length > 0) throw new DuplicateAssignmentError(`profile code '${data.code}'`);
@@ -106,7 +104,6 @@ export class ProfileService implements IProfileService {
     }
     //update the profile along wihtits premissions with default allow
     async update(actingUserId: string, profileId: string, data: UpdateProfileRequestDto): Promise<Profiles> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
         return withTransaction(async (t: TransactionTask) => {
             const existing = await this.profilesRepository.findById(t, profileId);
             if (!existing) throw new ProfileNotFoundError(profileId);
@@ -152,7 +149,6 @@ export class ProfileService implements IProfileService {
     }
 
     async delete(actingUserId: string, profileId: string): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
         return withTransaction(async (t: TransactionTask) => {
             const existing = await this.profilesRepository.findById(t, profileId);
             if (!existing) throw new ProfileNotFoundError(profileId);

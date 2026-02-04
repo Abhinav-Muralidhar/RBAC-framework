@@ -69,7 +69,6 @@ export class PermissionService implements IPermissionService {
     ) { }
 
     async getPermissionById(actingUserId: string, permissionId: string): Promise<Permissions> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
         return withTransaction(async (t: TransactionTask) => {
             const permission = await this.permissionsRepository.findById(t, permissionId);
@@ -81,7 +80,6 @@ export class PermissionService implements IPermissionService {
     }
 
     async getPermissionByModuleAction(actingUserId: string, moduleCode: string, action: PermissionAction): Promise<Permissions> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
         return withTransaction(async (t: TransactionTask) => {
             const module = await this.moduleRepository.findByCode(t, moduleCode);
@@ -99,7 +97,6 @@ export class PermissionService implements IPermissionService {
     }
 
     async listPermissionsByModule(actingUserId: string, moduleCode: string): Promise<Permissions[]> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
         return withTransaction(async (t: TransactionTask) => {
             const module = await this.moduleRepository.findByCode(t, moduleCode);
@@ -113,7 +110,6 @@ export class PermissionService implements IPermissionService {
     }
 
     async listAllPermissions(actingUserId: string, filters?: { module_id?: string; action?: PermissionAction; }): Promise<Permissions[]> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
         return withTransaction(async (t: TransactionTask) => {
             return this.permissionsRepository.findAll(t, filters);
@@ -121,7 +117,7 @@ export class PermissionService implements IPermissionService {
     }
 
     async createPermission(actingUserId: string, data: CreatePermissionRequestDto): Promise<Permissions> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
+
 
         return withTransaction(async (t: TransactionTask) => {
             const module = await this.moduleRepository.findById(t, data.module_id);
@@ -154,7 +150,7 @@ export class PermissionService implements IPermissionService {
         permissionId: string,
         data: UpdatePermissionRequestDto
     ): Promise<Permissions> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
+
 
         return withTransaction(async (t: TransactionTask) => {
             const existing = await this.permissionsRepository.findById(t, permissionId);
@@ -174,7 +170,6 @@ export class PermissionService implements IPermissionService {
     }
 
     async deletePermission(actingUserId: string, permissionId: string): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
 
         return withTransaction(async (t: TransactionTask) => {
             const existing = await this.permissionsRepository.findById(t, permissionId);
@@ -190,7 +185,6 @@ export class PermissionService implements IPermissionService {
         actingUserId: string,
         profileId: string
     ): Promise<Array<{ permission: Permissions; effect: PermissionEffect }>> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
 
         return withTransaction(async (t: TransactionTask) => {
             const profilePermissions =
@@ -220,7 +214,6 @@ export class PermissionService implements IPermissionService {
         profileIds: string[],
         roleId: string
     ): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
 
         return withTransaction(async (t: TransactionTask) => {
             //throw error if role doesnt exist
@@ -254,7 +247,6 @@ export class PermissionService implements IPermissionService {
         profileId: string,
         roleId: string
     ): Promise<void> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'update');
 
         return withTransaction(async (t: TransactionTask) => {
             const profile = await this.profilesRepository.findById(t, profileId);
@@ -275,8 +267,6 @@ export class PermissionService implements IPermissionService {
         actingUserId: string,
         roleId: string
     ): Promise<Profiles[]> {
-        await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-
         return withTransaction(async (t: TransactionTask) => {
             const roleProfiles =
                 await this.roleProfilesRepository.findProfilesByRole(t, roleId);

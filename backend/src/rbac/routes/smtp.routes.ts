@@ -12,6 +12,9 @@ import { SmtpConfigService } from '../services/smtpConfig.service';
 import { AuditService } from '../services/audit.service';
 import { parsePagination, getRequiredParam } from './_paramUtils';
 import { SmtpConfigCreate } from '../dto/smtp_config.dto';
+import { PermissionsRepository } from '../repositories/permissions.repository';
+import { EvaluationService } from '../services/evaluation.service';
+import { requirePermission } from '../middleware/requirePermission.middleware';
 
 /**
  * Standard response envelope
@@ -39,12 +42,16 @@ function parseFilters(query: any): { isActive?: boolean } {
 
 export function createSmtpConfigRouter(db: IDatabase<unknown>, auditService: AuditService): Router {
     const router = Router();
+    const permissionsRepository = new PermissionsRepository(db);
+    const evaluationService = new EvaluationService(
+        permissionsRepository
+    );
 
     const smtpRepo = new SmtpConfigRepository(db);
     const smtpService = new SmtpConfigService(smtpRepo, auditService);
 
     // --- List all SMTP configs ---
-    router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+    router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const filters = parseFilters(req.query);
             const pagination = parsePagination(req.query);
@@ -72,7 +79,7 @@ export function createSmtpConfigRouter(db: IDatabase<unknown>, auditService: Aud
     });
 
     // --- Create a new SMTP config ---
-    router.post('/', async (req: Request, res: Response, next: NextFunction) => {
+    router.post('/', requirePermission('SETTINGS', 'create', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const data = req.body as SmtpConfigCreate;
             const actingUserId = req.user!.id;
@@ -84,7 +91,7 @@ export function createSmtpConfigRouter(db: IDatabase<unknown>, auditService: Aud
     });
 
     // --- Update an existing SMTP config ---
-    router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.put('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const id = getRequiredParam(req.params, 'id');
             const data = req.body;
@@ -97,7 +104,7 @@ export function createSmtpConfigRouter(db: IDatabase<unknown>, auditService: Aud
     });
 
     // Delete an SMTP config
-    router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const id = getRequiredParam(req.params, 'id');
             const actingUserId = req.user!.id;
