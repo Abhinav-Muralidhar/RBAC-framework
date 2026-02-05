@@ -13,10 +13,10 @@ export type TransactionTask = ITask<unknown>;
 
 export interface IAuthSessionsRepository {
   create(t: TransactionTask | undefined, data: CreateAuthSessionInput): Promise<AuthSessions>;
-  findById(sessionId: string): Promise<AuthSessions | null>;
-  findBySessionToken(sessionToken: string): Promise<AuthSessions | null>;
-  update(sessionId: string, data: AuthSessions): Promise<AuthSessions>;
-  delete(sessionId: string, actingUserId: string): Promise<void>;
+  findById(t: TransactionTask | undefined, sessionId: string): Promise<AuthSessions | null>;
+  findBySessionToken(t: TransactionTask | undefined, sessionToken: string): Promise<AuthSessions | null>;
+  update(t: TransactionTask | undefined, sessionId: string, data: AuthSessions): Promise<AuthSessions>;
+  delete(t: TransactionTask | undefined, sessionId: string, actingUserId: string): Promise<void>;
   findAllByUser(t: TransactionTask | undefined, userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
   findActiveByUser(t: TransactionTask | undefined, userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
   deleteAllByUser(t: TransactionTask | undefined, userId: string): Promise<void>;
@@ -34,16 +34,16 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     return t ?? this.db;
   }
 
-  async findById(sessionId: string): Promise<AuthSessions | null> {
-    const rows = await this.db.any<AuthSessions>(
+  async findById(t: TransactionTask | undefined, sessionId: string): Promise<AuthSessions | null> {
+    const rows = await this.getTask(t).any<AuthSessions>(
       `SELECT * FROM ${this.tableName} WHERE id = $1`,
       [sessionId]
     );
     return rows[0] ?? null;
   }
 
-  async findBySessionToken(sessionToken: string): Promise<AuthSessions | null> {
-    const rows = await this.db.any<AuthSessions>(
+  async findBySessionToken(t: TransactionTask | undefined, sessionToken: string): Promise<AuthSessions | null> {
+    const rows = await this.getTask(t).any<AuthSessions>(
       `SELECT * FROM ${this.tableName} WHERE session_token = $1`,
       [sessionToken]
     );
@@ -72,8 +72,8 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     return row;
   }
 
-  async update(sessionId: string, data: AuthSessions): Promise<AuthSessions> {
-    const row = await this.db.one<AuthSessions>(
+  async update(t: TransactionTask | undefined, sessionId: string, data: AuthSessions): Promise<AuthSessions> {
+    const row = await this.getTask(t).one<AuthSessions>(
       `UPDATE ${this.tableName}
        SET expires_at = $1, logout_at = $2
        WHERE id = $3
@@ -85,8 +85,8 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     return row;
   }
 
-  async delete(sessionId: string, actingUserId: string): Promise<void> {
-    await this.db.none(
+  async delete(t: TransactionTask | undefined, sessionId: string, actingUserId: string): Promise<void> {
+    await this.getTask(t).none(
       `UPDATE ${this.tableName} 
        SET logout_at = NOW(), expires_at = NOW() 
        WHERE id = $1 AND user_id = $2`,

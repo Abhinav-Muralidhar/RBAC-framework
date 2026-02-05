@@ -7,7 +7,7 @@
  */
 
 import { IDatabase } from 'pg-promise';
-import { TransactionTask, withTransaction } from '../utils/transaction.utils';
+import { TransactionTask } from '../utils/transaction.utils';
 import { SharingRules, SharingRuleType } from '../models/sharing_rules.model';
 import { ISharingRulesRepository } from '../repositories/sharing_rules.repository';
 import { IEvaluationService } from './evaluation.service';
@@ -21,10 +21,10 @@ import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
 const MODULE_CODE = 'SETTINGS';
 
 export interface ISharingRuleService {
-    getById(actingUserId: string, ruleId: string): Promise<SharingRules>;
-    listAll(actingUserId: string, filters?: { is_active?: boolean }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<SharingRules>>;
-    update(actingUserId: string, ruleId: string, data: UpdateSharingRuleRequestDto): Promise<SharingRules>;
-    delete(actingUserId: string, ruleId: string): Promise<void>;
+    getById(t: TransactionTask, actingUserId: string, ruleId: string): Promise<SharingRules>;
+    listAll(t: TransactionTask, actingUserId: string, filters?: { is_active?: boolean }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<SharingRules>>;
+    update(t: TransactionTask, actingUserId: string, ruleId: string, data: UpdateSharingRuleRequestDto): Promise<SharingRules>;
+    delete(t: TransactionTask, actingUserId: string, ruleId: string): Promise<void>;
 }
 export class SharingRuleService implements ISharingRuleService {
     constructor(
@@ -33,73 +33,69 @@ export class SharingRuleService implements ISharingRuleService {
         private auditService: IAuditService
     ) { }
 
-    async getById(actingUserId: string, ruleId: string): Promise<SharingRules> {
-        return withTransaction(async (t: TransactionTask) => {
-            const rule = await this.sharingRulesRepository.findById(t, ruleId);
-            if (!rule) throw new SharingRuleNotFoundError(ruleId);
-            return rule;
-        });
+    async getById(t: TransactionTask, actingUserId: string, ruleId: string): Promise<SharingRules> {
+
+        const rule = await this.sharingRulesRepository.findById(t, ruleId);
+        if (!rule) throw new SharingRuleNotFoundError(ruleId);
+        return rule;
     }
 
 
-    async listAll(actingUserId: string, filters?: { is_active?: boolean }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<SharingRules>> {
-        return withTransaction(async (t: TransactionTask) =>
-            this.sharingRulesRepository.findAll(t, filters, pagination)
-        );
+    async listAll(t: TransactionTask, actingUserId: string, filters?: { is_active?: boolean }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<SharingRules>> {
+
+        return this.sharingRulesRepository.findAll(t, filters, pagination)
     }
 
     async update(
+        t: TransactionTask,
         actingUserId: string,
         ruleId: string,
         data: UpdateSharingRuleRequestDto
     ): Promise<SharingRules> {
-        return withTransaction(async (t: TransactionTask) => {
-            const existing = await this.sharingRulesRepository.findById(t, ruleId);
-            if (!existing) throw new SharingRuleNotFoundError(ruleId);
+        const existing = await this.sharingRulesRepository.findById(t, ruleId);
+        if (!existing) throw new SharingRuleNotFoundError(ruleId);
 
-            const share: SharingRules = {
-                id: existing.id,
-                module_id: existing.module_id,
-                rule_type: data.rule_type ?? existing.rule_type,
-                is_active: data.is_active ?? existing.is_active,
-                created_at: existing.created_at,
-                created_by: existing.created_by as string
-            };
+        const share: SharingRules = {
+            id: existing.id,
+            module_id: existing.module_id,
+            rule_type: data.rule_type ?? existing.rule_type,
+            is_active: data.is_active ?? existing.is_active,
+            created_at: existing.created_at,
+            created_by: existing.created_by as string
+        };
 
-            const updatedRule = await this.sharingRulesRepository.update(t, ruleId, share);
+        const updatedRule = await this.sharingRulesRepository.update(t, ruleId, share);
 
-            this.auditService.log(t, {
-                user_id: actingUserId,
-                action: 'update',
-                module_code: MODULE_CODE,
-                entity_type: 'sharing_rule',
-                entity_id: ruleId,
-                old_values: { ...existing } as Record<string, unknown>,
-                new_values: { ...data } as Record<string, unknown>,
-                status: 'success'
-            }).catch(console.error);
+        this.auditService.log(t, {
+            user_id: actingUserId,
+            action: 'update',
+            module_code: MODULE_CODE,
+            entity_type: 'sharing_rule',
+            entity_id: ruleId,
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { ...data } as Record<string, unknown>,
+            status: 'success'
+        }).catch(console.error);
 
-            return updatedRule;
-        });
+        return updatedRule;
+
     }
 
-    async delete(actingUserId: string, ruleId: string): Promise<void> {
-        return withTransaction(async (t: TransactionTask) => {
-            const existing = await this.sharingRulesRepository.findById(t, ruleId);
-            if (!existing) throw new SharingRuleNotFoundError(ruleId);
+    async delete(t: TransactionTask, actingUserId: string, ruleId: string): Promise<void> {
+        const existing = await this.sharingRulesRepository.findById(t, ruleId);
+        if (!existing) throw new SharingRuleNotFoundError(ruleId);
 
-            await this.sharingRulesRepository.delete(t, ruleId);
+        await this.sharingRulesRepository.delete(t, ruleId);
 
-            this.auditService.log(t, {
-                user_id: actingUserId,
-                action: 'delete',
-                module_code: MODULE_CODE,
-                entity_type: 'sharing_rule',
-                entity_id: ruleId,
-                old_values: { ...existing } as Record<string, unknown>,
-                new_values: { is_deleted: true },
-                status: 'success'
-            }).catch(console.error);
-        });
+        this.auditService.log(t, {
+            user_id: actingUserId,
+            action: 'delete',
+            module_code: MODULE_CODE,
+            entity_type: 'sharing_rule',
+            entity_id: ruleId,
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { is_deleted: true },
+            status: 'success'
+        }).catch(console.error);
     }
 }

@@ -122,7 +122,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
                 // Update last login
                 await usersService.update(user.id, user.id, { last_login_at: new Date() });
 
-                const userResponse = await usersService.getById(user.id, user.id);
+                const userResponse = await usersService.getById(t, user.id, user.id);
 
                 sendSuccess(res, userResponse, { message: 'Login successful' });
             });
@@ -138,30 +138,28 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
      */
     router.post('/logout', async (req: Request, res: Response): Promise<void> => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
-                // Try to invalidate session if cookie exists
-                const sessionToken = req.signedCookies['sessionToken'];
-                if (sessionToken) {
-                    try {
-                        // Find session by token and logout
-                        const session = await authSessionService.resolveSession(sessionToken);
-                        if (session) {
-                            await authSessionService.logout(t, session.id);
-                        }
-                    } catch {
-                        // Ignore errors - session may already be invalid
+            // Try to invalidate session if cookie exists
+            const sessionToken = req.signedCookies['sessionToken'];
+            if (sessionToken) {
+                try {
+                    // Find session by token and logout
+                    const session = await authSessionService.resolveSession(sessionToken);
+                    if (session) {
+                        await authSessionService.logout(session.id);
                     }
+                } catch {
+                    // Ignore errors - session may already be invalid
                 }
+            }
 
-                // Clear cookie
-                res.clearCookie('sessionToken', {
-                    httpOnly: true,
-                    secure: process.env.NODE_ENV === 'production',
-                    sameSite: 'strict',
-                    signed: true,
-                });
-                sendSuccess(res, { message: 'Logged out successfully' });
+            // Clear cookie
+            res.clearCookie('sessionToken', {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict',
+                signed: true,
             });
+            sendSuccess(res, { message: 'Logged out successfully' });
         } catch (error) {
 
             sendError(res, 500, 'Logout failed', 'INTERNAL_ERROR');
@@ -179,7 +177,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
         await withTransaction(async (t: TransactionTask) => {
             const userId = req.user!.id; // from session middleware
 
-            const user = await usersService.getById(userId, userId);
+            const user = await usersService.getById(t, userId, userId);
             const modules = await moduleRepository.findAll();
 
             const permissions: Record<

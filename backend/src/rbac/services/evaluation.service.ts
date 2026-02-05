@@ -23,13 +23,13 @@ import {
     PermissionDeniedError,
 } from '../errors/rbac.errors';
 import { PermissionAction } from '../models/permissions.model';
-import { TransactionTask, withTransaction } from '../utils/transaction.utils';
-import { IDatabase } from 'pg-promise';
+import { TransactionTask } from '../utils/transaction.utils';
 export interface IEvaluationService {
     /**
      * Evaluate if user has permission for module/action
      */
     evaluate(
+        t: TransactionTask | undefined,
         userId: string,
         moduleCode: string,
         action: string
@@ -39,6 +39,7 @@ export interface IEvaluationService {
      * Batch evaluate multiple permissions
      */
     evaluateBatch(
+        t: TransactionTask,
         userId: string,
         requests: Array<{ moduleCode: string; action: string }>
     ): Promise<PermissionDecision[]>;
@@ -78,92 +79,90 @@ export class EvaluationService implements IEvaluationService {
      * 8. Default: DENY (fail-closed)
      */
     async evaluate(
+        t: TransactionTask | undefined,
         userId: string,
         moduleCode: string,
         action: string
     ): Promise<PermissionDecision> {
-        return withTransaction(async (t: TransactionTask) => {  // wrap in transaction
-            try {
-                const effects = await this.permissionsRepository.findEffectsByUserAndModuleAction(t,
-                    userId,
-                    moduleCode,
-                    action as PermissionAction
-                );
+        try {
+            const effects = await this.permissionsRepository.findEffectsByUserAndModuleAction(t,
+                userId,
+                moduleCode,
+                action as PermissionAction
+            );
 
-                if (effects.length === 0) {
-                    return createDenyDecision(
-                        userId,
-                        moduleCode,
-                        action,
-                        `No permission found for '${action}' on '${moduleCode}'`,
-                        false,
-                        false
-                    );
-                }
-
-                const hasExplicitDeny = effects.includes('deny');
-                const hasExplicitAllow = effects.includes('allow');
-
-                if (hasExplicitDeny) {
-                    return createDenyDecision(
-                        userId,
-                        moduleCode,
-                        action,
-                        `Explicit DENY for '${action}' on '${moduleCode}'`,
-                        true,
-                        hasExplicitAllow
-                    );
-                }
-
-                if (hasExplicitAllow) {
-                    return createAllowDecision(
-                        userId,
-                        moduleCode,
-                        action,
-                        `Permission granted for '${action}' on '${moduleCode}'`,
-                        false,
-                        true
-                    );
-                }
-
+            if (effects.length === 0) {
                 return createDenyDecision(
                     userId,
                     moduleCode,
                     action,
-                    `No explicit permission for '${action}' on '${moduleCode}'`,
-                    false,
-                    false
-                );
-
-            } catch (error) {
-                console.error('EvaluationService.evaluate error:', error);
-                return createDenyDecision(
-                    userId,
-                    moduleCode,
-                    action,
-                    'Permission evaluation failed due to internal error',
+                    `No permission found for '${action}' on '${moduleCode}'`,
                     false,
                     false
                 );
             }
-        });
+
+            const hasExplicitDeny = effects.includes('deny');
+            const hasExplicitAllow = effects.includes('allow');
+
+            if (hasExplicitDeny) {
+                return createDenyDecision(
+                    userId,
+                    moduleCode,
+                    action,
+                    `Explicit DENY for '${action}' on '${moduleCode}'`,
+                    true,
+                    hasExplicitAllow
+                );
+            }
+
+            if (hasExplicitAllow) {
+                return createAllowDecision(
+                    userId,
+                    moduleCode,
+                    action,
+                    `Permission granted for '${action}' on '${moduleCode}'`,
+                    false,
+                    true
+                );
+            }
+
+            return createDenyDecision(
+                userId,
+                moduleCode,
+                action,
+                `No explicit permission for '${action}' on '${moduleCode}'`,
+                false,
+                false
+            );
+
+        } catch (error) {
+            console.error('EvaluationService.evaluate error:', error);
+            return createDenyDecision(
+                userId,
+                moduleCode,
+                action,
+                'Permission evaluation failed due to internal error',
+                false,
+                false
+            );
+        }
     }
 
     /**
      * Batch evaluate multiple permissions for the same user.
      */
     async evaluateBatch(
+        t: TransactionTask,
         userId: string,
         requests: Array<{ moduleCode: string; action: string }>
     ): Promise<PermissionDecision[]> {
-        return withTransaction(async (t: TransactionTask) => {
-            const results: PermissionDecision[] = [];
-            for (const req of requests) {
-                const decision = await this.evaluate(userId, req.moduleCode, req.action);
-                results.push(decision);
-            }
-            return results;
-        });
+        const results: PermissionDecision[] = [];
+        for (const req of requests) {
+            const decision = await this.evaluate(t, userId, req.moduleCode, req.action);
+            results.push(decision);
+        }
+        return results;
     }
 
     /**
@@ -175,7 +174,7 @@ export class EvaluationService implements IEvaluationService {
         moduleCode: string,
         action: string
     ): Promise<void> {
-        const decision = await this.evaluate(userId, moduleCode, action);
+        const decision = await this.evaluate(undefined, userId, moduleCode, action);
 
         if (!decision.granted) {
             throw new PermissionDeniedError(userId, moduleCode, action);

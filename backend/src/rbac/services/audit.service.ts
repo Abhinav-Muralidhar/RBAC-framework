@@ -10,8 +10,7 @@ import { AuditLogWithDetailsRow, IAuditLogsRepository } from '../repositories/au
 import { PaginatedResult, PaginationParams } from '../utils/pagination.utils';
 import { AuditLogFilters } from '../types/repository.types';
 import { IEvaluationService } from './evaluation.service';
-import { TransactionTask, withTransaction } from '../utils/transaction.utils'; // adjust path if needed
-import { IDatabase } from 'pg-promise';
+import { TransactionTask } from '../utils/transaction.utils'; // adjust path if needed
 import { IModuleRepository } from '../repositories/modules.repository';
 const MODULE_CODE = 'SETTINGS';
 

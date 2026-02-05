@@ -5,11 +5,10 @@
  * All mutating operations require RBAC enforcement.
  * All mutations are audit logged.
  */
-import { IDatabase } from 'pg-promise';
-import { withTransaction } from '../utils/transaction.utils';
+import { TransactionTask } from '../utils/transaction.utils';
 import { Roles } from '../models/roles.model';
 import { IRoleRepository } from '../repositories/roles.repository';
-import { IUserRoleRepository, TransactionTask } from '../repositories/user_roles.repository';
+import { IUserRoleRepository } from '../repositories/user_roles.repository';
 import { IRoleProfilesRepository } from '../repositories/role_profiles.repository';
 import { IEvaluationService } from './evaluation.service';
 import { IAuditService } from './audit.service';
@@ -25,17 +24,17 @@ import { PaginationParams, PaginatedResult, normalizePaginationParams, buildPagi
 const MODULE_CODE = 'SETTINGS';
 
 export interface IRoleService {
-    getById(actingUserId: string, roleId: string): Promise<RoleResponseDto | RoleNotFoundError>;
-    listPaginated(actingUserId: string, filters?: { parent_role_id?: string; is_active?: boolean; search?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Roles>>;
-    getAncestors(actingUserId: string, roleId: string): Promise<Roles[]>;
-    getChildren(actingUserId: string, roleId: string): Promise<Roles[]>;
-    createRoleProfiles(actingUserId: string, data: CreateRoleRequestDto): Promise<Roles>;
-    updateRoleProfiles(actingUserId: string, roleId: string, data: UpdateRoleRequestDto): Promise<Roles>;
-    delete(actingUserId: string, roleId: string): Promise<void>;
-    getUsersWithRole(actingUserId: string, roleId: string): Promise<string[]>;
+    getById(t: TransactionTask, actingUserId: string, roleId: string): Promise<RoleResponseDto | RoleNotFoundError>;
+    listPaginated(t: TransactionTask, actingUserId: string, filters?: { parent_role_id?: string; is_active?: boolean; search?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Roles>>;
+    getAncestors(t: TransactionTask, actingUserId: string, roleId: string): Promise<Roles[]>;
+    getChildren(t: TransactionTask, actingUserId: string, roleId: string): Promise<Roles[]>;
+    createRoleProfiles(t: TransactionTask, actingUserId: string, data: CreateRoleRequestDto): Promise<Roles>;
+    updateRoleProfiles(t: TransactionTask, actingUserId: string, roleId: string, data: UpdateRoleRequestDto): Promise<Roles>;
+    delete(t: TransactionTask, actingUserId: string, roleId: string): Promise<void>;
+    getUsersWithRole(t: TransactionTask, actingUserId: string, roleId: string): Promise<string[]>;
 
-    assignRoleToUser(actingUserId: string, roleId: string, userId: string): Promise<void>;
-    unassignRoleFromUser(actingUserId: string, roleId: string, userId: string): Promise<void>;
+    assignRoleToUser(t: TransactionTask, actingUserId: string, roleId: string, userId: string): Promise<void>;
+    unassignRoleFromUser(t: TransactionTask, actingUserId: string, roleId: string, userId: string): Promise<void>;
 }
 
 export class RoleService implements IRoleService {
@@ -47,162 +46,142 @@ export class RoleService implements IRoleService {
         private auditService: IAuditService,
     ) { }
 
-    async getById(actingUserId: string, roleId: string): Promise<RoleResponseDto | RoleNotFoundError> {
-        return withTransaction(async (t: TransactionTask) => {
-            const role = await this.roleRepository.findByIdWithDetails(t, roleId);
-            if (!role) throw new RoleNotFoundError(roleId);
-            return role;
-        });
+    async getById(t: TransactionTask, actingUserId: string, roleId: string): Promise<RoleResponseDto | RoleNotFoundError> {
+        const role = await this.roleRepository.findByIdWithDetails(t, roleId);
+        if (!role) throw new RoleNotFoundError(roleId);
+        return role;
     }
 
-    async assignRoleToUser(actingUserId: string, roleId: string, userId: string): Promise<void> {
-        return withTransaction(async (t: TransactionTask) => {
-            const existing = await this.userRoleRepository.hasRole(t, userId, roleId);
-            if (existing) throw new DuplicateAssignmentError(`role '${roleId}' to user '${userId}'`);
-            await this.userRoleRepository.assign(t, userId, roleId, actingUserId);
-        });
+    async assignRoleToUser(t: TransactionTask, actingUserId: string, roleId: string, userId: string): Promise<void> {
+        const existing = await this.userRoleRepository.hasRole(t, userId, roleId);
+        if (existing) throw new DuplicateAssignmentError(`role '${roleId}' to user '${userId}'`);
+        await this.userRoleRepository.assign(t, userId, roleId, actingUserId);
     }
 
-    async unassignRoleFromUser(actingUserId: string, roleId: string, userId: string): Promise<void> {
-        return withTransaction(async (t: TransactionTask) => {
-            await this.userRoleRepository.revoke(t, userId, roleId);
-        });
+    async unassignRoleFromUser(t: TransactionTask, actingUserId: string, roleId: string, userId: string): Promise<void> {
+        await this.userRoleRepository.revoke(t, userId, roleId);
     }
 
-    async listPaginated(
+    async listPaginated(t: TransactionTask,
         actingUserId: string,
         filters?: { parent_role_id?: string; is_active?: boolean; search?: string },
         pagination?: Partial<PaginationParams>
     ): Promise<PaginatedResult<Roles>> {
-        return withTransaction(async (t: TransactionTask) => {
-            const params = normalizePaginationParams(pagination);
-            const result = await this.roleRepository.findAllPaginated(t, filters, params);
-            return result;
-        });
+        const params = normalizePaginationParams(pagination);
+        const result = await this.roleRepository.findAllPaginated(t, filters, params);
+        return result;
     }
 
-    async getAncestors(actingUserId: string, roleId: string): Promise<Roles[]> {
-        return withTransaction(async (t: TransactionTask) => {
-            return this.roleRepository.findAncestors(t, roleId);
-        });
+    async getAncestors(t: TransactionTask, actingUserId: string, roleId: string): Promise<Roles[]> {
+        return this.roleRepository.findAncestors(t, roleId);
     }
 
-    async getChildren(actingUserId: string, roleId: string): Promise<Roles[]> {
-        return withTransaction(async (t: TransactionTask) => {
-            return this.roleRepository.findChildRoles(t, roleId);
-        });
+    async getChildren(t: TransactionTask, actingUserId: string, roleId: string): Promise<Roles[]> {
+        return this.roleRepository.findChildRoles(t, roleId);
     }
 
-    async createRoleProfiles(actingUserId: string, data: CreateRoleRequestDto): Promise<Roles> {
-        return withTransaction(async (t: TransactionTask) => {
-            const existing = await this.roleRepository.findByCode(t, data.code);
-            if (existing) throw new DuplicateAssignmentError(`role code '${data.code}'`);
+    async createRoleProfiles(t: TransactionTask, actingUserId: string, data: CreateRoleRequestDto): Promise<Roles> {
+        const existing = await this.roleRepository.findByCode(t, data.code);
+        if (existing) throw new DuplicateAssignmentError(`role code '${data.code}'`);
 
-            const role = await this.roleRepository.create(t, {
-                name: data.name,
-                code: data.code,
-                description: data.description ?? null,
-                parent_role_id: data.parent_role_id ?? null,
-                is_active: data.is_active ?? true,
-                created_by: actingUserId
-            });
-            const profileIds = data.profile_ids ?? []; // convert null/undefined to empty array
-            if (profileIds.length > 0) {
-                const profiles = await this.roleProfilesRepository.findByIds(t, profileIds);
-                if (profiles.length !== profileIds.length) {
-                    const foundIds = new Set(profiles.map(p => p.profile_id));
-                    const missing = profileIds.filter(id => !foundIds.has(id));
-                    throw new ProfileNotFoundError(missing.join(', '));
-                }
-
-                await this.roleProfilesRepository.assignAllByRole(t, role.id, profileIds, actingUserId);
+        const role = await this.roleRepository.create(t, {
+            name: data.name,
+            code: data.code,
+            description: data.description ?? null,
+            parent_role_id: data.parent_role_id ?? null,
+            is_active: data.is_active ?? true,
+            created_by: actingUserId
+        });
+        const profileIds = data.profile_ids ?? []; // convert null/undefined to empty array
+        if (profileIds.length > 0) {
+            const profiles = await this.roleProfilesRepository.findByIds(t, profileIds);
+            if (profiles.length !== profileIds.length) {
+                const foundIds = new Set(profiles.map(p => p.profile_id));
+                const missing = profileIds.filter(id => !foundIds.has(id));
+                throw new ProfileNotFoundError(missing.join(', '));
             }
 
-            this.auditService.log(t, {
-                user_id: actingUserId,
-                action: 'create',
-                module_code: MODULE_CODE,
-                entity_type: 'role',
-                entity_id: role.id,
-                old_values: null,
-                new_values: { ...data },
-                status: 'success'
-            }).catch(console.error);
+            await this.roleProfilesRepository.assignAllByRole(t, role.id, profileIds, actingUserId);
+        }
 
-            return role;
-        });
+        this.auditService.log(t, {
+            user_id: actingUserId,
+            action: 'create',
+            module_code: MODULE_CODE,
+            entity_type: 'role',
+            entity_id: role.id,
+            old_values: null,
+            new_values: { ...data },
+            status: 'success'
+        }).catch(console.error);
+
+        return role;
     }
 
-    async updateRoleProfiles(actingUserId: string, roleId: string, data: UpdateRoleRequestDto): Promise<Roles> {
-        return withTransaction(async (t: TransactionTask) => {
-            const existing = await this.roleRepository.findById(t, roleId);
-            if (!existing) throw new RoleNotFoundError(roleId);
+    async updateRoleProfiles(t: TransactionTask, actingUserId: string, roleId: string, data: UpdateRoleRequestDto): Promise<Roles> {
+        const existing = await this.roleRepository.findById(t, roleId);
+        if (!existing) throw new RoleNotFoundError(roleId);
 
-            const role: Roles = {
-                id: existing.id,
-                name: data.name ?? existing.name,
-                code: data.code ?? existing.code,
-                description: data.description ?? existing.description as string | null,
-                parent_role_id: data.parent_role_id ?? existing.parent_role_id as string | null,
-                is_active: data.is_active ?? existing.is_active,
-                created_by: existing.created_by as string | null,
-                created_at: existing.created_at,
+        const role: Roles = {
+            id: existing.id,
+            name: data.name ?? existing.name,
+            code: data.code ?? existing.code,
+            description: data.description ?? existing.description as string | null,
+            parent_role_id: data.parent_role_id ?? existing.parent_role_id as string | null,
+            is_active: data.is_active ?? existing.is_active,
+            created_by: existing.created_by as string | null,
+            created_at: existing.created_at,
+        }
+        const updatedRole = await this.roleRepository.update(t, roleId, role);
+
+        const profileIds = data.profile_ids ?? []; // convert null/undefined to empty array
+        if (profileIds.length > 0) {
+            const profiles = await this.roleProfilesRepository.findByIds(t, profileIds);
+            if (profiles.length !== profileIds.length) {
+                const foundIds = new Set(profiles.map(p => p.profile_id));
+                const missing = profileIds.filter(id => !foundIds.has(id));
+                throw new ProfileNotFoundError(missing.join(', '));
             }
-            const updatedRole = await this.roleRepository.update(t, roleId, role);
+            await this.roleProfilesRepository.assignAllByRole(t, role.id, profileIds, actingUserId);
+        }
 
-            const profileIds = data.profile_ids ?? []; // convert null/undefined to empty array
-            if (profileIds.length > 0) {
-                const profiles = await this.roleProfilesRepository.findByIds(t, profileIds);
-                if (profiles.length !== profileIds.length) {
-                    const foundIds = new Set(profiles.map(p => p.profile_id));
-                    const missing = profileIds.filter(id => !foundIds.has(id));
-                    throw new ProfileNotFoundError(missing.join(', '));
-                }
-                await this.roleProfilesRepository.assignAllByRole(t, role.id, profileIds, actingUserId);
-            }
+        this.auditService.log(t, {
+            user_id: actingUserId,
+            action: 'update',
+            module_code: MODULE_CODE,
+            entity_type: 'role',
+            entity_id: roleId,
+            old_values: { ...existing },
+            new_values: { ...data },
+            status: 'success'
+        }).catch(console.error);
 
-            this.auditService.log(t, {
-                user_id: actingUserId,
-                action: 'update',
-                module_code: MODULE_CODE,
-                entity_type: 'role',
-                entity_id: roleId,
-                old_values: { ...existing },
-                new_values: { ...data },
-                status: 'success'
-            }).catch(console.error);
-
-            return updatedRole;
-        });
+        return updatedRole;
     }
 
 
-    async delete(actingUserId: string, roleId: string): Promise<void> {
+    async delete(t: TransactionTask, actingUserId: string, roleId: string): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
-        return withTransaction(async (t: TransactionTask) => {
-            const existing = await this.roleRepository.findById(t, roleId);
-            if (!existing) throw new RoleNotFoundError(roleId);
+        const existing = await this.roleRepository.findById(t, roleId);
+        if (!existing) throw new RoleNotFoundError(roleId);
 
-            await this.roleRepository.delete(t, roleId);
+        await this.roleRepository.delete(t, roleId);
 
-            this.auditService.log(t, {
-                user_id: actingUserId,
-                action: 'delete',
-                module_code: MODULE_CODE,
-                entity_type: 'role',
-                entity_id: roleId,
-                old_values: { ...existing },
-                new_values: { is_deleted: true },
-                status: 'success'
-            }).catch(console.error);
-        });
+        this.auditService.log(t, {
+            user_id: actingUserId,
+            action: 'delete',
+            module_code: MODULE_CODE,
+            entity_type: 'role',
+            entity_id: roleId,
+            old_values: { ...existing },
+            new_values: { is_deleted: true },
+            status: 'success'
+        }).catch(console.error);
     }
 
-    async getUsersWithRole(actingUserId: string, roleId: string): Promise<string[]> {
+    async getUsersWithRole(t: TransactionTask, actingUserId: string, roleId: string): Promise<string[]> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
-        return withTransaction(async (t: TransactionTask) => {
-            const userRoles = await this.userRoleRepository.findUsersByRole(t, roleId);
-            return userRoles.map(ur => ur.user_id);
-        });
+        const userRoles = await this.userRoleRepository.findUsersByRole(t, roleId);
+        return userRoles.map(ur => ur.user_id);
     }
 }
