@@ -5,7 +5,7 @@
  * These routes set signed cookies for session management.
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, CookieOptions } from 'express';
 import { AuthSessionsRepository, TransactionTask } from '../repositories/auth_sessions.repository';
 import { UsersRepository } from '../repositories/users.repository';
 import { AuditLogsRepository } from '../repositories/audit_logs.repository';
@@ -29,7 +29,7 @@ import { UserRoleRepository } from '../repositories/user_roles.repository';
 import { PERMISSION_ACTIONS, PermissionAction } from '../models/permissions.model';
 import { withTransaction } from '../utils/transaction.utils';
 // Cookie configuration
-const COOKIE_OPTIONS = {
+const COOKIE_OPTIONS: CookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     signed: true,
@@ -166,8 +166,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
 
             sendError(res, 500, 'Logout failed', 'INTERNAL_ERROR');
             res.clearCookie('sessionToken', {
-                ...COOKIE_OPTIONS,
-                maxAge: undefined
+                ...COOKIE_OPTIONS
             });
 
             sendSuccess(res, { message: 'Logged out successfully' });
