@@ -58,10 +58,6 @@ export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAudi
     });
 
 
-
-
-
-
     /**
      * GET /rbac/sessions/current
      * Get current user's active session info

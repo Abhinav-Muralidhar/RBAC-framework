@@ -8,7 +8,7 @@
 import { TransactionTask } from '../utils/transaction.utils';
 import { Roles } from '../models/roles.model';
 import { IRoleRepository } from '../repositories/roles.repository';
-import { IUserRoleRepository, TransactionTask } from '../repositories/user_roles.repository';
+import { IUserRoleRepository } from '../repositories/user_roles.repository';
 import { IRoleProfilesRepository } from '../repositories/role_profiles.repository';
 import { IEvaluationService } from './evaluation.service';
 import { IAuditService } from './audit.service';

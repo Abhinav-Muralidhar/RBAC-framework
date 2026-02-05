@@ -8,7 +8,7 @@
  */
 
 import { AuthSessions } from '../models/auth_sessions.model';
-import { IAuthSessionsRepository, TransactionTask } from '../repositories/auth_sessions.repository';
+import { IAuthSessionsRepository } from '../repositories/auth_sessions.repository';
 import { IAuditService } from './audit.service';
 import { RBACInternalError } from '../errors/rbac.errors';
 import crypto from 'node:crypto';
@@ -81,7 +81,7 @@ export interface IAuthSessionService {
 
     revokeOneForUser(t: TransactionTask, sessionId: string, userId: string, actingUserId: string): Promise<void>;
 
-    revokeOneForUser(sessionId: string, userId: string, actingUserId: string): Promise<void>;
+    revokeOneForUser(t: TransactionTask, sessionId: string, userId: string, actingUserId: string): Promise<void>;
 
     /**
      * Revoke all sessions for a user
@@ -177,8 +177,8 @@ export class AuthSessionService implements IAuthSessionService {
             throw new ConcurrentSessionLimitError(data.user_id);
         }
 
-            const now = new Date();
-            const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
 
         const session = await this.authSessionsRepository.create(t, {
             user_id: data.user_id,
@@ -208,8 +208,7 @@ export class AuthSessionService implements IAuthSessionService {
             status: 'success'
         })
 
-            return session;
-        });
+        return session;
     }
 
     async update(t: TransactionTask | undefined, sessionId: string, data: Partial<AuthSessions>): Promise<AuthSessions> {
@@ -324,21 +323,20 @@ export class AuthSessionService implements IAuthSessionService {
         const session = await this.authSessionsRepository.findBySessionToken(t, sessionToken);
         console.log('LOOKUP TOKEN:', sessionToken);
 
-            if (!session) {
-                throw new RBACInternalError(`Session not found for token`);
-            }
+        if (!session) {
+            throw new RBACInternalError(`Session not found for token`);
+        }
 
-            // Check if session is logged out
-            if (session.logout_at) {
-                throw new RBACInternalError('Session has been logged out');
-            }
+        // Check if session is logged out
+        if (session.logout_at) {
+            throw new RBACInternalError('Session has been logged out');
+        }
 
-            // Check if session is expired
-            if (new Date() > session.expires_at) {
-                throw new RBACInternalError('Session has expired');
-            }
+        // Check if session is expired
+        if (new Date() > session.expires_at) {
+            throw new RBACInternalError('Session has expired');
+        }
 
-            return session;
-        });
+        return session;
     }
 }

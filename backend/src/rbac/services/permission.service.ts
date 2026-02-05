@@ -270,8 +270,8 @@ export class PermissionService implements IPermissionService {
             if (profile) {
                 profiles.push(profile);
             }
+        }
 
-            return profiles;
-        });
+        return profiles;
     }
 }
