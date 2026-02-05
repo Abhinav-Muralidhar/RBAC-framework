@@ -55,7 +55,7 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
         requirePermission('SETTINGS', 'read', evaluationService, auditService),
         async (req: Request, res: Response, next: NextFunction) => {
             try {
-                await withTransaction(async (t: TransactionTask) => {
+                const result = await withTransaction(async (t: TransactionTask) => {
                     const actingUserId = req.user!.id;
                     const pagination = parsePagination(req.query);
                     const filters = parseFilter(req.query);
@@ -66,12 +66,13 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
                         pagination
                     );
 
-                    sendSuccess(res, result.data, {
-                        page: result.pagination.page,
-                        limit: result.pagination.limit,
-                        total: result.pagination.total,
-                        totalPages: result.pagination.totalPages
-                    });
+                    return result;
+                });
+                sendSuccess(res, result.data, {
+                    page: result.pagination.page,
+                    limit: result.pagination.limit,
+                    total: result.pagination.total,
+                    totalPages: result.pagination.totalPages
                 });
             } catch (error) {
                 next(error);
@@ -87,11 +88,12 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
         requirePermission('SETTINGS', 'read', evaluationService, auditService),
         async (req: Request, res: Response, next: NextFunction) => {
             try {
-                await withTransaction(async (t: TransactionTask) => {
+                const result = await withTransaction(async (t: TransactionTask) => {
                     const ruleId = parseId(req.params.id, 'sharingRuleId');
                     const rule = await sharingRuleService.getById(t, req.user!.id, ruleId);
-                    sendSuccess(res, rule);
+                    return rule;
                 });
+                sendSuccess(res, result);
             } catch (error) {
                 next(error);
             }
@@ -107,7 +109,7 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
         requirePermission('SETTINGS', 'update', evaluationService, auditService),
         async (req: Request, res: Response, next: NextFunction) => {
             try {
-                await withTransaction(async (t: TransactionTask) => {
+                const result = await withTransaction(async (t: TransactionTask) => {
                     const actingUserId = req.user!.id;
                     const ruleId = parseId(req.params.id, 'sharingRuleId');
 
@@ -116,9 +118,9 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
                         ruleId,
                         req.body
                     );
-
-                    sendSuccess(res, updated);
+                    return updated;
                 });
+                sendSuccess(res, result);
             } catch (error) {
                 next(error);
             }
@@ -133,12 +135,13 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
         requirePermission('SETTINGS', 'delete', evaluationService, auditService),
         async (req: Request, res: Response, next: NextFunction) => {
             try {
-                await withTransaction(async (t: TransactionTask) => {
+                const result = await withTransaction(async (t: TransactionTask) => {
                     const actingUserId = req.user!.id;
                     const ruleId = parseId(req.params.id, 'sharingRuleId');
                     await sharingRuleService.delete(t, actingUserId, ruleId);
-                    sendSuccess(res, { deleted: true });
+                    return { message: 'Sharing rule deleted successfully' };
                 });
+                sendSuccess(res, result);
             } catch (error) {
                 next(error);
             }

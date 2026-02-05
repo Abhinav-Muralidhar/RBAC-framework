@@ -84,7 +84,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
      */
     router.post('/login', authLimiter, async (req: Request, res: Response): Promise<void> => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
                 const { username, password } = req.body;
                 if (!username || !password) {
                     sendError(res, 400, 'Username and password are required', 'VALIDATION_ERROR');
@@ -126,8 +126,9 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
 
                 const userResponse = await usersService.getById(t, user.id, user.id);
 
-                sendSuccess(res, userResponse, { message: 'Login successful' });
+                return userResponse;
             });
+            sendSuccess(res, result, { message: 'Login successful' });
         } catch (error) {
             sendError(res, 500, 'Login failed', 'INTERNAL_ERROR');
         }
@@ -140,7 +141,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
      */
     router.post('/logout', async (req: Request, res: Response): Promise<void> => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
                 // Try to invalidate session if cookie exists
                 const sessionToken = req.signedCookies['sessionToken'];
                 if (sessionToken) {
@@ -162,10 +163,9 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
                     sameSite: 'strict',
                     signed: true,
                 });
-                sendSuccess(res, { message: 'Logged out successfully' });
             });
+            sendSuccess(res, { message: 'Logged out successfully' });
         } catch (error) {
-
             sendError(res, 500, 'Logout failed', 'INTERNAL_ERROR');
             res.clearCookie('sessionToken', {
                 ...COOKIE_OPTIONS
@@ -177,7 +177,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
 
     // GET /rbac/users/me
     router.get('/users/me', requireAuth, async (req, res) => {
-        await withTransaction(async (t: TransactionTask) => {
+        const result = await withTransaction(async (t: TransactionTask) => {
             const userId = req.user!.id; // from session middleware
 
             const user = await usersService.getById(t, userId, userId);
@@ -208,12 +208,9 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
 
                 permissions[module.code] = modulePermissions;
             }
-
-            sendSuccess(res, {
-                user,
-                permissions,
-            });
+            return { user, permissions };
         });
+        sendSuccess(res, result);
     });
     return router;
 }

@@ -43,18 +43,19 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      */
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const pagination = parsePagination(req.query);
                 const filter = parseFilter(req.query);
                 const result = await profileService.listPaginated(t, actingUserId, filter, pagination);
-                sendSuccess(res, result.data, {
-                    page: result.pagination.page,
-                    limit: result.pagination.limit,
-                    total: result.pagination.total,
-                    totalPages: result.pagination.totalPages
-                });
+                return result;
+            });
+            sendSuccess(res, result.data, {
+                page: result.pagination.page,
+                limit: result.pagination.limit,
+                total: result.pagination.total,
+                totalPages: result.pagination.totalPages
             });
         } catch (error) {
             next(error);
@@ -67,15 +68,16 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      */
     router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
 
                 const profileId = parseId(req.params.id, 'profileId');
                 const profile = await profileService.getById(t, req.user!.id, profileId);
                 if (!profile) {
                     return sendError(res, 404, `Profile not found: ${profileId}`, 'PROFILE_NOT_FOUND');
                 }
-                sendSuccess(res, profile);
+                return profile;
             });
+            sendSuccess(res, result);
         } catch (error) {
             next(error);
         }
@@ -87,12 +89,13 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      */
     router.post('/', requirePermission('SETTINGS', 'create', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const profile = await profileService.create(t, actingUserId, req.body);
-                sendSuccess(res, profile);
+                return profile;
             });
+            sendSuccess(res, result);
         } catch (error) {
             next(error);
         }
@@ -104,13 +107,14 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      */
     router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const profileId = parseId(req.params.id, 'profileId');
                 const profile = await profileService.update(t, actingUserId, profileId, req.body);
-                sendSuccess(res, profile);
+                return profile;
             });
+            sendSuccess(res, result);
         } catch (error) {
             next(error);
         }
@@ -122,13 +126,14 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      */
     router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const profileId = parseId(req.params.id, 'profileId');
                 await profileService.delete(t, actingUserId, profileId);
-                sendSuccess(res, { deleted: true });
+                return { message: 'Profile deleted successfully' };
             });
+            sendSuccess(res, result);
         } catch (error) {
             next(error);
         }

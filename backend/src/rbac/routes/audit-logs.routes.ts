@@ -53,16 +53,23 @@ export function createAuditLogsRouter(db: IDatabase<unknown>, auditLogService: A
      */
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditLogService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
                 const pagination = parsePagination(req.query);
-                const logs = await auditLogService.getAll(t, req.user!.id, parseAuditLogFilters(req.query), pagination);
 
-                sendSuccess(res, logs, {
-                    page: logs.pagination.page,
-                    limit: logs.pagination.limit,
-                    total: logs.pagination.total,
-                    totalPages: logs.pagination.totalPages
-                });
+                const logs = await auditLogService.getAll(
+                    t,
+                    req.user!.id,
+                    parseAuditLogFilters(req.query),
+                    pagination
+                );
+
+                return logs;
+            });
+            sendSuccess(res, result, {
+                page: result.pagination.page,
+                limit: result.pagination.limit,
+                total: result.pagination.total,
+                totalPages: result.pagination.totalPages
             });
         } catch (error) {
             next(error);
@@ -75,11 +82,12 @@ export function createAuditLogsRouter(db: IDatabase<unknown>, auditLogService: A
      */
     router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditLogService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
                 const logId = parseId(req.params.id, 'id');
                 const log = await auditLogService.getById(t, req.user!.id, logId);
-                sendSuccess(res, log);
+                return log;
             });
+            sendSuccess(res, result);
         } catch (error) {
             next(error);
         }

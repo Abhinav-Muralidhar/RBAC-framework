@@ -46,7 +46,7 @@ export function createOtpRouter(db: IDatabase<unknown>, auditService: AuditServi
      */
     router.post('/send', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
 
                 await withTransaction(async (t: TransactionTask) => {
                     const email = req.body.email;
@@ -65,9 +65,10 @@ export function createOtpRouter(db: IDatabase<unknown>, auditService: AuditServi
 
                     // In real implementation, send OTP via email or SMS here
 
-                    sendSuccess(res, { message: 'OTP sent successfully' });
+                    return { message: 'OTP sent successfully' };
                 });
             });
+            sendSuccess(res, result);
         } catch (error: any) {
             next(error);
         }
@@ -80,7 +81,7 @@ export function createOtpRouter(db: IDatabase<unknown>, auditService: AuditServi
      */
     router.post('/verify', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
 
                 const email = req.body.email;
                 const code = req.body.code;
@@ -97,8 +98,9 @@ export function createOtpRouter(db: IDatabase<unknown>, auditService: AuditServi
                     return sendError(res, 400, 'Invalid or expired OTP');
                 }
 
-                sendSuccess(res, { otp: code, message: 'OTP verified successfully' });
+                return { otp: code, message: 'OTP verified successfully' };
             });
+            sendSuccess(res, result);
         } catch (error: any) {
             next(error);
         }
