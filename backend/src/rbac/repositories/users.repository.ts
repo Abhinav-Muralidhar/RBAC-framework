@@ -62,10 +62,11 @@ export interface UserDetail {
 
   // Assigned roles (JOINed)
   roles?: Array<{ id: string; name: string; code: string }>;
-
+  rolesid?: string;
+  rolesname?: string;
   // Assigned groups (JOINed)
   groups?: Array<{ id: string; name: string }>;
-
+  password?: string;
   created_at: Date;
   created_by: string | null;
   created_by_name: string | null;        // JOINed: creator's first_name + ' ' + last_name
@@ -149,14 +150,17 @@ export class UsersRepository implements IUsersRepository {
 
     const user = userRes[0];
     if (!user) return null;
+    const { password, ...safeUser } = user;
 
-    const rolesRes = await task.any<{ id: string; name: string; code: string }>(
-      `SELECT r.id, r.name, r.code
+    const rolesRes = await task.oneOrNone<{ id: string; name: string }>(
+      `SELECT r.id, r.name
        FROM roles r
        INNER JOIN user_roles ur ON r.id = ur.role_id
-       WHERE ur.user_id = $1 AND r.is_active = true`,
+       WHERE ur.user_id = $1 AND r.is_active = true
+       LIMIT 1`,
       [userId]
     );
+
 
     const groupsRes = await task.any<{ id: string; name: string }>(
       `SELECT g.id, g.name
@@ -183,10 +187,11 @@ export class UsersRepository implements IUsersRepository {
     );
 
     return {
-      ...user,
+      ...safeUser,
       reports_to_user_name: user.reports_to_user_name,
       created_by_name: user.created_by_name,
-      roles: rolesRes,
+      rolesid: rolesRes?.id,
+      rolesname: rolesRes?.name,
       groups,
     } as UserDetail;
   }

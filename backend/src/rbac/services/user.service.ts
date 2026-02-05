@@ -6,7 +6,6 @@
  * All mutations are audit logged.
  */
 
-import { IDatabase } from 'pg-promise';
 import { TransactionTask } from '../utils/transaction.utils';
 import { IUsersRepository, UserDetail } from '../repositories/users.repository';
 import { Users, UserStatus } from '../models/users.model';
@@ -82,6 +81,7 @@ export class UserService implements IUserService {
         await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'create',
+            module_code: MODULE_CODE,
             entity_type: 'user',
             entity_id: user.id,
             old_values: null,
@@ -123,12 +123,15 @@ export class UserService implements IUserService {
         };
 
         const updatedUser = await this.userRepository.update(t, updateUserData);
+        const updateUserDetail = await this.userRepository.findByIdWithDetails(t, id);
+        if (!updateUserDetail) throw new Error('User not found');
         await this.userRolesRepository.revokeAllByUser(t, id);
-        await this.userRolesRepository.assign(t, id, data.rolesid as string);
+        await this.userRolesRepository.assign(t, id, updateUserDetail.rolesid as string);
 
         await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'update',
+            module_code: MODULE_CODE,
             entity_type: 'user',
             entity_id: id,
             old_values: { user_id: oldUser.id, username: oldUser.username, primary_email: oldUser.primary_email, last_name: oldUser.last_name, password: '[REDACTED]' },
@@ -148,6 +151,7 @@ export class UserService implements IUserService {
         await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'delete',
+            module_code: MODULE_CODE,
             entity_type: 'user',
             entity_id: id,
             old_values: oldUser ? { user_id: oldUser.id, username: oldUser.username, primary_email: oldUser.primary_email, last_name: oldUser.last_name, password: '[REDACTED]' } : null,
@@ -164,6 +168,7 @@ export class UserService implements IUserService {
         await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'delete',
+            module_code: MODULE_CODE,
             entity_type: 'user',
             entity_id: id,
             old_values: oldUser ? { user_id: oldUser.id, username: oldUser.username, primary_email: oldUser.primary_email, last_name: oldUser.last_name, password: '[REDACTED]' } : null,
