@@ -24,7 +24,6 @@ export function DashboardPage() {
         <div className="dashboard-page">
             <header className="page-header">
                 <h1>Welcome back, {user?.first_name || user?.username}!</h1>
-                <p>Here's an overview of your RBAC system.</p>
             </header>
 
             {hasPermission('SETTINGS', 'read') && (
@@ -49,11 +48,11 @@ export function DashboardPage() {
             <section className="dashboard-info">
                 <div className="info-card">
                     <h3>Your Role</h3>
-                    <p>{user?.roles?.[0]?.name || 'No role assigned'}</p>
+                    <p>{user?.rolesname || 'No role assigned'}</p>
                 </div>
                 <div className="info-card">
                     <h3>Groups</h3>
-                    <p>{user?.groups?.length || 0} group(s)</p>
+                    <p>{user?.groups?.map(g => g.name).join(', ') || 'No group assigned'}</p>
                 </div>
                 <div className="info-card">
                     <h3>Last Login</h3>

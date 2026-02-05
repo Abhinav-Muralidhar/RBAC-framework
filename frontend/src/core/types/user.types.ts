@@ -2,6 +2,12 @@
  * User Types
  */
 
+interface Permission {
+    module: string;
+    action: string;
+    effect: 'allow' | 'deny';
+}
+
 export type UserStatus = 'active' | 'inactive' | 'deleted';
 export type SymbolPlacement = 'before' | 'after';
 export type TrailingZeroHandling = 'show' | 'hide';
@@ -60,10 +66,16 @@ export interface User {
     created_by?: string | null;
     rolesid: string;
     rolesname: string;
+    groups?: Array<{ id: string; name: string }>;
 
     updated_at?: Date | null;
     last_login_at?: Date | null;
     password_changed_at?: Date | null;
+}
+
+export interface GetCurrentUserResponse {
+    user: User;
+    permissions: Record<string, Record<string, 'allow' | 'deny'>>;
 }
 
 

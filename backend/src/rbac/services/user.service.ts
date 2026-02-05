@@ -118,7 +118,7 @@ export class UserService implements IUserService {
             id,
             created_at: oldUser.created_at,
             status: data.status ?? oldUser.status,
-            last_login_at: oldUser.last_login_at ?? null,
+            last_login_at: oldUser.last_login_at ?? cleanData.last_login_at as Date,
             password_changed_at: oldUser.password_changed_at ?? null,
         };
 

@@ -40,17 +40,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setIsLoading(true);
             // Try to get current user using session cookie
             const response = await authApi.getCurrentUser();
-            setUser(response);
+            const currentUser = response?.user ?? null;
+            setUser(currentUser);
 
             // Extract permissions from user's roles/profiles (if available)
             // This is just for UI - server validates all requests
-            // TEMP: Bypass RBAC for frontend testing - assume admin has full SETTINGS permissions
-            const userPermissions: Permission[] = [
-                { module: 'SETTINGS', action: 'read', effect: 'allow' },
-                { module: 'SETTINGS', action: 'create', effect: 'allow' },
-                { module: 'SETTINGS', action: 'update', effect: 'allow' },
-                { module: 'SETTINGS', action: 'delete', effect: 'allow' },
-            ] as Permission[]; // ✅ cast to Permission[] to satisfy TS
+            const userPermissions: Permission[] = [];
+            for (const module in response.permissions) {
+                const actions = response.permissions[module];
+                for (const action in actions) {
+                    userPermissions.push({
+                        module,
+                        action,
+                        effect: actions[action] as 'allow' | 'deny'
+                    });
+                }
+            }
+
 
             setPermissions(userPermissions);
 
