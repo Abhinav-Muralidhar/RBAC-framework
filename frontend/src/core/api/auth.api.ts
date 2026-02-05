@@ -5,7 +5,7 @@
  */
 
 import { apiClient } from './client';
-import type { User } from '../types/user.types';
+import type { GetCurrentUserResponse, User } from '../types/user.types';
 
 /* =====================================================
    TYPES
@@ -50,7 +50,7 @@ export const authApi = {
         return response.data;
     },
 
-    getCurrentUser: async (): Promise<User> => {
+    getCurrentUser: async (): Promise<GetCurrentUserResponse> => {
         const response = await apiClient.get('/auth/users/me');
         return response.data;
     },
