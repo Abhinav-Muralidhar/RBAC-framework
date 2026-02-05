@@ -17,6 +17,7 @@ import { UserRoleRepository } from '../repositories/user_roles.repository';
 import { ProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
 import { parseId, parsePagination } from './_paramUtils';
 import { IDatabase } from 'pg-promise';
+import { TransactionTask, withTransaction } from '../utils/transaction.utils';
 
 /**
  * Standard response envelope
@@ -51,16 +52,18 @@ export function createUsersRouter(db: IDatabase<unknown>, userService: UserServi
      */
     router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const actingUserId = req.user!.id;
-            const pagination = parsePagination(req.query);
-            const filters = parseFilters(req.query);
+            await withTransaction(async (t: TransactionTask) => {
+                const actingUserId = req.user!.id;
+                const pagination = parsePagination(req.query);
+                const filters = parseFilters(req.query);
 
-            const result = await userService.listPaginated(actingUserId, filters, pagination);
-            sendSuccess(res, result.data, {
-                page: result.pagination.page,
-                limit: result.pagination.limit,
-                total: result.pagination.total,
-                totalPages: result.pagination.totalPages
+                const result = await userService.listPaginated(t, actingUserId, filters, pagination);
+                sendSuccess(res, result.data, {
+                    page: result.pagination.page,
+                    limit: result.pagination.limit,
+                    total: result.pagination.total,
+                    totalPages: result.pagination.totalPages
+                });
             });
         } catch (error) {
             next(error);
@@ -73,13 +76,15 @@ export function createUsersRouter(db: IDatabase<unknown>, userService: UserServi
      */
     router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const userId = parseId(req.params.id, 'userId');
+            await withTransaction(async (t: TransactionTask) => {
+                const userId = parseId(req.params.id, 'userId');
 
-            const user = await userService.getById(req.user!.id, userId);
-            if (!user) {
-                return sendError(res, 404, `User not found: ${userId}`, 'USER_NOT_FOUND');
-            }
-            sendSuccess(res, user);
+                const user = await userService.getById(t, req.user!.id, userId);
+                if (!user) {
+                    return sendError(res, 404, `User not found: ${userId}`, 'USER_NOT_FOUND');
+                }
+                sendSuccess(res, user);
+            });
         } catch (error) {
             next(error);
         }
@@ -91,9 +96,11 @@ export function createUsersRouter(db: IDatabase<unknown>, userService: UserServi
      */
     router.post('/', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const actingUserId = req.user!.id;
-            const user = await userService.create(actingUserId, req.body);
-            sendSuccess(res, user);
+            await withTransaction(async (t: TransactionTask) => {
+                const actingUserId = req.user!.id;
+                const user = await userService.create(t, actingUserId, req.body);
+                sendSuccess(res, user);
+            });
         } catch (error) {
             next(error);
         }
@@ -105,10 +112,12 @@ export function createUsersRouter(db: IDatabase<unknown>, userService: UserServi
      */
     router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const actingUserId = req.user!.id;
-            const userId = parseId(req.params.id, 'userId');
-            const user = await userService.update(actingUserId, userId, req.body);
-            sendSuccess(res, user);
+            await withTransaction(async (t: TransactionTask) => {
+                const actingUserId = req.user!.id;
+                const userId = parseId(req.params.id, 'userId');
+                const user = await userService.update(t, actingUserId, userId, req.body);
+                sendSuccess(res, user);
+            });
         } catch (error) {
             next(error);
         }
@@ -120,10 +129,12 @@ export function createUsersRouter(db: IDatabase<unknown>, userService: UserServi
      */
     router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const actingUserId = req.user!.id;
-            const userId = parseId(req.params.id, 'userId');
-            await userService.delete(actingUserId, userId);
-            sendSuccess(res, { deleted: true });
+            await withTransaction(async (t: TransactionTask) => {
+                const actingUserId = req.user!.id;
+                const userId = parseId(req.params.id, 'userId');
+                await userService.delete(t, actingUserId, userId);
+                sendSuccess(res, { deleted: true });
+            });
         } catch (error) {
             next(error);
         }

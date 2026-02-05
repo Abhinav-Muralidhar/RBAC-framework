@@ -16,6 +16,7 @@ import { requirePermission } from '../middleware/requirePermission.middleware';
 import {
     UpdateOrganizationRequestDto
 } from '../dto';
+import { withTransaction, TransactionTask } from '../utils/transaction.utils';
 
 /**
  * Standard response envelope
@@ -55,19 +56,21 @@ export function createOrganizationsRouter(db: IDatabase<unknown>, evaluationServ
      */
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const pagination = parsePagination(req.query);
-            const filters = parseOrganizationFilters(req.query);
+            await withTransaction(async (t: TransactionTask) => {
+                const pagination = parsePagination(req.query);
+                const filters = parseOrganizationFilters(req.query);
 
-            const result = await organizationService.getOrganizations(
-                filters,
-                pagination
-            );
+                const result = await organizationService.getOrganizations(t,
+                    filters,
+                    pagination
+                );
 
-            sendSuccess(res, result.data, {
-                page: result.pagination.page,
-                limit: result.pagination.limit,
-                total: result.pagination.total,
-                totalPages: result.pagination.totalPages
+                sendSuccess(res, result.data, {
+                    page: result.pagination.page,
+                    limit: result.pagination.limit,
+                    total: result.pagination.total,
+                    totalPages: result.pagination.totalPages
+                });
             });
         } catch (error) {
             next(error);
@@ -80,9 +83,11 @@ export function createOrganizationsRouter(db: IDatabase<unknown>, evaluationServ
      */
     router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const id = parseId(req.params.id, 'id');
-            const organization = await organizationService.getOrganization(id);
-            sendSuccess(res, organization);
+            await withTransaction(async (t: TransactionTask) => {
+                const id = parseId(req.params.id, 'id');
+                const organization = await organizationService.getOrganization(t, id);
+                sendSuccess(res, organization);
+            });
         } catch (error) {
             next(error);
         }
@@ -112,15 +117,17 @@ export function createOrganizationsRouter(db: IDatabase<unknown>, evaluationServ
      */
     router.put('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const id = parseId(req.params.id, 'id');
-            const payload: UpdateOrganizationRequestDto = req.body;
+            await withTransaction(async (t: TransactionTask) => {
+                const id = parseId(req.params.id, 'id');
+                const payload: UpdateOrganizationRequestDto = req.body;
 
-            const organization = await organizationService.updateOrganization(
-                id,
-                payload
-            );
+                const organization = await organizationService.updateOrganization(
+                    t, id,
+                    payload
+                );
 
-            sendSuccess(res, organization);
+                sendSuccess(res, organization);
+            });
         } catch (error) {
             next(error);
         }

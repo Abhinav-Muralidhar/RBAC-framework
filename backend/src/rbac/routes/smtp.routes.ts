@@ -15,6 +15,7 @@ import { SmtpConfigCreate } from '../dto/smtp_config.dto';
 import { PermissionsRepository } from '../repositories/permissions.repository';
 import { EvaluationService } from '../services/evaluation.service';
 import { requirePermission } from '../middleware/requirePermission.middleware';
+import { TransactionTask, withTransaction } from '../utils/transaction.utils';
 
 /**
  * Standard response envelope
@@ -45,14 +46,16 @@ export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditServ
     // --- List all SMTP configs ---
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const filters = parseFilters(req.query);
-            const pagination = parsePagination(req.query);
-            const result = await smtpService.listAll(filters, pagination);
-            sendSuccess(res, result.data, {
-                page: result.pagination.page,
-                limit: result.pagination.limit,
-                total: result.pagination.total,
-                totalPages: result.pagination.totalPages
+            await withTransaction(async (t: TransactionTask) => {
+                const filters = parseFilters(req.query);
+                const pagination = parsePagination(req.query);
+                const result = await smtpService.listAll(t, filters, pagination);
+                sendSuccess(res, result.data, {
+                    page: result.pagination.page,
+                    limit: result.pagination.limit,
+                    total: result.pagination.total,
+                    totalPages: result.pagination.totalPages
+                });
             });
         } catch (error) {
             next(error);
@@ -62,9 +65,11 @@ export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditServ
     // --- Get SMTP config by ID ---
     router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const id = getRequiredParam(req.params, 'id');
-            const config = await smtpService.getById(id);
-            sendSuccess(res, config);
+            await withTransaction(async (t: TransactionTask) => {
+                const id = getRequiredParam(req.params, 'id');
+                const config = await smtpService.getById(t, id);
+                sendSuccess(res, config);
+            });
         } catch (error) {
             next(error);
         }
@@ -73,10 +78,12 @@ export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditServ
     // --- Create a new SMTP config ---
     router.post('/', requirePermission('SETTINGS', 'create', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const data = req.body as SmtpConfigCreate;
-            const actingUserId = req.user!.id;
-            const config = await smtpService.create(data, actingUserId);
-            sendSuccess(res, config);
+            await withTransaction(async (t: TransactionTask) => {
+                const data = req.body as SmtpConfigCreate;
+                const actingUserId = req.user!.id;
+                const config = await smtpService.create(t, data, actingUserId);
+                sendSuccess(res, config);
+            });
         } catch (error) {
             next(error);
         }
@@ -85,11 +92,13 @@ export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditServ
     // --- Update an existing SMTP config ---
     router.put('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const id = getRequiredParam(req.params, 'id');
-            const data = req.body;
-            const actingUserId = req.user!.id;
-            const updated = await smtpService.update(id, data, actingUserId);
-            sendSuccess(res, updated);
+            await withTransaction(async (t: TransactionTask) => {
+                const id = getRequiredParam(req.params, 'id');
+                const data = req.body;
+                const actingUserId = req.user!.id;
+                const updated = await smtpService.update(t, id, data, actingUserId);
+                sendSuccess(res, updated);
+            });
         } catch (error) {
             next(error);
         }
@@ -98,10 +107,12 @@ export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditServ
     // Delete an SMTP config
     router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const id = getRequiredParam(req.params, 'id');
-            const actingUserId = req.user!.id;
-            await smtpService.delete(id, actingUserId);
-            sendSuccess(res, { message: 'Deleted successfully' });
+            await withTransaction(async (t: TransactionTask) => {
+                const id = getRequiredParam(req.params, 'id');
+                const actingUserId = req.user!.id;
+                await smtpService.delete(t, id, actingUserId);
+                sendSuccess(res, { message: 'Deleted successfully' });
+            });
         } catch (error) {
             next(error);
         }

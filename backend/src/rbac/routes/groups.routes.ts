@@ -12,6 +12,7 @@ import { AuditService, IAuditService } from '../services/audit.service';
 import { parseId, parsePagination } from './_paramUtils';
 import { IDatabase } from 'pg-promise';
 import { requirePermission } from '../middleware/requirePermission.middleware';
+import { TransactionTask, withTransaction } from '../utils/transaction.utils';
 
 /**
  * Standard response envelope
@@ -44,16 +45,18 @@ export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: Ev
      */
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const actingUserId = req.user!.id;
-            const pagination = parsePagination(req.query);
-            const filter = parseFilter(req.query);
+            await withTransaction(async (t: TransactionTask) => {
+                const actingUserId = req.user!.id;
+                const pagination = parsePagination(req.query);
+                const filter = parseFilter(req.query);
 
-            const result = await groupService.listAll(actingUserId, filter, pagination);
-            sendSuccess(res, result.data, {
-                page: result.pagination.page,
-                limit: result.pagination.limit,
-                total: result.pagination.total,
-                totalPages: result.pagination.totalPages
+                const result = await groupService.listAll(t, actingUserId, filter, pagination);
+                sendSuccess(res, result.data, {
+                    page: result.pagination.page,
+                    limit: result.pagination.limit,
+                    total: result.pagination.total,
+                    totalPages: result.pagination.totalPages
+                });
             });
         } catch (error) {
             next(error);
@@ -66,12 +69,14 @@ export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: Ev
      */
     router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const groupId = parseId(req.params.id, 'groupId');
-            const group = await groupService.getById(req.user!.id, groupId);
-            if (!group) {
-                return sendError(res, 404, `Group not found: ${groupId}`, 'GROUP_NOT_FOUND');
-            }
-            sendSuccess(res, group);
+            await withTransaction(async (t: TransactionTask) => {
+                const groupId = parseId(req.params.id, 'groupId');
+                const group = await groupService.getById(t, req.user!.id, groupId);
+                if (!group) {
+                    return sendError(res, 404, `Group not found: ${groupId}`, 'GROUP_NOT_FOUND');
+                }
+                sendSuccess(res, group);
+            });
         } catch (error) {
             next(error);
         }
@@ -83,9 +88,11 @@ export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: Ev
      */
     router.post('/', requirePermission('SETTINGS', 'create', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const actingUserId = req.user!.id;
-            const group = await groupService.create(actingUserId, req.body);
-            sendSuccess(res, group);
+            await withTransaction(async (t: TransactionTask) => {
+                const actingUserId = req.user!.id;
+                const group = await groupService.create(t, actingUserId, req.body);
+                sendSuccess(res, group);
+            });
         } catch (error) {
             next(error);
         }
@@ -97,10 +104,12 @@ export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: Ev
      */
     router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const actingUserId = req.user!.id;
-            const groupId = parseId(req.params.id, 'groupId');
-            const group = await groupService.update(actingUserId, groupId, req.body);
-            sendSuccess(res, group);
+            await withTransaction(async (t: TransactionTask) => {
+                const actingUserId = req.user!.id;
+                const groupId = parseId(req.params.id, 'groupId');
+                const group = await groupService.update(t, actingUserId, groupId, req.body);
+                sendSuccess(res, group);
+            });
         } catch (error) {
             next(error);
         }
@@ -112,10 +121,12 @@ export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: Ev
      */
     router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const actingUserId = req.user!.id;
-            const groupId = parseId(req.params.id, 'groupId');
-            await groupService.delete(actingUserId, groupId);
-            sendSuccess(res, { deleted: true });
+            await withTransaction(async (t: TransactionTask) => {
+                const actingUserId = req.user!.id;
+                const groupId = parseId(req.params.id, 'groupId');
+                await groupService.delete(t, actingUserId, groupId);
+                sendSuccess(res, { deleted: true });
+            });
         } catch (error) {
             next(error);
         }

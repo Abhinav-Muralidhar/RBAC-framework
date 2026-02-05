@@ -29,7 +29,7 @@ export interface IAuthSessionService {
      * Get session by ID
      * @throws SessionNotFoundError
      */
-    getById(t: TransactionTask, sessionId: string): Promise<AuthSessions>;
+    getById(t: TransactionTask | undefined, sessionId: string): Promise<AuthSessions>;
 
     /**
      * List all active sessions for a user with pagination
@@ -65,7 +65,7 @@ export interface IAuthSessionService {
      * Update session (e.g., set logout_at)
      * @throws SessionNotFoundError
      */
-    update(t: TransactionTask, sessionId: string, data: Partial<AuthSessions>): Promise<AuthSessions>;
+    update(t: TransactionTask | undefined, sessionId: string, data: Partial<AuthSessions>): Promise<AuthSessions>;
 
     /**
      * Logout session (sets logout_at)
@@ -94,14 +94,14 @@ export interface IAuthSessionService {
     /**
      * Validate session is active and not expired
      */
-    isValid(t: TransactionTask, sessionId: string): Promise<boolean>;
+    isValid(t: TransactionTask | undefined, sessionId: string): Promise<boolean>;
 
     /**
      * Resolve session from session_token (Global Lookup)
      * Used by Authentication Middleware
      * @throws RBACInternalError (Session Not Found or Invalid)
      */
-    resolveSession(t: TransactionTask, sessionToken: string): Promise<AuthSessions>;
+    resolveSession(t: TransactionTask | undefined, sessionToken: string): Promise<AuthSessions>;
 
     findAll(t: TransactionTask, pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessions>>;
 }
@@ -116,7 +116,7 @@ export class AuthSessionService implements IAuthSessionService {
         private readonly evaluationService: IEvaluationService,
     ) { }
 
-    async getById(t: TransactionTask, sessionId: string): Promise<AuthSessions> {
+    async getById(t: TransactionTask | undefined, sessionId: string): Promise<AuthSessions> {
         const session = await this.authSessionsRepository.findById(t, sessionId);
         if (!session) {
             throw new SessionNotFoundError(sessionId);
@@ -191,7 +191,7 @@ export class AuthSessionService implements IAuthSessionService {
         return session;
     }
 
-    async update(t: TransactionTask, sessionId: string, data: Partial<AuthSessions>): Promise<AuthSessions> {
+    async update(t: TransactionTask | undefined, sessionId: string, data: Partial<AuthSessions>): Promise<AuthSessions> {
         // Verify session exists
         const existing = await this.getById(t, sessionId);
         const updated: AuthSessions = {
@@ -282,7 +282,7 @@ export class AuthSessionService implements IAuthSessionService {
     /**
      * Validate session is active and not expired
      */
-    async isValid(t: TransactionTask, sessionId: string): Promise<boolean> {
+    async isValid(t: TransactionTask | undefined, sessionId: string): Promise<boolean> {
         try {
             const session = await this.authSessionsRepository.findById(t, sessionId);
             if (!session) return false;
@@ -299,7 +299,7 @@ export class AuthSessionService implements IAuthSessionService {
      * Used by authentication middleware.
      * @throws RBACInternalError if session not found or invalid
      */
-    async resolveSession(t: TransactionTask, sessionToken: string): Promise<AuthSessions> {
+    async resolveSession(t: TransactionTask | undefined, sessionToken: string): Promise<AuthSessions> {
         const session = await this.authSessionsRepository.findBySessionToken(t, sessionToken);
 
         if (!session) {
