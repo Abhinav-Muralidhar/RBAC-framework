@@ -74,12 +74,18 @@ export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: Ev
                 const groupId = parseId(req.params.id, 'groupId');
                 const group = await groupService.getById(t, req.user!.id, groupId);
                 if (!group) {
-                    return sendError(res, 404, `Group not found: ${groupId}`, 'GROUP_NOT_FOUND');
+                    const error = new Error(`Group not found: ${groupId}`);
+                    (error as any).code = 'GROUP_NOT_FOUND';
+                    (error as any).status = 404;
+                    throw error;
                 }
                 return group;
             });
             sendSuccess(res, result);
         } catch (error) {
+            if (error.code === 'GROUP_NOT_FOUND') {
+                return sendError(res, 404, error.message, 'GROUP_NOT_FOUND');
+            }
             next(error);
         }
     });

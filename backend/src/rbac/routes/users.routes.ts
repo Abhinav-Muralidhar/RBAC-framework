@@ -74,7 +74,9 @@ export function createUsersRouter(db: IDatabase<unknown>, userService: UserServi
 
                 const user = await userService.getById(t, req.user!.id, userId);
                 if (!user) {
-                    return sendError(res, 404, `User not found: ${userId}`, 'USER_NOT_FOUND');
+                    const err = new Error('User not found');
+                    (err as any).status = 404;
+                    throw err;
                 }
                 return user;
             });

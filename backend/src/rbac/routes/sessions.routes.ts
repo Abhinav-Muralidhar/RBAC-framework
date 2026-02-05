@@ -52,7 +52,9 @@ export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAudi
             const result = await withTransaction(async (t: TransactionTask) => {
                 const sessionId = req.user?.sessionId;
                 if (!sessionId) {
-                    throw new Error('Session ID not found');
+                    const err = new Error('Session ID not found');
+                    (err as any).status = 404;
+                    throw err;
                 }
                 const session = await authSessionService.resolveSession(t, sessionId);
                 const s = {

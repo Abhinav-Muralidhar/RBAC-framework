@@ -73,7 +73,9 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
                 const profileId = parseId(req.params.id, 'profileId');
                 const profile = await profileService.getById(t, req.user!.id, profileId);
                 if (!profile) {
-                    return sendError(res, 404, `Profile not found: ${profileId}`, 'PROFILE_NOT_FOUND');
+                    const err = new Error('Profile not found');
+                    (err as any).status = 404;
+                    throw err;
                 }
                 return profile;
             });

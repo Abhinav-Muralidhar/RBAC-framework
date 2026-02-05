@@ -72,7 +72,7 @@ export function createAuditLogsRouter(db: IDatabase<unknown>, auditLogService: A
                 totalPages: result.pagination.totalPages
             });
         } catch (error) {
-            next(error);
+            sendError(res, 500, 'Audit log retrieval failed', 'INTERNAL_ERROR');
         }
     });
 
@@ -89,7 +89,7 @@ export function createAuditLogsRouter(db: IDatabase<unknown>, auditLogService: A
             });
             sendSuccess(res, result);
         } catch (error) {
-            next(error);
+            sendError(res, 500, 'Audit log retrieval failed', 'INTERNAL_ERROR');
         }
     });
 

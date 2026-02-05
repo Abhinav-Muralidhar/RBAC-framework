@@ -76,7 +76,9 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
                 const roleId = parseId(req.params.id, 'roleId');
                 const role = await roleService.getById(t, req.user!.id, roleId);
                 if (!role) {
-                    return sendError(res, 404, `Role not found: ${roleId}`, 'ROLE_NOT_FOUND');
+                    const err = new Error('Role not found');
+                    (err as any).status = 404;
+                    throw err;
                 }
                 return role;
             });
