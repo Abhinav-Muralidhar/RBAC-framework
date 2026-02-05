@@ -115,6 +115,8 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
                     user_agent: req.headers['user-agent'] || 'unknown'
                 });
                 console.log('LOGIN TOKEN:', session.session_token);
+                //CLEAR ANY PERVIOUS COOKIE
+                res.clearCookie('sessionToken', COOKIE_OPTIONS);
 
                 // Set signed cookie with session token
                 res.cookie('sessionToken', session.session_token, COOKIE_OPTIONS);

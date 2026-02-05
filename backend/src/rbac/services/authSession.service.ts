@@ -301,6 +301,7 @@ export class AuthSessionService implements IAuthSessionService {
      */
     async resolveSession(t: TransactionTask | undefined, sessionToken: string): Promise<AuthSessions> {
         const session = await this.authSessionsRepository.findBySessionToken(t, sessionToken);
+        console.log('LOOKUP TOKEN:', sessionToken);
 
         if (!session) {
             throw new RBACInternalError(`Session not found for token`);

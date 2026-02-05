@@ -65,4 +65,7 @@ app.listen(PORT, () => {
   console.log(`🔒 Signed cookies enabled`);
   console.log(`⚡ Rate limiting active: ${process.env.RATE_LIMIT_API_MAX || 100} req/min`);
   console.log(`-----------------------------------------`);
+  console.log('SERVER PID:', process.pid);
+  console.log('DB URL:', process.env.DATABASE_URL);
+
 });
