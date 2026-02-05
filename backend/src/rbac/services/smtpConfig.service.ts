@@ -185,9 +185,9 @@ export class SmtpConfigService implements ISmtpConfigService {
             module_code: MODULE_CODE,
             entity_type: 'smtp_config',
             entity_id: configId,
-            old_values: { ...existing } as Record<string, unknown>,
-            new_values: { is_deleted: true } as Record<string, unknown>,
+            old_values: { smtp_config_id: existing.id, host: existing.host, port: existing.port, encryption: existing.encryption, from_email: existing.from_email, reply_to_email: existing.reply_to_email, is_active: existing.is_active } as Record<string, unknown>,
+            new_values: { smtp_config_id: existing.id, host: existing.host, port: existing.port, encryption: existing.encryption, from_email: existing.from_email, reply_to_email: existing.reply_to_email, is_active: false } as Record<string, unknown>,
             status: 'success'
-        }).catch(console.error);
+        })
     }
 }
