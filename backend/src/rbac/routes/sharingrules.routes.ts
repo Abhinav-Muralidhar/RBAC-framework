@@ -14,6 +14,7 @@ import { EvaluationService } from '../services/evaluation.service';
 import { AuditService } from '../services/audit.service';
 import { requirePermission } from '../middleware/requirePermission.middleware';
 import { parseId, parsePagination } from './_paramUtils';
+import { TransactionTask, withTransaction } from '../utils/transaction.utils';
 
 /* -------------------------------------------------------------------------- */
 /* Response helpers                                                            */
@@ -54,21 +55,23 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
         requirePermission('SETTINGS', 'read', evaluationService, auditService),
         async (req: Request, res: Response, next: NextFunction) => {
             try {
-                const actingUserId = req.user!.id;
-                const pagination = parsePagination(req.query);
-                const filters = parseFilter(req.query);
+                await withTransaction(async (t: TransactionTask) => {
+                    const actingUserId = req.user!.id;
+                    const pagination = parsePagination(req.query);
+                    const filters = parseFilter(req.query);
 
-                const result = await sharingRuleService.listAll(
-                    actingUserId,
-                    filters,
-                    pagination
-                );
+                    const result = await sharingRuleService.listAll(t,
+                        actingUserId,
+                        filters,
+                        pagination
+                    );
 
-                sendSuccess(res, result.data, {
-                    page: result.pagination.page,
-                    limit: result.pagination.limit,
-                    total: result.pagination.total,
-                    totalPages: result.pagination.totalPages
+                    sendSuccess(res, result.data, {
+                        page: result.pagination.page,
+                        limit: result.pagination.limit,
+                        total: result.pagination.total,
+                        totalPages: result.pagination.totalPages
+                    });
                 });
             } catch (error) {
                 next(error);
@@ -84,9 +87,11 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
         requirePermission('SETTINGS', 'read', evaluationService, auditService),
         async (req: Request, res: Response, next: NextFunction) => {
             try {
-                const ruleId = parseId(req.params.id, 'sharingRuleId');
-                const rule = await sharingRuleService.getById(req.user!.id, ruleId);
-                sendSuccess(res, rule);
+                await withTransaction(async (t: TransactionTask) => {
+                    const ruleId = parseId(req.params.id, 'sharingRuleId');
+                    const rule = await sharingRuleService.getById(t, req.user!.id, ruleId);
+                    sendSuccess(res, rule);
+                });
             } catch (error) {
                 next(error);
             }
@@ -102,16 +107,18 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
         requirePermission('SETTINGS', 'update', evaluationService, auditService),
         async (req: Request, res: Response, next: NextFunction) => {
             try {
-                const actingUserId = req.user!.id;
-                const ruleId = parseId(req.params.id, 'sharingRuleId');
+                await withTransaction(async (t: TransactionTask) => {
+                    const actingUserId = req.user!.id;
+                    const ruleId = parseId(req.params.id, 'sharingRuleId');
 
-                const updated = await sharingRuleService.update(
-                    actingUserId,
-                    ruleId,
-                    req.body
-                );
+                    const updated = await sharingRuleService.update(t,
+                        actingUserId,
+                        ruleId,
+                        req.body
+                    );
 
-                sendSuccess(res, updated);
+                    sendSuccess(res, updated);
+                });
             } catch (error) {
                 next(error);
             }
@@ -126,11 +133,12 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
         requirePermission('SETTINGS', 'delete', evaluationService, auditService),
         async (req: Request, res: Response, next: NextFunction) => {
             try {
-                const actingUserId = req.user!.id;
-                const ruleId = parseId(req.params.id, 'sharingRuleId');
-
-                await sharingRuleService.delete(actingUserId, ruleId);
-                sendSuccess(res, { deleted: true });
+                await withTransaction(async (t: TransactionTask) => {
+                    const actingUserId = req.user!.id;
+                    const ruleId = parseId(req.params.id, 'sharingRuleId');
+                    await sharingRuleService.delete(t, actingUserId, ruleId);
+                    sendSuccess(res, { deleted: true });
+                });
             } catch (error) {
                 next(error);
             }

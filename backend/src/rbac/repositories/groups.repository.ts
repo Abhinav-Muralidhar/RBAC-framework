@@ -17,6 +17,7 @@ export interface IGroupRepository {
   findById(t: TransactionTask, id: string): Promise<Groups | null>;
   findByIdWithDetails(t: TransactionTask, id: string): Promise<GroupResponse | null>;
   findByName(t: TransactionTask, name: string, isActive?: boolean): Promise<PaginatedResult<Groups>>;
+  findByCode(t: TransactionTask, code: string, isActive?: boolean): Promise<boolean>;
   findAllPaginated(t: TransactionTask, filters?: { isActive?: boolean; name?: string, code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
 }
 
@@ -50,6 +51,15 @@ export class GroupRepository implements IGroupRepository {
       t
     );
     return rows[0] ?? null;
+  }
+
+  async findByCode(t: TransactionTask, code: string, isActive = true): Promise<boolean> {
+    const rows = await this.query<Groups>(
+      `SELECT * FROM ${this.tableName} WHERE code = $1 AND is_active = $2`,
+      [code, isActive],
+      t
+    );
+    return rows.length > 0;
   }
 
 

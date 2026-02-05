@@ -14,6 +14,7 @@ import { IDatabase } from 'pg-promise';
 import { EvaluationService } from '../services/evaluation.service';
 import { AuditLogListFilterDto } from '../dto/audit_log.dto';
 import { requirePermission } from '../middleware/requirePermission.middleware';
+import { withTransaction, TransactionTask } from '../utils/transaction.utils';
 
 /**
  * Standard response envelope
@@ -52,15 +53,16 @@ export function createAuditLogsRouter(db: IDatabase<unknown>, auditLogService: A
      */
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditLogService), async (req: Request, res: Response, next: NextFunction) => {
         try {
+            await withTransaction(async (t: TransactionTask) => {
+                const pagination = parsePagination(req.query);
+                const logs = await auditLogService.getAll(t, req.user!.id, parseAuditLogFilters(req.query), pagination);
 
-            const pagination = parsePagination(req.query);
-            const logs = await auditLogService.getAll(req.user!.id, parseAuditLogFilters(req.query), pagination);
-
-            sendSuccess(res, logs, {
-                page: logs.pagination.page,
-                limit: logs.pagination.limit,
-                total: logs.pagination.total,
-                totalPages: logs.pagination.totalPages
+                sendSuccess(res, logs, {
+                    page: logs.pagination.page,
+                    limit: logs.pagination.limit,
+                    total: logs.pagination.total,
+                    totalPages: logs.pagination.totalPages
+                });
             });
         } catch (error) {
             next(error);
@@ -73,9 +75,11 @@ export function createAuditLogsRouter(db: IDatabase<unknown>, auditLogService: A
      */
     router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditLogService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const logId = parseId(req.params.id, 'id');
-            const log = await auditLogService.getById(req.user!.id, logId);
-            sendSuccess(res, log);
+            await withTransaction(async (t: TransactionTask) => {
+                const logId = parseId(req.params.id, 'id');
+                const log = await auditLogService.getById(t, req.user!.id, logId);
+                sendSuccess(res, log);
+            });
         } catch (error) {
             next(error);
         }

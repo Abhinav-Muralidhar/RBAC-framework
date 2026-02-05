@@ -7,7 +7,7 @@
  */
 
 import { IDatabase } from 'pg-promise';
-import { TransactionTask, withTransaction } from '../utils/transaction.utils';
+import { TransactionTask } from '../utils/transaction.utils';
 import { IUsersRepository, UserDetail } from '../repositories/users.repository';
 import { Users, UserStatus } from '../models/users.model';
 import { hashPassword, validatePassword } from '../utils/crypto.utils';
@@ -22,13 +22,13 @@ import { IUserRoleRepository } from '../repositories/user_roles.repository';
 const MODULE_CODE = 'SETTINGS';
 
 export interface IUserService {
-    listPaginated(actingUserId: string, filters?: UserListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Users>>;
-    create(actingUserId: string, data: CreateUserRequestDto): Promise<Users>;
-    update(actingUserId: string, id: string, data: UpdateUserRequestDto): Promise<Users>;
-    delete(actingUserId: string, id: string): Promise<void>;
-    getById(actingUserId: string, id: string): Promise<UserDetail | null>;
-    findByUsername(username: string): Promise<Users | null>;
-    findByEmail(email: string): Promise<Users | null>;
+    listPaginated(t: TransactionTask, actingUserId: string, filters?: UserListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Users>>;
+    create(t: TransactionTask, actingUserId: string, data: CreateUserRequestDto): Promise<Users>;
+    update(t: TransactionTask, actingUserId: string, id: string, data: UpdateUserRequestDto): Promise<Users>;
+    delete(t: TransactionTask, actingUserId: string, id: string): Promise<void>;
+    getById(t: TransactionTask, actingUserId: string, id: string): Promise<UserDetail | null>;
+    findByUsername(t: TransactionTask, username: string): Promise<Users | null>;
+    findByEmail(t: TransactionTask, email: string): Promise<Users | null>;
 }
 
 export class UserService implements IUserService {
@@ -39,152 +39,136 @@ export class UserService implements IUserService {
         private auditService: IAuditService,
     ) { }
 
-    async findByUsername(username: string): Promise<Users | null> {
-        return withTransaction(async (t: TransactionTask) => {
-            return this.userRepository.findByUsername(t, username);
-        });
+    async findByUsername(t: TransactionTask, username: string): Promise<Users | null> {
+        return this.userRepository.findByUsername(t, username);
     }
 
-    async findByEmail(email: string): Promise<Users | null> {
-        return withTransaction(async (t: TransactionTask) => {
-            return this.userRepository.findByEmail(t, email);
-        });
+    async findByEmail(t: TransactionTask, email: string): Promise<Users | null> {
+        return this.userRepository.findByEmail(t, email);
     }
 
     async listPaginated(
+        t: TransactionTask,
         actingUserId: string,
         filters?: UserListFilterDto,
         pagination?: Partial<PaginationParams>
     ): Promise<PaginatedResult<Users>> {
 
-        return withTransaction(async (t: TransactionTask) => {
-            return this.userRepository.findAllPaginated(t, filters, pagination);
-        });
+        return this.userRepository.findAllPaginated(t, filters, pagination);
     }
 
-    async getById(actingUserId: string, id: string): Promise<UserDetail | null> {
-
-        return withTransaction(async (t: TransactionTask) => {
-            return this.userRepository.findByIdWithDetails(t, id);
-        });
+    async getById(t: TransactionTask, actingUserId: string, id: string): Promise<UserDetail | null> {
+        return this.userRepository.findByIdWithDetails(t, id);
     }
 
-    async create(actingUserId: string, data: CreateUserRequestDto): Promise<Users> {
-        return withTransaction(async (t: TransactionTask) => {
-            if (data.password) {
-                validatePassword(data.password);
-                data.password = await hashPassword(data.password);
-            }
+    async create(t: TransactionTask, actingUserId: string, data: CreateUserRequestDto): Promise<Users> {
+        if (data.password) {
+            validatePassword(data.password);
+            data.password = await hashPassword(data.password);
+        }
 
-            const userData: CreateUserInput = {
-                ...data,
-                username: data.username,
-                password: data.password,
-                primary_email: data.primary_email,
-                last_name: data.last_name,
+        const userData: CreateUserInput = {
+            ...data,
+            username: data.username,
+            password: data.password,
+            primary_email: data.primary_email,
+            last_name: data.last_name,
 
-            };
+        };
 
-            const user = await this.userRepository.create(t, userData);
-            await this.userRolesRepository.assign(t, user.id, data.rolesid as string);
+        const user = await this.userRepository.create(t, userData);
+        await this.userRolesRepository.assign(t, user.id, data.rolesid as string);
 
-            this.auditService.log(t, {
-                user_id: actingUserId,
-                action: 'create',
-                entity_type: 'user',
-                entity_id: user.id,
-                old_values: null,
-                new_values: { ...data, password: '[REDACTED]' },
-                status: 'success'
-            }).catch(console.error);
+        this.auditService.log(t, {
+            user_id: actingUserId,
+            action: 'create',
+            entity_type: 'user',
+            entity_id: user.id,
+            old_values: null,
+            new_values: { ...data, password: '[REDACTED]' },
+            status: 'success'
+        }).catch(console.error);
 
-            return user;
-        });
+        return user;
     }
 
     async update(
+        t: TransactionTask,
         actingUserId: string,
         id: string,
         data: UpdateUserRequestDto
     ): Promise<Users> {
+        const oldUser = await this.userRepository.findById(t, id);
+        if (!oldUser) throw new Error('User not found');
 
-        return withTransaction(async (t) => {
-            const oldUser = await this.userRepository.findById(t, id);
-            if (!oldUser) throw new Error('User not found');
+        const userData: any = { ...data };
 
-            const userData: any = { ...data };
+        if (userData.password) {
+            validatePassword(userData.password);
+            userData.password = await hashPassword(userData.password);
+        }
 
-            if (userData.password) {
-                validatePassword(userData.password);
-                userData.password = await hashPassword(userData.password);
-            }
+        const cleanData = Object.fromEntries(
+            Object.entries(userData).filter(([_, v]) => v !== undefined)
+        );
 
-            const cleanData = Object.fromEntries(
-                Object.entries(userData).filter(([_, v]) => v !== undefined)
-            );
+        const updateUserData: Users = {
+            ...oldUser,
+            ...cleanData,
+            id,
+            created_at: oldUser.created_at,
+            status: data.status ?? oldUser.status,
+            last_login_at: oldUser.last_login_at ?? null,
+            password_changed_at: oldUser.password_changed_at ?? null,
+        };
 
-            const updateUserData: Users = {
-                ...oldUser,
-                ...cleanData,
-                id,
-                created_at: oldUser.created_at,
-                status: data.status ?? oldUser.status,
-                last_login_at: oldUser.last_login_at ?? null,
-                password_changed_at: oldUser.password_changed_at ?? null,
-            };
+        const updatedUser = await this.userRepository.update(t, updateUserData);
+        await this.userRolesRepository.revokeAllByUser(t, id);
+        await this.userRolesRepository.assign(t, id, data.rolesid as string);
 
-            const updatedUser = await this.userRepository.update(t, updateUserData);
-            await this.userRolesRepository.revokeAllByUser(t, id);
-            await this.userRolesRepository.assign(t, id, data.rolesid as string);
+        this.auditService.log(t, {
+            user_id: actingUserId,
+            action: 'update',
+            entity_type: 'user',
+            entity_id: id,
+            old_values: { ...oldUser, password: '[REDACTED]' },
+            new_values: { ...cleanData, password: cleanData.password ? '[REDACTED]' : undefined },
+            status: 'success'
+        }).catch(console.error);
 
-            this.auditService.log(t, {
-                user_id: actingUserId,
-                action: 'update',
-                entity_type: 'user',
-                entity_id: id,
-                old_values: { ...oldUser, password: '[REDACTED]' },
-                new_values: { ...cleanData, password: cleanData.password ? '[REDACTED]' : undefined },
-                status: 'success'
-            }).catch(console.error);
-
-            return updatedUser;
-        });
+        return updatedUser;
     }
 
 
-    async delete(actingUserId: string, id: string): Promise<void> {
-        return withTransaction(async (t: TransactionTask) => {
-            const oldUser = await this.userRepository.findById(t, id);
+    async delete(t: TransactionTask, actingUserId: string, id: string): Promise<void> {
+        const oldUser = await this.userRepository.findById(t, id);
 
-            await this.userRepository.delete(t, id);
+        await this.userRepository.delete(t, id);
 
-            this.auditService.log(t, {
-                user_id: actingUserId,
-                action: 'delete',
-                entity_type: 'user',
-                entity_id: id,
-                old_values: oldUser ? { ...oldUser, password: '[REDACTED]' } : null,
-                new_values: { status: 'deleted' },
-                status: 'success'
-            }).catch(console.error);
-        });
+        this.auditService.log(t, {
+            user_id: actingUserId,
+            action: 'delete',
+            entity_type: 'user',
+            entity_id: id,
+            old_values: oldUser ? { ...oldUser, password: '[REDACTED]' } : null,
+            new_values: { status: 'deleted' },
+            status: 'success'
+        }).catch(console.error);
     }
 
-    async deactivate(actingUserId: string, id: string): Promise<void> {
-        return withTransaction(async (t: TransactionTask) => {
-            const oldUser = await this.userRepository.findById(t, id);
+    async deactivate(t: TransactionTask, actingUserId: string, id: string): Promise<void> {
+        const oldUser = await this.userRepository.findById(t, id);
 
-            await this.userRepository.deactivate(t, id);
+        await this.userRepository.deactivate(t, id);
 
-            this.auditService.log(t, {
-                user_id: actingUserId,
-                action: 'delete',
-                entity_type: 'user',
-                entity_id: id,
-                old_values: oldUser ? { ...oldUser, password: '[REDACTED]' } : null,
-                new_values: { status: 'inactive' },
-                status: 'success'
-            }).catch(console.error);
-        });
+        this.auditService.log(t, {
+            user_id: actingUserId,
+            action: 'delete',
+            entity_type: 'user',
+            entity_id: id,
+            old_values: oldUser ? { ...oldUser, password: '[REDACTED]' } : null,
+            new_values: { status: 'inactive' },
+            status: 'success'
+        }).catch(console.error);
     }
 }

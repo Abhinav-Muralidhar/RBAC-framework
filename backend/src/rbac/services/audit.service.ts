@@ -10,8 +10,7 @@ import { AuditLogWithDetailsRow, IAuditLogsRepository } from '../repositories/au
 import { PaginatedResult, PaginationParams } from '../utils/pagination.utils';
 import { AuditLogFilters } from '../types/repository.types';
 import { IEvaluationService } from './evaluation.service';
-import { TransactionTask, withTransaction } from '../utils/transaction.utils'; // adjust path if needed
-import { IDatabase } from 'pg-promise';
+import { TransactionTask } from '../utils/transaction.utils'; // adjust path if needed
 import { IModuleRepository } from '../repositories/modules.repository';
 const MODULE_CODE = 'SETTINGS';
 
@@ -44,6 +43,7 @@ export interface IAuditService {
      * Get audit log by ID
      */
     getById(
+        t: TransactionTask | undefined,
         actingUserId: string,
         logId: string
     ): Promise<AuditLogWithDetailsRow>;
@@ -52,6 +52,7 @@ export interface IAuditService {
      * Query audit logs with optional filters
      */
     getAll(
+        t: TransactionTask | undefined,
         actingUserId: string,
         filters?: AuditLogFilters,
         pagination?: Partial<PaginationParams>
@@ -110,21 +111,18 @@ export class AuditService implements IAuditService {
     }
 
     async getById(
+        t: TransactionTask | undefined,
         actingUserId: string,
         logId: string
     ): Promise<AuditLogWithDetailsRow> {
-        return withTransaction(async (t: TransactionTask) => {
-            const log = await this.auditLogsRepository.findByIdWithDetails(t, logId);
-            if (!log) {
-                throw new Error(`Audit log not found: ${logId}`);
-            }
-            return log;
-        });
+        const log = await this.auditLogsRepository.findByIdWithDetails(t, logId);
+        if (!log) {
+            throw new Error(`Audit log not found: ${logId}`);
+        }
+        return log;
     }
 
-    async getAll(actingUserId: string, filters: AuditLogFilters = {}, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogWithDetailsRow>> {
-        return withTransaction(async (t: TransactionTask) => {
-            return this.auditLogsRepository.findAllWithDetails(t, filters, pagination);
-        });
+    async getAll(t: TransactionTask | undefined, actingUserId: string, filters: AuditLogFilters = {}, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuditLogWithDetailsRow>> {
+        return this.auditLogsRepository.findAllWithDetails(t, filters, pagination);
     }
 }

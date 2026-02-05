@@ -36,7 +36,7 @@ export function createAuthenticateMiddleware(authSessionService: IAuthSessionSer
                 return;
             }
 
-            const session = await authSessionService.resolveSession(sessionToken);
+            const session = await authSessionService.resolveSession(undefined, sessionToken);
 
             if (!session) {
                 res.status(401).json({
@@ -88,7 +88,7 @@ export function createRequireActiveSessionMiddleware(authSessionService: IAuthSe
             }
 
             // Check if session is still active (not logged out, not expired)
-            const isActive = await authSessionService.isValid(req.user.sessionId);
+            const isActive = await authSessionService.isValid(undefined, req.user.sessionId);
             if (!isActive) {
                 res.status(401).json({
                     error: 'Session expired',
@@ -100,7 +100,7 @@ export function createRequireActiveSessionMiddleware(authSessionService: IAuthSe
 
             // Extend session expiry by 24 hours (sliding expiration)
             const newExpiry = new Date(Date.now() + SESSION_EXTEND_MS);
-            await authSessionService.update(req.user.sessionId, { expires_at: newExpiry });
+            await authSessionService.update(undefined, req.user.sessionId, { expires_at: newExpiry });
 
             next();
 

@@ -6,7 +6,7 @@
  * All mutations are audit logged.
  */
 import { IDatabase } from 'pg-promise';
-import { TransactionTask, withTransaction } from '../utils/transaction.utils';
+import { TransactionTask } from '../utils/transaction.utils';
 import { Profiles } from '../models/profiles.model';
 import { IProfilesRepository } from '../repositories/profiles.repository';
 import { IProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
@@ -25,18 +25,12 @@ import { Permissions } from '../models/permissions.model';
 // Module code for RBAC operations
 const MODULE_CODE = 'SETTINGS';
 
-// Response DTO type definitions
-export interface ProfilePermissionFlagDto {
-    permissionId: string;
-    allowed: boolean;
-}
-
 export interface IProfileService {
-    getById(actingUserId: string, profileId: string): Promise<ProfileResponseDto>
-    listPaginated(actingUserId: string, filters?: { is_active?: boolean, code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Profiles>>;
-    create(actingUserId: string, data: CreateProfileRequestDto): Promise<Profiles>;
-    update(actingUserId: string, profileId: string, data: UpdateProfileRequestDto): Promise<Profiles>;
-    delete(actingUserId: string, profileId: string): Promise<void>;
+    getById(t: TransactionTask, actingUserId: string, profileId: string): Promise<ProfileResponseDto>
+    listPaginated(t: TransactionTask, actingUserId: string, filters?: { is_active?: boolean, code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Profiles>>;
+    create(t: TransactionTask, actingUserId: string, data: CreateProfileRequestDto): Promise<Profiles>;
+    update(t: TransactionTask, actingUserId: string, profileId: string, data: UpdateProfileRequestDto): Promise<Profiles>;
+    delete(t: TransactionTask, actingUserId: string, profileId: string): Promise<void>;
 }
 
 export class ProfileService implements IProfileService {
@@ -48,134 +42,126 @@ export class ProfileService implements IProfileService {
         private auditService: IAuditService
     ) { }
 
-    async getById(actingUserId: string, profileId: string): Promise<ProfileResponseDto> {
+    async getById(t: TransactionTask, actingUserId: string, profileId: string): Promise<ProfileResponseDto> {
 
-        return withTransaction(async (t: TransactionTask) => {
-            const profile = await this.profilesRepository.findByIdWithDetails(t, profileId);
-            if (!profile) throw new ProfileNotFoundError(profileId);
-            return profile;
-        });
+        const profile = await this.profilesRepository.findByIdWithDetails(t, profileId);
+        if (!profile) throw new ProfileNotFoundError(profileId);
+        return profile;
     }
 
     async listPaginated(
-        actingUserId: string,
+        t: TransactionTask, actingUserId: string,
         filters?: { is_active?: boolean, code?: string },
         pagination?: Partial<PaginationParams>
     ): Promise<PaginatedResult<Profiles>> {
-        return withTransaction(async (t: TransactionTask) => this.profilesRepository.findAllPaginated(t, filters, pagination));
+        return this.profilesRepository.findAllPaginated(t, filters, pagination);
     }
 
     //create profile as well as do thing like update its premissions wiht default allow
-    async create(actingUserId: string, data: CreateProfileRequestDto): Promise<Profiles> {
-        return withTransaction(async (t: TransactionTask) => {
-            const existing = await this.profilesRepository.findAllPaginated(t, { search: data.code as string });
-            if (existing.data.length > 0) throw new DuplicateAssignmentError(`profile code '${data.code}'`);
+    async create(t: TransactionTask, actingUserId: string, data: CreateProfileRequestDto): Promise<Profiles> {
+        const existing = await this.profilesRepository.findAllPaginated(t, { search: data.code as string });
+        if (existing.data.length > 0) throw new DuplicateAssignmentError(`profile code '${data.code}'`);
 
-            const profile = await this.profilesRepository.create(t, {
-                name: data.name!,
-                code: data.code!,
-                description: data.description ?? null,
-                is_active: data.is_active ?? true,
-                created_by: actingUserId
-            });
-            const perms = data.permission_ids ?? []
-            if (perms.length > 0) {
-                const permissions = await this.permissionsRepository.findByIds(t, perms as string[]);
-                if (permissions.length !== perms.length) {
-                    const foundIds = new Set(permissions.map(p => p.id));
-                    const missing = perms.filter(id => !foundIds.has(id));
-                    throw new PermissionNotFoundError(missing.join(', '));
-                }
-                await this.profilePermissionsRepository.replacePermissions(t, profile.id, permissions.map(p => p.id));
-            }
-
-            this.auditService.log(t, {
-                user_id: actingUserId,
-                action: 'create',
-                module_code: MODULE_CODE,
-                entity_type: 'profile',
-                entity_id: profile.id,
-                old_values: null,
-                new_values: { ...data },
-                status: 'success'
-            }).catch(console.error);
-
-            return profile;
+        const profile = await this.profilesRepository.create(t, {
+            name: data.name!,
+            code: data.code!,
+            description: data.description ?? null,
+            is_active: data.is_active ?? true,
+            created_by: actingUserId
         });
+        const perms = data.permission_ids ?? []
+        if (perms.length > 0) {
+            const permissions = await this.permissionsRepository.findByIds(t, perms as string[]);
+            if (permissions.length !== perms.length) {
+                const foundIds = new Set(permissions.map(p => p.id));
+                const missing = perms.filter(id => !foundIds.has(id));
+                throw new PermissionNotFoundError(missing.join(', '));
+            }
+            await this.profilePermissionsRepository.replacePermissions(t, profile.id, permissions.map(p => p.id));
+        }
+
+        this.auditService.log(t, {
+            user_id: actingUserId,
+            action: 'create',
+            module_code: MODULE_CODE,
+            entity_type: 'profile',
+            entity_id: profile.id,
+            old_values: null,
+            new_values: { ...data },
+            status: 'success'
+        }).catch(console.error);
+
+        return profile;
     }
     //update the profile along wihtits premissions with default allow
-    async update(actingUserId: string, profileId: string, data: UpdateProfileRequestDto): Promise<Profiles> {
-        return withTransaction(async (t: TransactionTask) => {
-            const existing = await this.profilesRepository.findById(t, profileId);
-            if (!existing) throw new ProfileNotFoundError(profileId);
+    async update(t: TransactionTask, actingUserId: string, profileId: string, data: UpdateProfileRequestDto): Promise<Profiles> {
+        const existing = await this.profilesRepository.findById(t, profileId);
+        if (!existing) throw new ProfileNotFoundError(profileId);
 
-            if (data.code && data.code !== existing.code) {
-                const conflict = await this.profilesRepository.findAllPaginated(t, { search: data.code });
-                if (conflict.data.length > 0) throw new DuplicateAssignmentError(`profile code '${data.code}'`);
+        if (data.code && data.code !== existing.code) {
+            const conflict = await this.profilesRepository.findAllPaginated(t, { search: data.code });
+            if (conflict.data.length > 0) throw new DuplicateAssignmentError(`profile code '${data.code}'`);
+        }
+
+        const prof: Profiles = {
+            id: profileId,
+            name: data.name ?? existing.name,
+            code: data.code ?? existing.code,
+            description: data.description ?? null,
+            is_active: data.is_active ?? true,
+            created_at: existing.created_at,
+        }
+
+        const updated = await this.profilesRepository.update(t, profileId, prof);
+        const perms = data.permission_ids ?? []
+        if (perms.length > 0) {
+            const permissions = await this.permissionsRepository.findByIds(t, perms as string[]);
+            if (permissions.length !== perms.length) {
+                const foundIds = new Set(permissions.map(p => p.id));
+                const missing = perms.filter(id => !foundIds.has(id));
+                throw new PermissionNotFoundError(missing.join(', '));
             }
+            await this.profilePermissionsRepository.replacePermissions(t, profileId, permissions.map(p => p.id));
+        }
 
-            const prof: Profiles = {
-                id: profileId,
-                name: data.name ?? existing.name,
-                code: data.code ?? existing.code,
-                description: data.description ?? null,
-                is_active: data.is_active ?? true,
-                created_at: existing.created_at,
-            }
+        this.auditService.log(t, {
+            user_id: actingUserId,
+            module_code: MODULE_CODE,
+            action: 'update',
+            entity_type: 'profile',
+            entity_id: profileId,
+            old_values: { ...existing },
+            new_values: { ...data },
+            status: 'success'
+        }).catch(console.error);
 
-            const updated = await this.profilesRepository.update(t, profileId, prof);
-            const perms = data.permission_ids ?? []
-            if (perms.length > 0) {
-                const permissions = await this.permissionsRepository.findByIds(t, perms as string[]);
-                if (permissions.length !== perms.length) {
-                    const foundIds = new Set(permissions.map(p => p.id));
-                    const missing = perms.filter(id => !foundIds.has(id));
-                    throw new PermissionNotFoundError(missing.join(', '));
-                }
-                await this.profilePermissionsRepository.replacePermissions(t, profileId, permissions.map(p => p.id));
-            }
-
-            this.auditService.log(t, {
-                user_id: actingUserId,
-                module_code: MODULE_CODE,
-                action: 'update',
-                entity_type: 'profile',
-                entity_id: profileId,
-                old_values: { ...existing },
-                new_values: { ...data },
-                status: 'success'
-            }).catch(console.error);
-
-            return updated;
-        });
+        return updated;
     }
 
-    async delete(actingUserId: string, profileId: string): Promise<void> {
-        return withTransaction(async (t: TransactionTask) => {
-            const existing = await this.profilesRepository.findById(t, profileId);
-            if (!existing) throw new ProfileNotFoundError(profileId);
+    async delete(t: TransactionTask, actingUserId: string, profileId: string): Promise<void> {
+        const existing = await this.profilesRepository.findById(t, profileId);
+        if (!existing) throw new ProfileNotFoundError(profileId);
 
-            const prof: Profiles = {
-                id: profileId,
-                name: existing.name,
-                code: existing.code,
-                description: existing.description as string,
-                is_active: false,
-                created_at: existing.created_at,
-            }
+        const prof: Profiles = {
+            id: profileId,
+            name: existing.name,
+            code: existing.code,
+            description: existing.description as string,
+            is_active: false,
+            created_at: existing.created_at,
+        }
 
-            await this.profilesRepository.update(t, profileId, prof);
+        await this.profilesRepository.update(t, profileId, prof);
 
-            this.auditService.log(t, {
-                user_id: actingUserId,
-                action: 'delete',
-                module_code: MODULE_CODE,
-                entity_type: 'profile',
-                entity_id: profileId,
-                old_values: { ...existing },
-                new_values: { is_deleted: true },
-                status: 'success'
-            }).catch(console.error);
-        });
+        this.auditService.log(t, {
+            user_id: actingUserId,
+            action: 'delete',
+            module_code: MODULE_CODE,
+            entity_type: 'profile',
+            entity_id: profileId,
+            old_values: { ...existing },
+            new_values: { is_deleted: true },
+            status: 'success'
+        }).catch(console.error);
     }
 }

@@ -52,8 +52,8 @@ export class AuditLogsRepository implements IAuditLogsRepository {
   constructor(private db: IDatabase<unknown>) { }
 
   // Helper: use transaction if provided, otherwise main connection
-  private getTask(t?: TransactionTask) {
-    return t ?? this.db;
+  protected async query<T>(text: string, params?: unknown[], t?: TransactionTask): Promise<T[]> {
+    return (t ?? this.db).any<T>(text, params);
   }
 
   /**
@@ -91,18 +91,19 @@ export class AuditLogsRepository implements IAuditLogsRepository {
   }
 
   async findById(t: TransactionTask | undefined, id: string): Promise<AuditLogs | null> {
-    const rows = await this.getTask(t).any<AuditLogs>(
+    const rows = await this.query<AuditLogs>(
       `SELECT * FROM ${this.tableName} WHERE id = $1`,
-      [id]
+      [id],
+      t
     );
     return rows[0] ?? null;
   }
 
   async findByIdWithDetails(t: TransactionTask | undefined, id: string): Promise<AuditLogWithDetailsRow | null> {
-    const rows = await this.getTask(t).any<AuditLogWithDetailsRow>(
-      `${this.selectWithJoinsQuery}
-       WHERE al.id = $1`,
-      [id]
+    const rows = await this.query<AuditLogWithDetailsRow>(
+      `${this.selectWithJoinsQuery} WHERE al.id = $1`,
+      [id],
+      t
     );
     return rows[0] ?? null;
   }
@@ -123,55 +124,43 @@ export class AuditLogsRepository implements IAuditLogsRepository {
         values.push(filters.user_id);
         conditions.push(`al.user_id = $${values.length}`);
       }
-
       if (filters.role_id) {
         values.push(filters.role_id);
         conditions.push(`al.role_id = $${values.length}`);
       }
-
       if (filters.action) {
         values.push(filters.action);
         conditions.push(`al.action = $${values.length}`);
       }
-
       if (filters.module_id) {
         values.push(filters.module_id);
         conditions.push(`al.module_id = $${values.length}`);
       }
-
       if (filters.entity_type) {
         values.push(filters.entity_type);
         conditions.push(`al.entity_type = $${values.length}`);
       }
-
       if (filters.status) {
         values.push(filters.status);
         conditions.push(`al.status = $${values.length}`);
       }
-
       if (filters.startDate && filters.endDate) {
         values.push(filters.startDate, filters.endDate);
-        conditions.push(
-          `al.created_at BETWEEN $${values.length - 1} AND $${values.length}`
-        );
+        conditions.push(`al.created_at BETWEEN $${values.length - 1} AND $${values.length}`);
       }
     }
 
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const task = this.getTask(t);
-
-    const totalRes = await task.one<{ count: string }>(
+    const totalRes = await (t ?? this.db).one<{ count: string }>(
       `SELECT COUNT(*) FROM ${this.tableName} ${where}`,
       values
     );
 
-    const rows = await task.any<AuditLogWithDetailsRow>(
-      `${this.selectWithJoinsQuery}
-       ${where}
-       ORDER BY al.created_at DESC
-       LIMIT $1 OFFSET $2`,
-      [...values, p.limit, offset]
+    const rows = await this.query<AuditLogWithDetailsRow>(
+      `${this.selectWithJoinsQuery} ${where} ORDER BY al.created_at DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      [...values, p.limit, offset],
+      t
     );
 
     return buildPaginatedResult(
@@ -182,7 +171,7 @@ export class AuditLogsRepository implements IAuditLogsRepository {
   }
 
   async create(t: TransactionTask | undefined, input: CreateAuditLogInput): Promise<AuditLogs> {
-    const row = await this.getTask(t).one<AuditLogs>(
+    const rows = await this.query<AuditLogs>(
       `INSERT INTO ${this.tableName} (
         action, module_id, entity_type, entity_id, ip_address, user_agent, status,
         user_id, role_id, old_values, new_values
@@ -200,10 +189,11 @@ export class AuditLogsRepository implements IAuditLogsRepository {
         input.role_id ?? null,
         input.old_values ? JSON.stringify(input.old_values) : null,
         input.new_values ? JSON.stringify(input.new_values) : null
-      ]
+      ],
+      t
     );
 
-    if (!row) throw new Error('Audit log creation failed');
-    return row;
+    if (!rows[0]) throw new Error('Audit log creation failed');
+    return rows[0];
   }
 }

@@ -9,6 +9,7 @@ import { AuditService } from '../services/audit.service';
 import { PermissionsRepository } from '../repositories/permissions.repository';
 import { hashPassword } from '../utils/crypto.utils';
 import { UserRoleRepository } from '../repositories/user_roles.repository';
+import { withTransaction, TransactionTask } from '../utils/transaction.utils';
 
 /**
  * Standard response helpers
@@ -45,23 +46,28 @@ export function createOtpRouter(db: IDatabase<unknown>, auditService: AuditServi
      */
     router.post('/send', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const email = req.body.email;
-            if (!email || typeof email !== 'string') {
-                return sendError(res, 400, 'Email is required and must be a string');
-            }
-            const user = await userService.findByEmail(email);
-            if (!user) {
-                throw sendError(res, 404, 'User not found');
-            }
-            const otpCode = generateAlphaNumericOtp(6);
-            const otpHash = await hashPassword(otpCode);
+            await withTransaction(async (t: TransactionTask) => {
+
+                await withTransaction(async (t: TransactionTask) => {
+                    const email = req.body.email;
+                    if (!email || typeof email !== 'string') {
+                        return sendError(res, 400, 'Email is required and must be a string');
+                    }
+                    const user = await userService.findByEmail(t, email);
+                    if (!user) {
+                        throw sendError(res, 404, 'User not found');
+                    }
+                    const otpCode = generateAlphaNumericOtp(6);
+                    const otpHash = await hashPassword(otpCode);
 
 
-            await otpService.generateOtp(user.id, email, otpHash);
+                    await otpService.generateOtp(t, user.id, email, otpHash);
 
-            // In real implementation, send OTP via email or SMS here
+                    // In real implementation, send OTP via email or SMS here
 
-            sendSuccess(res, { message: 'OTP sent successfully' });
+                    sendSuccess(res, { message: 'OTP sent successfully' });
+                });
+            });
         } catch (error: any) {
             next(error);
         }
@@ -74,22 +80,25 @@ export function createOtpRouter(db: IDatabase<unknown>, auditService: AuditServi
      */
     router.post('/verify', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const email = req.body.email;
-            const code = req.body.code;
+            await withTransaction(async (t: TransactionTask) => {
 
-            if (!email || typeof email !== 'string') {
-                return sendError(res, 400, 'Email is required and must be a string');
-            }
-            if (!code || typeof code !== 'string') {
-                return sendError(res, 400, 'OTP code is required and must be a string');
-            }
+                const email = req.body.email;
+                const code = req.body.code;
 
-            const success = await otpService.validateOtp(email, code);
-            if (!success) {
-                return sendError(res, 400, 'Invalid or expired OTP');
-            }
+                if (!email || typeof email !== 'string') {
+                    return sendError(res, 400, 'Email is required and must be a string');
+                }
+                if (!code || typeof code !== 'string') {
+                    return sendError(res, 400, 'OTP code is required and must be a string');
+                }
 
-            sendSuccess(res, { otp: code, message: 'OTP verified successfully' });
+                const success = await otpService.validateOtp(t, email, code);
+                if (!success) {
+                    return sendError(res, 400, 'Invalid or expired OTP');
+                }
+
+                sendSuccess(res, { otp: code, message: 'OTP verified successfully' });
+            });
         } catch (error: any) {
             next(error);
         }
