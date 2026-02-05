@@ -32,8 +32,8 @@ import { withTransaction } from '../utils/transaction.utils';
 const COOKIE_OPTIONS = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict' as const,
     signed: true,
+    sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
 };
 
@@ -75,7 +75,6 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
     const authSessionService = new AuthSessionService(sessionsRepo, auditService, evaluationService);
     const requireAuth = createAuthenticateMiddleware(authSessionService);
     const usersService = new UserService(usersRepo, userRolesRepository, evaluationService, auditService);
-    const permissionService = new PermissionService(permissionsRepository, profilesRepository, profilePermissionsRepository, roleProfilesRepository, moduleRepository, roleRepository, evaluationService, auditService);
 
     /**
      * POST /auth/login
@@ -115,6 +114,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
                     ip_address: req.ip || 'unknown',
                     user_agent: req.headers['user-agent'] || 'unknown'
                 });
+                console.log('LOGIN TOKEN:', session.session_token);
 
                 // Set signed cookie with session token
                 res.cookie('sessionToken', session.session_token, COOKIE_OPTIONS);
