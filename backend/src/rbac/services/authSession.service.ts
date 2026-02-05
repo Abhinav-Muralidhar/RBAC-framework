@@ -151,7 +151,7 @@ export class AuthSessionService implements IAuthSessionService {
             ip_address: session.ip_address,
             user_agent: session.user_agent,
             status: 'success'
-        }).catch(console.error);
+        })
 
     }
 
@@ -204,7 +204,7 @@ export class AuthSessionService implements IAuthSessionService {
             ip_address: data.ip_address,
             user_agent: data.user_agent,
             status: 'success'
-        }).catch(console.error);
+        })
 
         return session;
     }
@@ -250,7 +250,7 @@ export class AuthSessionService implements IAuthSessionService {
             old_values: { logout_at: null },
             new_values: { logout_at: new Date().toISOString() },
             status: 'success'
-        }).catch(console.error);
+        })
     }
 
     async revoke(t: TransactionTask, sessionId: string, actingUserId: string): Promise<void> {
@@ -270,7 +270,7 @@ export class AuthSessionService implements IAuthSessionService {
             old_values: { ...session } as Record<string, unknown>,
             new_values: { revoked: true, revoked_by: actingUserId },
             status: 'success'
-        }).catch(console.error);
+        })
     }
 
     async revokeAllByUser(t: TransactionTask, userId: string, actingUserId: string): Promise<void> {
@@ -290,7 +290,7 @@ export class AuthSessionService implements IAuthSessionService {
             old_values: { session_count: sessionCount },
             new_values: { revoked_all: true, target_user_id: userId },
             status: 'success'
-        }).catch(console.error);
+        })
     }
 
     async cleanupExpired(t: TransactionTask): Promise<void> {
