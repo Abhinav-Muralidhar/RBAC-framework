@@ -103,16 +103,16 @@ export class SmtpConfigService implements ISmtpConfigService {
         }
 
         const config = await this.smtpConfigRepository.create(t, data);
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'create',
             module_code: MODULE_CODE,
             entity_type: 'smtp_config',
             entity_id: config.id,
             old_values: {},  // No old values for create
-            new_values: { ...config } as Record<string, unknown>,
+            new_values: { smtp_config_id: config.id, host: config.host, port: config.port, encryption: config.encryption, from_email: config.from_email, reply_to_email: config.reply_to_email, is_active: config.is_active } as Record<string, unknown>,
             status: 'success'
-        }).catch(console.error);
+        })
         return config;
     }
 
@@ -140,16 +140,16 @@ export class SmtpConfigService implements ISmtpConfigService {
         }
 
         const updatedConfig = await this.smtpConfigRepository.update(t, configId, updated);
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'update',
             module_code: MODULE_CODE,
             entity_type: 'smtp_config',
             entity_id: configId,
-            old_values: { ...existing } as Record<string, unknown>,
-            new_values: { ...updatedConfig } as Record<string, unknown>,
+            old_values: { smtp_config_id: existing.id, host: existing.host, port: existing.port, encryption: existing.encryption, from_email: existing.from_email, reply_to_email: existing.reply_to_email, is_active: existing.is_active } as Record<string, unknown>,
+            new_values: { smtp_config_id: updatedConfig.id, host: updatedConfig.host, port: updatedConfig.port, encryption: updatedConfig.encryption, from_email: updatedConfig.from_email, reply_to_email: updatedConfig.reply_to_email, is_active: updatedConfig.is_active } as Record<string, unknown>,
             status: 'success'
-        }).catch(console.error);
+        })
         return updatedConfig;
     }
 
@@ -160,15 +160,15 @@ export class SmtpConfigService implements ISmtpConfigService {
         }
 
         await this.smtpConfigRepository.delete(t, configId);
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'delete',
             module_code: MODULE_CODE,
             entity_type: 'smtp_config',
             entity_id: configId,
-            old_values: { ...existing } as Record<string, unknown>,
-            new_values: { is_deleted: true } as Record<string, unknown>,
+            old_values: { smtp_config_id: existing.id, host: existing.host, port: existing.port, encryption: existing.encryption, from_email: existing.from_email, reply_to_email: existing.reply_to_email, is_active: existing.is_active } as Record<string, unknown>,
+            new_values: { smtp_config_id: existing.id, host: existing.host, port: existing.port, encryption: existing.encryption, from_email: existing.from_email, reply_to_email: existing.reply_to_email, is_active: false } as Record<string, unknown>,
             status: 'success'
-        }).catch(console.error);
+        })
     }
 }

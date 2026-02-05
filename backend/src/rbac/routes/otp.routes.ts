@@ -10,6 +10,7 @@ import { PermissionsRepository } from '../repositories/permissions.repository';
 import { hashPassword } from '../utils/crypto.utils';
 import { UserRoleRepository } from '../repositories/user_roles.repository';
 import { withTransaction, TransactionTask } from '../utils/transaction.utils';
+import { error } from 'node:console';
 
 /**
  * Standard response helpers
@@ -46,28 +47,30 @@ export function createOtpRouter(db: IDatabase<unknown>, auditService: AuditServi
      */
     router.post('/send', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
+                const email = req.body.email;
+                if (!email || typeof email !== 'string') {
+                    const err = new Error('Email is required and must be a string');
+                    (err as any).status = 400;
+                    throw err;
+                }
+                const user = await userService.findByEmail(t, email);
+                if (!user) {
+                    const err = new Error('User not found');
+                    (err as any).status = 404;
+                    throw err;
+                }
+                const otpCode = generateAlphaNumericOtp(6);
+                const otpHash = await hashPassword(otpCode);
 
-                await withTransaction(async (t: TransactionTask) => {
-                    const email = req.body.email;
-                    if (!email || typeof email !== 'string') {
-                        return sendError(res, 400, 'Email is required and must be a string');
-                    }
-                    const user = await userService.findByEmail(t, email);
-                    if (!user) {
-                        throw sendError(res, 404, 'User not found');
-                    }
-                    const otpCode = generateAlphaNumericOtp(6);
-                    const otpHash = await hashPassword(otpCode);
 
+                await otpService.generateOtp(t, user.id, email, otpHash);
 
-                    await otpService.generateOtp(t, user.id, email, otpHash);
+                // In real implementation, send OTP via email or SMS here
 
-                    // In real implementation, send OTP via email or SMS here
-
-                    sendSuccess(res, { message: 'OTP sent successfully' });
-                });
+                return { message: 'OTP sent successfully' };
             });
+            sendSuccess(res, result);
         } catch (error: any) {
             next(error);
         }
@@ -80,25 +83,32 @@ export function createOtpRouter(db: IDatabase<unknown>, auditService: AuditServi
      */
     router.post('/verify', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
 
                 const email = req.body.email;
                 const code = req.body.code;
 
                 if (!email || typeof email !== 'string') {
-                    return sendError(res, 400, 'Email is required and must be a string');
+                    const err = new Error('Email is required and must be a string');
+                    (err as any).status = 400;
+                    throw err;
                 }
                 if (!code || typeof code !== 'string') {
-                    return sendError(res, 400, 'OTP code is required and must be a string');
+                    const err = new Error('OTP code is required and must be a string');
+                    (err as any).status = 400;
+                    throw err;
                 }
 
                 const success = await otpService.validateOtp(t, email, code);
                 if (!success) {
-                    return sendError(res, 400, 'Invalid or expired OTP');
+                    const err = new Error('Invalid or expired OTP');
+                    (err as any).status = 400;
+                    throw err;
                 }
 
-                sendSuccess(res, { otp: code, message: 'OTP verified successfully' });
+                return { otp: code, message: 'OTP verified successfully' };
             });
+            sendSuccess(res, result);
         } catch (error: any) {
             next(error);
         }

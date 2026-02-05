@@ -134,6 +134,24 @@ export class AuthSessionService implements IAuthSessionService {
             throw new SessionNotFoundError(sessionId);
         }
         await this.authSessionsRepository.deleteOneForUser(t, sessionId, userId, actingUserId);
+        await this.auditService.log(undefined, {
+            user_id: actingUserId,
+            action: 'delete',
+            module_code: MODULE_CODE,
+            entity_type: 'session',
+            entity_id: session.id,
+            old_values: {
+                ip_address: session.ip_address,
+                user_agent: session.user_agent,
+                login_at: session.login_at
+            },
+            new_values: {
+                logout_at: new Date().toISOString()
+            },
+            ip_address: session.ip_address,
+            user_agent: session.user_agent,
+            status: 'success'
+        })
 
     }
 
@@ -171,7 +189,7 @@ export class AuthSessionService implements IAuthSessionService {
         });
 
         // AUDIT: Log session creation (login) (fire-and-forget)
-        this.auditService.log(t, {
+        await this.auditService.log(undefined, {
             user_id: data.user_id,
             action: 'create',
             module_code: MODULE_CODE,
@@ -186,7 +204,7 @@ export class AuthSessionService implements IAuthSessionService {
             ip_address: data.ip_address,
             user_agent: data.user_agent,
             status: 'success'
-        }).catch(console.error);
+        })
 
         return session;
     }
@@ -223,7 +241,7 @@ export class AuthSessionService implements IAuthSessionService {
         await this.authSessionsRepository.update(t, sessionId, updated);
 
         // AUDIT: Log session logout (fire-and-forget)
-        this.auditService.log(undefined, {
+        await this.auditService.log(undefined, {
             user_id: existing.user_id,
             module_code: MODULE_CODE,
             action: 'update',
@@ -232,7 +250,7 @@ export class AuthSessionService implements IAuthSessionService {
             old_values: { logout_at: null },
             new_values: { logout_at: new Date().toISOString() },
             status: 'success'
-        }).catch(console.error);
+        })
     }
 
     async revoke(t: TransactionTask, sessionId: string, actingUserId: string): Promise<void> {
@@ -243,7 +261,7 @@ export class AuthSessionService implements IAuthSessionService {
         await this.authSessionsRepository.delete(t, sessionId, actingUserId);
 
         // AUDIT: Log session revocation (fire-and-forget)
-        this.auditService.log(undefined, {
+        await this.auditService.log(undefined, {
             user_id: actingUserId,
             module_code: MODULE_CODE,
             action: 'delete',
@@ -252,7 +270,7 @@ export class AuthSessionService implements IAuthSessionService {
             old_values: { ...session } as Record<string, unknown>,
             new_values: { revoked: true, revoked_by: actingUserId },
             status: 'success'
-        }).catch(console.error);
+        })
     }
 
     async revokeAllByUser(t: TransactionTask, userId: string, actingUserId: string): Promise<void> {
@@ -263,7 +281,7 @@ export class AuthSessionService implements IAuthSessionService {
         await this.authSessionsRepository.deleteAllByUser(t, userId);
 
         // AUDIT: Log bulk session revocation (fire-and-forget)
-        this.auditService.log(t, {
+        await this.auditService.log(undefined, {
             user_id: actingUserId,
             module_code: MODULE_CODE,
             action: 'delete',
@@ -272,7 +290,7 @@ export class AuthSessionService implements IAuthSessionService {
             old_values: { session_count: sessionCount },
             new_values: { revoked_all: true, target_user_id: userId },
             status: 'success'
-        }).catch(console.error);
+        })
     }
 
     async cleanupExpired(t: TransactionTask): Promise<void> {
@@ -301,6 +319,7 @@ export class AuthSessionService implements IAuthSessionService {
      */
     async resolveSession(t: TransactionTask | undefined, sessionToken: string): Promise<AuthSessions> {
         const session = await this.authSessionsRepository.findBySessionToken(t, sessionToken);
+        console.log('LOOKUP TOKEN:', sessionToken);
 
         if (!session) {
             throw new RBACInternalError(`Session not found for token`);

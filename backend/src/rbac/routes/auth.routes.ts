@@ -5,7 +5,7 @@
  * These routes set signed cookies for session management.
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, CookieOptions } from 'express';
 import { AuthSessionsRepository, TransactionTask } from '../repositories/auth_sessions.repository';
 import { UsersRepository } from '../repositories/users.repository';
 import { AuditLogsRepository } from '../repositories/audit_logs.repository';
@@ -29,11 +29,11 @@ import { UserRoleRepository } from '../repositories/user_roles.repository';
 import { PERMISSION_ACTIONS, PermissionAction } from '../models/permissions.model';
 import { withTransaction } from '../utils/transaction.utils';
 // Cookie configuration
-const COOKIE_OPTIONS = {
+const COOKIE_OPTIONS: CookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict' as const,
     signed: true,
+    sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
 };
 
@@ -75,7 +75,6 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
     const authSessionService = new AuthSessionService(sessionsRepo, auditService, evaluationService);
     const requireAuth = createAuthenticateMiddleware(authSessionService);
     const usersService = new UserService(usersRepo, userRolesRepository, evaluationService, auditService);
-    const permissionService = new PermissionService(permissionsRepository, profilesRepository, profilePermissionsRepository, roleProfilesRepository, moduleRepository, roleRepository, evaluationService, auditService);
 
     /**
      * POST /auth/login
@@ -85,29 +84,18 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
      */
     router.post('/login', authLimiter, async (req: Request, res: Response): Promise<void> => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            if (!req.body.username || !req.body.password) {
+                return sendError(res, 400, 'Username and password are required', 'VALIDATION_ERROR');
+            }
+            const result = await withTransaction(async (t: TransactionTask) => {
                 const { username, password } = req.body;
-                if (!username || !password) {
-                    sendError(res, 400, 'Username and password are required', 'VALIDATION_ERROR');
-                    return;
-                }
-
                 const user = await usersService.findByUsername(t, username);
-                if (!user) {
-                    sendError(res, 401, 'Invalid username or password', 'AUTH_FAILED');
-                    return;
-                }
+                if (!user) throw new Error('AUTH_FAILED');
 
                 // Check user status
-                if (user.status !== 'active') {
-                    sendError(res, 401, 'Account is not active', 'ACCOUNT_INACTIVE');
-                    return;
-                }
+                if (user.status !== 'active') throw new Error('ACCOUNT_INACTIVE');
                 const isValidPassword = await verifyPassword(password, user.password);
-                if (!isValidPassword) {
-                    sendError(res, 401, 'Invalid username or password', 'AUTH_FAILED');
-                    return;
-                }
+                if (!isValidPassword) throw new Error('AUTH_FAILED');
 
                 // Create session using the service's create method
                 const session = await authSessionService.create(t, {
@@ -115,18 +103,27 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
                     ip_address: req.ip || 'unknown',
                     user_agent: req.headers['user-agent'] || 'unknown'
                 });
+                console.log('LOGIN TOKEN:', session.session_token);
 
-                // Set signed cookie with session token
-                res.cookie('sessionToken', session.session_token, COOKIE_OPTIONS);
 
                 // Update last login
                 await usersService.update(t, user.id, user.id, { last_login_at: new Date() });
 
                 const userResponse = await usersService.getById(t, user.id, user.id);
 
-                sendSuccess(res, userResponse, { message: 'Login successful' });
+                return { session, userResponse };
             });
-        } catch (error) {
+            // Set signed cookie with session token
+            res.cookie('sessionToken', result.session.session_token, COOKIE_OPTIONS);
+            sendSuccess(res, result.userResponse, { message: 'Login successful' });
+        } catch (error: any) {
+            if (error.message === 'AUTH_FAILED') {
+                return sendError(res, 401, 'Invalid username or password', 'AUTH_FAILED');
+            }
+            if (error.message === 'ACCOUNT_INACTIVE') {
+                return sendError(res, 401, 'Account is not active', 'ACCOUNT_INACTIVE');
+            }
+
             sendError(res, 500, 'Login failed', 'INTERNAL_ERROR');
         }
     });
@@ -138,45 +135,27 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
      */
     router.post('/logout', async (req: Request, res: Response): Promise<void> => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
                 // Try to invalidate session if cookie exists
                 const sessionToken = req.signedCookies['sessionToken'];
                 if (sessionToken) {
-                    try {
-                        // Find session by token and logout
+                    await withTransaction(async (t) => {
                         const session = await authSessionService.resolveSession(t, sessionToken);
-                        if (session) {
-                            await authSessionService.logout(t, session.id);
-                        }
-                    } catch {
-                        // Ignore errors - session may already be invalid
-                    }
+                        await authSessionService.logout(t, session.id);
+                    });
                 }
-
-                // Clear cookie
-                res.clearCookie('sessionToken', {
-                    httpOnly: true,
-                    secure: process.env.NODE_ENV === 'production',
-                    sameSite: 'strict',
-                    signed: true,
-                });
-                sendSuccess(res, { message: 'Logged out successfully' });
             });
-        } catch (error) {
-
-            sendError(res, 500, 'Logout failed', 'INTERNAL_ERROR');
-            res.clearCookie('sessionToken', {
-                ...COOKIE_OPTIONS,
-                maxAge: undefined
-            });
-
+            res.clearCookie('sessionToken', COOKIE_OPTIONS);
             sendSuccess(res, { message: 'Logged out successfully' });
+        } catch (error) {
+            sendError(res, 500, 'Logout failed', 'INTERNAL_ERROR');
+            res.clearCookie('sessionToken', COOKIE_OPTIONS);
         }
     });
 
     // GET /rbac/users/me
     router.get('/users/me', requireAuth, async (req, res) => {
-        await withTransaction(async (t: TransactionTask) => {
+        const result = await withTransaction(async (t: TransactionTask) => {
             const userId = req.user!.id; // from session middleware
 
             const user = await usersService.getById(t, userId, userId);
@@ -207,12 +186,9 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
 
                 permissions[module.code] = modulePermissions;
             }
-
-            sendSuccess(res, {
-                user,
-                permissions,
-            });
+            return { user, permissions };
         });
+        sendSuccess(res, result);
     });
     return router;
 }

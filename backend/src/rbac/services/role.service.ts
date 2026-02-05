@@ -104,16 +104,16 @@ export class RoleService implements IRoleService {
             await this.roleProfilesRepository.assignAllByRole(t, role.id, profileIds, actingUserId);
         }
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'create',
             module_code: MODULE_CODE,
             entity_type: 'role',
             entity_id: role.id,
             old_values: null,
-            new_values: { ...data },
+            new_values: { role_id: role.id, role_name: role.name, is_active: role.is_active, role_description: role.description },
             status: 'success'
-        }).catch(console.error);
+        })
 
         return role;
     }
@@ -145,16 +145,16 @@ export class RoleService implements IRoleService {
             await this.roleProfilesRepository.assignAllByRole(t, role.id, profileIds, actingUserId);
         }
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'update',
             module_code: MODULE_CODE,
             entity_type: 'role',
             entity_id: roleId,
-            old_values: { ...existing },
-            new_values: { ...data },
+            old_values: { role_id: existing.id, role_name: existing.name, is_active: existing.is_active, role_description: existing.description },
+            new_values: { role_id: updatedRole.id, role_name: updatedRole.name, is_active: updatedRole.is_active, role_description: updatedRole.description },
             status: 'success'
-        }).catch(console.error);
+        })
 
         return updatedRole;
     }
@@ -167,16 +167,16 @@ export class RoleService implements IRoleService {
 
         await this.roleRepository.delete(t, roleId);
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'delete',
             module_code: MODULE_CODE,
             entity_type: 'role',
             entity_id: roleId,
-            old_values: { ...existing },
-            new_values: { is_deleted: true },
+            old_values: { role_id: existing.id, role_name: existing.name, is_active: existing.is_active, role_description: existing.description },
+            new_values: { role_id: existing.id, role_name: existing.name, is_active: false, role_description: existing.description },
             status: 'success'
-        }).catch(console.error);
+        })
     }
 
     async getUsersWithRole(t: TransactionTask, actingUserId: string, roleId: string): Promise<string[]> {

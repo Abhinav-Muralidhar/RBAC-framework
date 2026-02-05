@@ -42,7 +42,7 @@ export const authApi = {
     },
 
     logout: async (): Promise<void> => {
-        await apiClient.post('/rbac/sessions/logout');
+        await apiClient.post('/auth/logout');
     },
 
     getCurrentSession: async (): Promise<SessionResponse> => {

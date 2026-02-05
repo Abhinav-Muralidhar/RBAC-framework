@@ -45,19 +45,20 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      */
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const pagination = parsePagination(req.query);
                 const filters = filter(req.query);
 
                 const result = await roleService.listPaginated(t, actingUserId, filters, pagination);
-                sendSuccess(res, result.data, {
-                    page: result.pagination.page,
-                    limit: result.pagination.limit,
-                    total: result.pagination.total,
-                    totalPages: result.pagination.totalPages
-                });
+                return result;
+            });
+            sendSuccess(res, result.data, {
+                page: result.pagination.page,
+                limit: result.pagination.limit,
+                total: result.pagination.total,
+                totalPages: result.pagination.totalPages
             });
         } catch (error) {
             next(error);
@@ -70,15 +71,18 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      */
     router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
 
                 const roleId = parseId(req.params.id, 'roleId');
                 const role = await roleService.getById(t, req.user!.id, roleId);
                 if (!role) {
-                    return sendError(res, 404, `Role not found: ${roleId}`, 'ROLE_NOT_FOUND');
+                    const err = new Error('Role not found');
+                    (err as any).status = 404;
+                    throw err;
                 }
-                sendSuccess(res, role);
+                return role;
             });
+            sendSuccess(res, result);
         } catch (error) {
             next(error);
         }
@@ -90,12 +94,13 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      */
     router.post('/', requirePermission('SETTINGS', 'create', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const role = await roleService.createRoleProfiles(t, actingUserId, req.body);
-                sendSuccess(res, role);
+                return role;
             });
+            sendSuccess(res, result);
         } catch (error) {
             next(error);
         }
@@ -107,13 +112,14 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      */
     router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const roleId = parseId(req.params.id, 'roleId');
                 const role = await roleService.updateRoleProfiles(t, actingUserId, roleId, req.body);
-                sendSuccess(res, role);
+                return role;
             });
+            sendSuccess(res, result);
         } catch (error) {
             next(error);
         }
@@ -125,13 +131,14 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      */
     router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const roleId = parseId(req.params.id, 'roleId');
                 await roleService.delete(t, actingUserId, roleId);
-                sendSuccess(res, { deleted: true });
+                return { message: 'Role deleted successfully' };
             });
+            sendSuccess(res, result);
         } catch (error) {
             next(error);
         }
@@ -143,14 +150,15 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      */
     router.put('/:id/profiles', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const roleId = parseId(req.params.id, 'roleId');
                 const { profile_ids } = req.body;
                 await roleService.updateRoleProfiles(t, actingUserId, roleId, profile_ids ?? []);
-                sendSuccess(res, { updated: true });
+                return { message: 'Role profiles updated successfully' };
             });
+            sendSuccess(res, result);
         } catch (error) {
             next(error);
         }

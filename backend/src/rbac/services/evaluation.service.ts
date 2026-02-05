@@ -13,12 +13,8 @@
  */
 
 import { PermissionDecision, createDenyDecision, createAllowDecision } from '../types/permission-decision';
-import { IModuleRepository } from '../repositories/modules.repository';
-import { IUserRoleRepository } from '../repositories/user_roles.repository';
-import { IRoleProfilesRepository } from '../repositories/role_profiles.repository';
-import { IProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
 import { IPermissionsRepository } from '../repositories/permissions.repository';
-import { IUsersRepository } from '../repositories/users.repository';
+
 import {
     PermissionDeniedError,
 } from '../errors/rbac.errors';

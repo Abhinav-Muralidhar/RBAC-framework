@@ -7,8 +7,6 @@
  * 
  * All mutating operations require RBAC enforcement.
  */
-
-import { IDatabase } from 'pg-promise';
 import { TransactionTask } from '../utils/transaction.utils';
 import { Permissions, PermissionAction } from '../models/permissions.model';
 import { Profiles } from '../models/profiles.model';
@@ -26,7 +24,6 @@ import {
     DuplicateAssignmentError,
     ModuleNotFoundError,
     RoleNotFoundError,
-    UserNotFoundError
 } from '../errors/rbac.errors';
 import {
     CreatePermissionRequestDto,
@@ -212,7 +209,7 @@ export class PermissionService implements IPermissionService {
         }
 
         await this.roleProfilesRepository.assignAllByRole(t, roleId, profileIds, actingUserId);
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'create',
             module_code: MODULE_CODE,
@@ -221,7 +218,7 @@ export class PermissionService implements IPermissionService {
             old_values: null,
             new_values: { role_id: roleId, profile_ids: profileIds, effect: 'allow' },
             status: 'success'
-        }).catch(console.error);
+        })
     }
 
     async revokeProfileFromRole(
@@ -242,6 +239,17 @@ export class PermissionService implements IPermissionService {
         }
 
         await this.roleProfilesRepository.revoke(t, roleId, profileId);
+
+        await this.auditService.log(t, {
+            user_id: actingUserId,
+            action: 'delete',
+            module_code: MODULE_CODE,
+            entity_type: 'role_profile',
+            entity_id: `${roleId}:${profileId}`,
+            old_values: { role_id: roleId, profile_id: profileId },
+            new_values: {},
+            status: 'success'
+        });
     }
 
     async getRoleProfiles(

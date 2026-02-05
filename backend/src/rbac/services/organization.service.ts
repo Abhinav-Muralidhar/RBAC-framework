@@ -59,7 +59,20 @@ export class OrganizationService implements IOrganizationService {
             created_by: acting_user_id
         };
 
-        return this.organizationRepository.create(t, org);
+        const organization = await this.organizationRepository.create(t, org);
+
+        await this.auditService.log(t, {
+            user_id: acting_user_id,
+            action: 'create',
+            module_code: MODULE_CODE,
+            entity_type: 'organization',
+            entity_id: organization.id,
+            old_values: null,
+            new_values: { ...org } as Record<string, unknown>,
+            status: 'success'
+        });
+
+        return organization;
 
     }
 
@@ -113,7 +126,7 @@ export class OrganizationService implements IOrganizationService {
         };
 
         const updatedOrganization = await this.organizationRepository.update(t, updated);
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: id,
             action: 'update',
             module_code: MODULE_CODE,

@@ -53,10 +53,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     const authSessionsRepository = new AuthSessionsRepository(db);
     const auditLogsRepository = new AuditLogsRepository(db);
     const moduleRepository = new ModuleRepository(db);
-
-    const sessionsRepo = new AuthSessionsRepository(db);
     const usersRepo = new UsersRepository(db);
-    const auditLogsRepo = new AuditLogsRepository(db);
     const permissionsRepository = new PermissionsRepository(db);
     const profilesRepository = new ProfilesRepository(db);
     const profilePermissionsRepository = new ProfilePermissionsRepository(db);

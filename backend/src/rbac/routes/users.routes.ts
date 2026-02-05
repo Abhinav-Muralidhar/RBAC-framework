@@ -7,14 +7,6 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import { UserService } from '../services/user.service';
-import { UsersRepository } from '../repositories/users.repository';
-import { EvaluationService } from '../services/evaluation.service';
-import { IAuditService } from '../services/audit.service';
-import { PermissionsRepository } from '../repositories/permissions.repository';
-import { ModuleRepository } from '../repositories/modules.repository';
-import { RoleProfilesRepository } from '../repositories/role_profiles.repository';
-import { UserRoleRepository } from '../repositories/user_roles.repository';
-import { ProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
 import { parseId, parsePagination } from './_paramUtils';
 import { IDatabase } from 'pg-promise';
 import { TransactionTask, withTransaction } from '../utils/transaction.utils';
@@ -52,18 +44,19 @@ export function createUsersRouter(db: IDatabase<unknown>, userService: UserServi
      */
     router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
                 const pagination = parsePagination(req.query);
                 const filters = parseFilters(req.query);
 
                 const result = await userService.listPaginated(t, actingUserId, filters, pagination);
-                sendSuccess(res, result.data, {
-                    page: result.pagination.page,
-                    limit: result.pagination.limit,
-                    total: result.pagination.total,
-                    totalPages: result.pagination.totalPages
-                });
+                return result;
+            });
+            sendSuccess(res, result.data, {
+                page: result.pagination.page,
+                limit: result.pagination.limit,
+                total: result.pagination.total,
+                totalPages: result.pagination.totalPages
             });
         } catch (error) {
             next(error);
@@ -76,15 +69,18 @@ export function createUsersRouter(db: IDatabase<unknown>, userService: UserServi
      */
     router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
                 const userId = parseId(req.params.id, 'userId');
 
                 const user = await userService.getById(t, req.user!.id, userId);
                 if (!user) {
-                    return sendError(res, 404, `User not found: ${userId}`, 'USER_NOT_FOUND');
+                    const err = new Error('User not found');
+                    (err as any).status = 404;
+                    throw err;
                 }
-                sendSuccess(res, user);
+                return user;
             });
+            sendSuccess(res, result);
         } catch (error) {
             next(error);
         }
@@ -96,11 +92,12 @@ export function createUsersRouter(db: IDatabase<unknown>, userService: UserServi
      */
     router.post('/', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
                 const user = await userService.create(t, actingUserId, req.body);
-                sendSuccess(res, user);
+                return user;
             });
+            sendSuccess(res, result);
         } catch (error) {
             next(error);
         }
@@ -112,12 +109,13 @@ export function createUsersRouter(db: IDatabase<unknown>, userService: UserServi
      */
     router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
                 const userId = parseId(req.params.id, 'userId');
                 const user = await userService.update(t, actingUserId, userId, req.body);
-                sendSuccess(res, user);
+                return user;
             });
+            sendSuccess(res, result);
         } catch (error) {
             next(error);
         }
@@ -129,12 +127,13 @@ export function createUsersRouter(db: IDatabase<unknown>, userService: UserServi
      */
     router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
                 const userId = parseId(req.params.id, 'userId');
                 await userService.delete(t, actingUserId, userId);
-                sendSuccess(res, { deleted: true });
+                return { message: 'Deleted successfully' };
             });
+            sendSuccess(res, result);
         } catch (error) {
             next(error);
         }
