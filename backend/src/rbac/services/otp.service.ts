@@ -42,7 +42,7 @@ export class OtpService implements IOtpService {
 
   async validateOtp(t: TransactionTask, userId: string, otpHash: string): Promise<boolean> {
     const valiasd = await this.otpRepo.findLatestByUser(userId, t);
-    if (valiasd?.attempt_count ?? 0 >= 5) {
+    if ((valiasd?.attempt_count ?? 0) >= 5) {
       throw new Error(`Maximum OTP generation attempts (${MAX_OTP_GENERATE}) reached`);
     }
     if (!await verifyPassword(valiasd?.otp_hash ?? '', otpHash)) {

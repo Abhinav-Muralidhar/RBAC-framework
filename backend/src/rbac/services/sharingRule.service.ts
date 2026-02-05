@@ -66,16 +66,16 @@ export class SharingRuleService implements ISharingRuleService {
 
         const updatedRule = await this.sharingRulesRepository.update(t, ruleId, share);
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'update',
             module_code: MODULE_CODE,
             entity_type: 'sharing_rule',
             entity_id: ruleId,
-            old_values: { ...existing } as Record<string, unknown>,
-            new_values: { ...data } as Record<string, unknown>,
+            old_values: { sharing_rule_id: existing.id, sharing_rule_type: existing.rule_type, is_active: existing.is_active },
+            new_values: { sharing_rule_id: updatedRule.id, sharing_rule_type: updatedRule.rule_type, is_active: updatedRule.is_active },
             status: 'success'
-        }).catch(console.error);
+        })
 
         return updatedRule;
 
@@ -87,15 +87,15 @@ export class SharingRuleService implements ISharingRuleService {
 
         await this.sharingRulesRepository.delete(t, ruleId);
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'delete',
             module_code: MODULE_CODE,
             entity_type: 'sharing_rule',
             entity_id: ruleId,
-            old_values: { ...existing } as Record<string, unknown>,
-            new_values: { is_deleted: true },
+            old_values: { sharing_rule_id: existing.id, sharing_rule_type: existing.rule_type, is_active: existing.is_active },
+            new_values: { sharing_rule_id: existing.id, sharing_rule_type: existing.rule_type, is_active: false },
             status: 'success'
-        }).catch(console.error);
+        })
     }
 }

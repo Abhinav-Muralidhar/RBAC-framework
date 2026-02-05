@@ -79,7 +79,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
             await this.userGroupsRepository.replaceUsers(t, group.id, users, actingUserId);
         }
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'create',
             module_code: MODULE_CODE,
@@ -88,7 +88,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
             old_values: null,
             new_values: { ...data } as Record<string, unknown>,
             status: 'success'
-        }).catch(console.error);
+        });
 
         return group;
     }
@@ -124,7 +124,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
             await this.userGroupsRepository.replaceUsers(t, groupId, users, actingUserId);
         }
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'update',
             entity_type: 'group',
@@ -133,7 +133,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
             old_values: { ...existing } as Record<string, unknown>,
             new_values: { ...data } as Record<string, unknown>,
             status: 'success'
-        }).catch(console.error);
+        })
 
         return result;
     }
@@ -144,7 +144,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
 
         await this.groupRepository.delete(t, groupId);
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'delete',
             entity_type: 'group',
@@ -153,6 +153,6 @@ export class UnifiedGroupService implements IUnifiedGroupService {
             old_values: { ...existing } as Record<string, unknown>,
             new_values: { is_deleted: true },
             status: 'success'
-        }).catch(console.error);
+        })
     }
 }

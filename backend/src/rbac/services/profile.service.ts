@@ -20,7 +20,6 @@ import {
 } from '../errors/rbac.errors';
 import { CreateProfileRequestDto, ProfileResponseDto, UpdateProfileRequestDto } from '../dto/profile.dto';
 import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
-import { Permissions } from '../models/permissions.model';
 
 // Module code for RBAC operations
 const MODULE_CODE = 'SETTINGS';
@@ -80,16 +79,16 @@ export class ProfileService implements IProfileService {
             await this.profilePermissionsRepository.replacePermissions(t, profile.id, permissions.map(p => p.id));
         }
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'create',
             module_code: MODULE_CODE,
             entity_type: 'profile',
             entity_id: profile.id,
             old_values: null,
-            new_values: { ...data },
+            new_values: { profile_id: profile.id, profile_name: profile.name, is_active: profile.is_active, profile_description: profile.description },
             status: 'success'
-        }).catch(console.error);
+        });
 
         return profile;
     }
@@ -124,16 +123,16 @@ export class ProfileService implements IProfileService {
             await this.profilePermissionsRepository.replacePermissions(t, profileId, permissions.map(p => p.id));
         }
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             module_code: MODULE_CODE,
             action: 'update',
             entity_type: 'profile',
             entity_id: profileId,
-            old_values: { ...existing },
-            new_values: { ...data },
+            old_values: { profile_id: existing.id, profile_name: existing.name, is_active: existing.is_active, profile_description: existing.description },
+            new_values: { profile_id: updated.id, profile_name: updated.name, is_active: updated.is_active, profile_description: updated.description },
             status: 'success'
-        }).catch(console.error);
+        });
 
         return updated;
     }
@@ -153,15 +152,15 @@ export class ProfileService implements IProfileService {
 
         await this.profilesRepository.update(t, profileId, prof);
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'delete',
             module_code: MODULE_CODE,
             entity_type: 'profile',
             entity_id: profileId,
-            old_values: { ...existing },
-            new_values: { is_deleted: true },
+            old_values: { profile_id: existing.id, profile_name: existing.name, is_active: existing.is_active, profile_description: existing.description },
+            new_values: { profile_id: existing.id, profile_name: existing.name, is_active: false, profile_description: existing.description },
             status: 'success'
-        }).catch(console.error);
+        });
     }
 }

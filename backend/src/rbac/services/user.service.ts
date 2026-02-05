@@ -79,15 +79,15 @@ export class UserService implements IUserService {
         const user = await this.userRepository.create(t, userData);
         await this.userRolesRepository.assign(t, user.id, data.rolesid as string);
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'create',
             entity_type: 'user',
             entity_id: user.id,
             old_values: null,
-            new_values: { ...data, password: '[REDACTED]' },
+            new_values: { user_id: user.id, username: user.username, primary_email: user.primary_email, last_name: user.last_name, password: '[REDACTED]' },
             status: 'success'
-        }).catch(console.error);
+        })
 
         return user;
     }
@@ -126,15 +126,15 @@ export class UserService implements IUserService {
         await this.userRolesRepository.revokeAllByUser(t, id);
         await this.userRolesRepository.assign(t, id, data.rolesid as string);
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'update',
             entity_type: 'user',
             entity_id: id,
-            old_values: { ...oldUser, password: '[REDACTED]' },
-            new_values: { ...cleanData, password: cleanData.password ? '[REDACTED]' : undefined },
+            old_values: { user_id: oldUser.id, username: oldUser.username, primary_email: oldUser.primary_email, last_name: oldUser.last_name, password: '[REDACTED]' },
+            new_values: { user_id: updatedUser.id, username: updatedUser.username, primary_email: updatedUser.primary_email, last_name: updatedUser.last_name, password: updatedUser.password ? '[REDACTED]' : undefined },
             status: 'success'
-        }).catch(console.error);
+        })
 
         return updatedUser;
     }
@@ -145,15 +145,15 @@ export class UserService implements IUserService {
 
         await this.userRepository.delete(t, id);
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'delete',
             entity_type: 'user',
             entity_id: id,
-            old_values: oldUser ? { ...oldUser, password: '[REDACTED]' } : null,
-            new_values: { status: 'deleted' },
+            old_values: oldUser ? { user_id: oldUser.id, username: oldUser.username, primary_email: oldUser.primary_email, last_name: oldUser.last_name, password: '[REDACTED]' } : null,
+            new_values: oldUser ? { user_id: oldUser.id, username: oldUser.username, primary_email: oldUser.primary_email, last_name: oldUser.last_name, password: '[REDACTED]' } : {},
             status: 'success'
-        }).catch(console.error);
+        })
     }
 
     async deactivate(t: TransactionTask, actingUserId: string, id: string): Promise<void> {
@@ -161,14 +161,14 @@ export class UserService implements IUserService {
 
         await this.userRepository.deactivate(t, id);
 
-        this.auditService.log(t, {
+        await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'delete',
             entity_type: 'user',
             entity_id: id,
-            old_values: oldUser ? { ...oldUser, password: '[REDACTED]' } : null,
-            new_values: { status: 'inactive' },
+            old_values: oldUser ? { user_id: oldUser.id, username: oldUser.username, primary_email: oldUser.primary_email, last_name: oldUser.last_name, password: '[REDACTED]' } : null,
+            new_values: oldUser ? { user_id: oldUser.id, username: oldUser.username, primary_email: oldUser.primary_email, last_name: oldUser.last_name, password: '[REDACTED]' } : {},
             status: 'success'
-        }).catch(console.error);
+        })
     }
 }

@@ -134,6 +134,24 @@ export class AuthSessionService implements IAuthSessionService {
             throw new SessionNotFoundError(sessionId);
         }
         await this.authSessionsRepository.deleteOneForUser(t, sessionId, userId, actingUserId);
+        await this.auditService.log(undefined, {
+            user_id: actingUserId,
+            action: 'delete',
+            module_code: MODULE_CODE,
+            entity_type: 'session',
+            entity_id: session.id,
+            old_values: {
+                ip_address: session.ip_address,
+                user_agent: session.user_agent,
+                login_at: session.login_at
+            },
+            new_values: {
+                logout_at: new Date().toISOString()
+            },
+            ip_address: session.ip_address,
+            user_agent: session.user_agent,
+            status: 'success'
+        }).catch(console.error);
 
     }
 
@@ -171,7 +189,7 @@ export class AuthSessionService implements IAuthSessionService {
         });
 
         // AUDIT: Log session creation (login) (fire-and-forget)
-        this.auditService.log(t, {
+        await this.auditService.log(undefined, {
             user_id: data.user_id,
             action: 'create',
             module_code: MODULE_CODE,
@@ -223,7 +241,7 @@ export class AuthSessionService implements IAuthSessionService {
         await this.authSessionsRepository.update(t, sessionId, updated);
 
         // AUDIT: Log session logout (fire-and-forget)
-        this.auditService.log(undefined, {
+        await this.auditService.log(undefined, {
             user_id: existing.user_id,
             module_code: MODULE_CODE,
             action: 'update',
@@ -243,7 +261,7 @@ export class AuthSessionService implements IAuthSessionService {
         await this.authSessionsRepository.delete(t, sessionId, actingUserId);
 
         // AUDIT: Log session revocation (fire-and-forget)
-        this.auditService.log(undefined, {
+        await this.auditService.log(undefined, {
             user_id: actingUserId,
             module_code: MODULE_CODE,
             action: 'delete',
@@ -263,7 +281,7 @@ export class AuthSessionService implements IAuthSessionService {
         await this.authSessionsRepository.deleteAllByUser(t, userId);
 
         // AUDIT: Log bulk session revocation (fire-and-forget)
-        this.auditService.log(t, {
+        await this.auditService.log(undefined, {
             user_id: actingUserId,
             module_code: MODULE_CODE,
             action: 'delete',
