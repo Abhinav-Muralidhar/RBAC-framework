@@ -8,38 +8,10 @@ import type { AuditLog } from '../../../core/types/audit.types';
 import { Search, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 import './SettingsPage.css';
+import { usePaginatedData } from '../../../core/hooks/usePaginatedData';
 
 export function AuditLogsPage() {
-    const [logs, setLogs] = useState<AuditLog[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
-    const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-
-    useEffect(() => {
-        loadLogs();
-    }, [page]);
-
-    const loadLogs = async () => {
-        try {
-            setIsLoading(true);
-            const response = await auditLogsApi.list({ page, limit: 20 });
-            setLogs(response.data || []);
-            setTotalPages(response.meta?.totalPages || 1);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load audit logs');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const filteredLogs = logs.filter(log =>
-        log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.entity_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (log.user_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
-    );
-
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'success': return 'status-active';
@@ -48,6 +20,23 @@ export function AuditLogsPage() {
             default: return '';
         }
     };
+
+    const {
+        data: logs,
+        isLoading,
+        error,
+        page,
+        totalPages,
+        limit,
+        setPage,
+        setLimit,
+        reload
+    } = usePaginatedData<AuditLog>(auditLogsApi.list, 20);
+    const filteredLogs = (logs || []).filter(log =>
+        log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        log.entity_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (log.user_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+    );
 
     return (
         <div className="settings-page">
@@ -96,22 +85,24 @@ export function AuditLogsPage() {
                                 {filteredLogs.map(log => (
                                     <tr key={log.id}>
                                         <td className="text-muted">
-                                            {format(new Date(log.created_at), 'MMM d, yyyy HH:mm:ss')}
+                                            {log.created_at ? format(new Date(log.created_at), 'MMM d, yyyy HH:mm:ss') : '-'}
                                         </td>
                                         <td>{log.user_name || log.user_email || '-'}</td>
                                         <td>
-                                            <span className="action-badge">{log.action}</span>
+                                            <span className="action-badge">{log.action || '-'}</span>
                                         </td>
                                         <td>
-                                            <code>{log.entity_type}</code>
-                                            <span className="text-muted"> #{log.entity_id.slice(0, 8)}</span>
-                                        </td>
-                                        <td>
-                                            <span className={`status-badge ${getStatusColor(log.status)}`}>
-                                                {log.status}
+                                            <code>{log.entity_type || '-'}</code>
+                                            <span className="text-muted">
+                                                #{log.entity_id ? log.entity_id.toString().slice(0, 8) : '-'}
                                             </span>
                                         </td>
-                                        <td className="text-muted">{log.ip_address}</td>
+                                        <td>
+                                            <span className={`status-badge ${getStatusColor(log.status || '')}`}>
+                                                {log.status || '-'}
+                                            </span>
+                                        </td>
+                                        <td className="text-muted">{log.ip_address || '-'}</td>
                                     </tr>
                                 ))}
                                 {filteredLogs.length === 0 && (
@@ -124,9 +115,9 @@ export function AuditLogsPage() {
                     </div>
 
                     <div className="pagination">
-                        <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</button>
+                        <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
                         <span>Page {page} of {totalPages}</span>
-                        <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
+                        <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
                     </div>
                 </>
             )}
