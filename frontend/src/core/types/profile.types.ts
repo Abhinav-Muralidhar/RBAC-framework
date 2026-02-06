@@ -46,3 +46,12 @@ export interface ProfileSummaryDto {
     code: string;
     is_active: boolean;
 }
+
+export interface Permission {
+    id: string;
+    module_id: string;
+    module_code: string;
+    module_name: string;
+    action: string;
+    description: string;
+}
