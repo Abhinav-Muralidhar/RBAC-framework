@@ -40,6 +40,8 @@ import { OrganizationRepository } from '../repositories/organizations.repository
 import { createSmtpRouter } from './smtp.routes';
 import { SmtpConfigRepository } from '../repositories/smtp_config.repository';
 import { SmtpConfigService } from '../services/smtpConfig.service';
+import { createPermissionsRouter } from './permissions.routes';
+
 
 /**
  * Create the main RBAC router with all sub-routes
@@ -92,6 +94,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     router.use('/users', createUsersRouter(db, userService));
     router.use('/roles', createRolesRouter(db, auditService, evaluationService, roleService));
     router.use('/profiles', createProfilesRouter(db, auditService, evaluationService, profileService));
+    router.use('/permissions', createPermissionsRouter(permissionsRepository));
     router.use('/groups', createGroupsRouter(db, evaluationService, auditService, groupService));
     router.use('/audit-logs', createAuditLogsRouter(db, auditService, evaluationService));
     router.use('/sessions', createSessionsRouter(db, auditService, evaluationService, authSessionService));

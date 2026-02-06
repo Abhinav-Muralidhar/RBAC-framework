@@ -7,7 +7,7 @@
 import { apiClient, type PaginatedResponse, type ApiResponse } from './client';
 import type { User, CreateUserDto, UpdateUserDto } from '../types/user.types';
 import type { Role, CreateRoleDto, UpdateRoleDto } from '../types/role.types';
-import type { Profile, CreateProfileDto, UpdateProfileDto } from '../types/profile.types';
+import type { Profile, CreateProfileDto, UpdateProfileDto, Permission } from '../types/profile.types';
 import type { Group, CreateGroupDto, UpdateGroupDto } from '../types/group.types';
 import type { AuditLog } from '../types/audit.types';
 import type { Session } from '../types/session.types';
@@ -298,6 +298,21 @@ export const organizationApi = {
             `/rbac/organization/${id}`,
             data
         );
+        return response.data;
+    },
+};
+
+// ============================================================================
+// Permissions (Metadata)
+// ============================================================================
+
+export const permissionsApi = {
+    /**
+     * Get all permissions for UI assignment
+     * Returns module_id, module_code, module_name, action, description
+     */
+    list: async (): Promise<Permission[]> => {
+        const response = await get<ApiResponse<Permission[]>>('/rbac/permissions');
         return response.data;
     },
 };
