@@ -65,12 +65,8 @@ export function createAuditLogsRouter(db: IDatabase<unknown>, auditLogService: A
 
                 return logs;
             });
-            sendSuccess(res, result, {
-                page: result.pagination.page,
-                limit: result.pagination.limit,
-                total: result.pagination.total,
-                totalPages: result.pagination.totalPages
-            });
+            sendSuccess(res, result.data, result.pagination);
+
         } catch (error) {
             sendError(res, 500, 'Audit log retrieval failed', 'INTERNAL_ERROR');
         }
