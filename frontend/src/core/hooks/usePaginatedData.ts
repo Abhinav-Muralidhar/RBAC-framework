@@ -29,20 +29,22 @@ export function usePaginatedData<T>(
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
-
     const loadData = useCallback(async () => {
         setIsLoading(true);
         setError('');
         try {
             const response = await fetchFn({ page, limit });
-            const items = response.data ?? response.data?.data ?? [];
-            const pagination = response.meta?.pagination ?? {
+            console.log('API response:', response);  // Log the response
+
+            const { data: responseData = [], meta } = response;
+            const pagination = meta?.pagination ?? {
                 page: 1,
                 limit,
-                total: items.length,
+                total: responseData.length,
                 totalPages: 1,
             };
-            const responseData = Array.isArray(response.data?.data) ? response.data.data : [];
+
+            console.log('Pagination data:', pagination); // Log pagination data
 
             setData(responseData);
             setTotalPages(pagination.totalPages);
@@ -55,7 +57,7 @@ export function usePaginatedData<T>(
 
     useEffect(() => {
         loadData();
-    }, [loadData]);
+    }, [loadData, page, limit]);
 
     return { data, isLoading, error, page, totalPages, limit, reload: loadData, setPage, setLimit };
 }

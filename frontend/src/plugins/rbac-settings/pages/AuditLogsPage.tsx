@@ -1,7 +1,3 @@
-/**
- * Audit Logs Page
- */
-
 import { useState, useEffect } from 'react';
 import { auditLogsApi } from '../../../core/api/rbac.api';
 import type { AuditLog } from '../../../core/types/audit.types';
@@ -12,6 +8,8 @@ import { usePaginatedData } from '../../../core/hooks/usePaginatedData';
 
 export function AuditLogsPage() {
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Function to get the color based on the status
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'success': return 'status-active';
@@ -21,6 +19,7 @@ export function AuditLogsPage() {
         }
     };
 
+    // Fetch paginated logs using the custom hook
     const {
         data: logs,
         isLoading,
@@ -32,6 +31,14 @@ export function AuditLogsPage() {
         setLimit,
         reload
     } = usePaginatedData<AuditLog>(auditLogsApi.list, 20);
+
+    // Debugging: Log the values of the current page and the API response
+    useEffect(() => {
+        console.log(`Current page: ${page}`);
+        console.log(`Total pages: ${totalPages}`);
+    }, [page, totalPages]);
+
+    // Filter the logs based on search query
     const filteredLogs = (logs || []).filter(log =>
         log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
         log.entity_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -114,10 +121,30 @@ export function AuditLogsPage() {
                         </table>
                     </div>
 
+                    {/* Pagination Controls */}
                     <div className="pagination">
-                        <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
-                        <span>Page {page} of {totalPages}</span>
-                        <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
+                        {/* Previous Page Button */}
+                        <button
+                            disabled={page <= 1}
+                            onClick={() => setPage(page - 1)}
+                            className="pagination-button"
+                        >
+                            Previous
+                        </button>
+
+                        {/* Page Info */}
+                        <span className="pagination-info">
+                            Page {page} of {totalPages}
+                        </span>
+
+                        {/* Next Page Button */}
+                        <button
+                            disabled={page >= totalPages}
+                            onClick={() => setPage(page + 1)}
+                            className="pagination-button"
+                        >
+                            Next
+                        </button>
                     </div>
                 </>
             )}
