@@ -125,8 +125,11 @@ export class UserService implements IUserService {
         const updatedUser = await this.userRepository.update(t, updateUserData);
         const updateUserDetail = await this.userRepository.findByIdWithDetails(t, id);
         if (!updateUserDetail) throw new Error('User not found');
-        await this.userRolesRepository.revokeAllByUser(t, id);
-        await this.userRolesRepository.assign(t, id, updateUserDetail.rolesid as string);
+        if (data.rolesid) {
+            await this.userRolesRepository.revokeAllByUser(t, id);
+            await this.userRolesRepository.assign(t, id, data.rolesid);
+        }
+
 
         await this.auditService.log(t, {
             user_id: actingUserId,

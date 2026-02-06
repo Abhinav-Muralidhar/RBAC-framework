@@ -71,6 +71,8 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
         setSelectedRole(prev => (prev === roleId ? null : roleId));
     };
 
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+
     // ---------------- VALIDATION ----------------
 
     const validate = (): boolean => {
@@ -224,47 +226,76 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             </div>
 
             {/* Roles */}
-            <div className="form-field">
-                <label className="form-label">Assign Roles</label>
+            {/* Roles */}
+            <div className="form-field" style={{ position: 'relative' }}>
+                <label className="form-label">Assign Role</label>
 
-                {/* Search input */}
                 <input
                     type="text"
-                    placeholder="Search roles..."
-                    value={roleSearch}
+                    placeholder="Select a role..."
+                    value={
+                        selectedRole
+                            ? availableRoles.find(r => r.id === selectedRole)?.name || ''
+                            : roleSearch
+                    }
                     onChange={e => setRoleSearch(e.target.value)}
-                    style={{ width: '100%', padding: '0.5rem', marginBottom: '0.25rem' }}
+                    onFocus={() => setDropdownOpen(true)}
+                    style={{ width: '100%', padding: '0.5rem' }}
+                    autoComplete="off"
                 />
 
-                {/* Native select dropdown */}
-                <select className='form-select'
-                    value={selectedRole || ''}
-                    onChange={e => setSelectedRole(e.target.value)}
-                    size={Math.min(5, availableRoles.length)} // shows a few options, scrollable
-                >
-                    <option value="" disabled >
-                        Select a role
-                    </option>
-
-                    {availableRoles
-                        .filter(role =>
+                {/* Dropdown list */}
+                {dropdownOpen && (
+                    <div
+                        className="dropdown-options"
+                        style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            border: '1px solid #ccc',
+                            backgroundColor: 'white',
+                            zIndex: 1000,
+                        }}
+                    >
+                        {availableRoles
+                            .filter(role =>
+                                role.name.toLowerCase().includes(roleSearch.toLowerCase())
+                            )
+                            .map(role => {
+                                const isCurrent = role.id === user?.rolesid; // cannot select user's own role
+                                return (
+                                    <div
+                                        key={role.id}
+                                        className={`dropdown-item ${isCurrent ? 'disabled' : ''}`}
+                                        style={{
+                                            padding: '0.5rem',
+                                            cursor: isCurrent ? 'not-allowed' : 'pointer',
+                                            color: isCurrent ? '#999' : '#000',
+                                        }}
+                                        onClick={() => {
+                                            if (!isCurrent) {
+                                                setSelectedRole(role.id);
+                                                setRoleSearch('');
+                                                setDropdownOpen(false);
+                                            }
+                                        }}
+                                    >
+                                        {role.name} {isCurrent && '(Current)'}
+                                    </div>
+                                );
+                            })}
+                        {availableRoles.filter(role =>
                             role.name.toLowerCase().includes(roleSearch.toLowerCase())
-                        )
-                        .map(role => (
-                            <option
-                                key={role.id}
-                                value={role.id}
-                                disabled={role.id === user?.rolesid}
-                            >
-                                {role.name}
-                            </option>
-                        ))}
-                </select>
-
-                {availableRoles.length === 0 && (
-                    <span className="text-muted">No roles available</span>
+                        ).length === 0 && (
+                                <div style={{ padding: '0.5rem', color: '#999' }}>No roles found</div>
+                            )}
+                    </div>
                 )}
             </div>
+
 
 
             {/* Hidden submit button */}
