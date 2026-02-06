@@ -131,7 +131,7 @@ export class ProfilePermissionsRepository implements IProfilePermissionsReposito
         await (t ?? this.db).none(
             `INSERT INTO ${this.tableName} (profile_id, permission_id, effect)
              SELECT $1, pid, 'allow'
-             FROM UNNEST($2::uuid[]) AS pid`,
+             FROM UNNEST($2::bigint[]) AS pid`,
             [profileId, permissionIds]
         );
     }

@@ -27,7 +27,7 @@ export function SmtpPage() {
         entityName: 'SMTP configurations',
     });
 
-    const [activating, setActivating] = useState<string | null>(null);
+    /*const [activating, setActivating] = useState<string | null>(null);
 
     const handleActivate = async (config: SmtpConfig) => {
         setActivating(config.id);
@@ -39,7 +39,7 @@ export function SmtpPage() {
         } finally {
             setActivating(null);
         }
-    };
+    };*/
 
     if (crud.isLoading) {
         return <div className="settings-page-loading">Loading...</div>;
@@ -113,7 +113,7 @@ export function SmtpPage() {
                                     </td>
                                     <td>
                                         <div className="action-buttons">
-                                            {!config.is_active && (
+                                            {/* {!config.is_active && (
                                                 <button
                                                     className="btn-icon btn-activate"
                                                     onClick={() => handleActivate(config)}
@@ -122,7 +122,7 @@ export function SmtpPage() {
                                                 >
                                                     <Check size={16} />
                                                 </button>
-                                            )}
+                                            )} */}
                                             <button
                                                 className="btn-icon"
                                                 onClick={() => crud.openEdit(config)}
@@ -134,7 +134,6 @@ export function SmtpPage() {
                                                 className="btn-icon btn-danger"
                                                 onClick={() => crud.openDelete(config)}
                                                 title="Delete"
-                                                disabled={config.is_active}
                                             >
                                                 <Trash2 size={16} />
                                             </button>

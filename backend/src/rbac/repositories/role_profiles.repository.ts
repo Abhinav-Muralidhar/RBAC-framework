@@ -29,9 +29,10 @@ export class RoleProfilesRepository implements IRoleProfilesRepository {
     );
   }
   async findByIds(t: ITask<unknown> | undefined, ids: string[]): Promise<RoleProfiles[]> {
+    const numericIds = ids.map(id => BigInt(id));
     return this.query<RoleProfiles>(
-      `SELECT * FROM ${this.tableName} WHERE profile_id = ANY($1)`,
-      [ids],
+      `SELECT * FROM ${this.tableName} WHERE profile_id = ANY($1::bigint[])`,
+      [numericIds],
       t
     );
   }
@@ -87,16 +88,18 @@ export class RoleProfilesRepository implements IRoleProfilesRepository {
     assignedBy?: string
   ): Promise<void> {
     if (!profileIds.length) return;
+    const numericProfileIds = profileIds.map(id => BigInt(id));
+
 
     await this.revokeAllByRole(t, roleId);
 
-    const values = profileIds
-      .map((_, i) => `($1, $${i + 2}, $${profileIds.length + 2})`)
+    const values = numericProfileIds
+      .map((_, i) => `($1, $${i + 2}, $${numericProfileIds.length + 2})`)
       .join(', ');
 
     await (t ?? this.db).none(
       `INSERT INTO ${this.tableName} (role_id, profile_id, assigned_by) VALUES ${values}`,
-      [roleId, ...profileIds, assignedBy ?? null]
+      [roleId, ...numericProfileIds, assignedBy ?? null]
     );
   }
 }

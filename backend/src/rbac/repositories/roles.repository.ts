@@ -75,10 +75,20 @@ export class RoleRepository implements IRoleRepository {
     id: string,
     isActive?: boolean
   ): Promise<Roles | null> {
-    return (t ?? this.db).oneOrNone<Roles>(
-      `SELECT * FROM ${this.tableName} WHERE id = $1 AND is_active = $2`,
-      [id, isActive]
-    );
+    const numericId = BigInt(id);
+    // If `is_active` is not provided, do not filter by it
+    if (isActive === undefined) {
+      return (t ?? this.db).oneOrNone<Roles>(
+        `SELECT * FROM ${this.tableName} WHERE id = $1`,
+        [numericId]
+      );
+    } else {
+      // If `is_active` is provided, include it in the query
+      return (t ?? this.db).oneOrNone<Roles>(
+        `SELECT * FROM ${this.tableName} WHERE id = $1 AND is_active = $2`,
+        [numericId, isActive]
+      );
+    }
   }
 
   async findByIds(

@@ -1,10 +1,3 @@
-/**
- * Profile Form Component
- *
- * Create/Edit profile form used in FormModal.
- * Uses centralized validators.
- */
-
 import { useState, useEffect } from 'react';
 import { FormInput, FormSwitch } from '../../../core/components/FormElements';
 import type { Profile, CreateProfileDto, UpdateProfileDto, Permission } from '../../../core/types/profile.types';
@@ -30,10 +23,16 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
 
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [permissions, setPermissions] = useState<Permission[]>([]);
-    const [selectedPermissionIds, setSelectedPermissionIds] = useState<string[]>(
-        profile?.permissions?.map(p => p.id) ?? []
-    );
+    const [selectedPermissionIds, setSelectedPermissionIds] = useState<string[]>(profile?.permissions?.map(p => p.id) ?? []);
+    const [loadingPermissions, setLoadingPermissions] = useState(true); // Loading state for permissions
 
+    // Define a mapping for module_id to module_name
+    const moduleMapping: Record<string, string> = {
+        "1": "Settings",
+        "2": "Dashboard",
+    };
+
+    // Toggle selected permission
     const togglePermission = (id: string) => {
         setSelectedPermissionIds(prev =>
             prev.includes(id)
@@ -42,11 +41,12 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
         );
     };
 
-    // Group permissions by module
+    // Group permissions by module_name (based on module_id)
     const groupedPermissions = permissions.reduce<Record<string, Permission[]>>(
         (acc, p) => {
-            acc[p.module_name] ||= [];
-            acc[p.module_name].push(p);
+            const moduleName = moduleMapping[p.module_id] || 'Unknown'; // Use module mapping to find module name
+            acc[moduleName] ||= [];
+            acc[moduleName].push(p);
             return acc;
         },
         {}
@@ -55,17 +55,23 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
     // Load all permissions on mount
     useEffect(() => {
         permissionsApi.list()
-            .then(setPermissions)
-            .catch(() => onError('Failed to load permissions'));
+            .then(permissions => {
+                setPermissions(permissions);
+                setLoadingPermissions(false);  // Permissions are now loaded
+            })
+            .catch(() => {
+                onError('Failed to load permissions');
+                setLoadingPermissions(false);  // Even on error, stop loading
+            });
     }, []);
 
+    // Handle form field changes
     const handleChange = (field: string, value: string | boolean) => {
         setFormData(prev => ({ ...prev, [field]: value }));
         if (errors[field]) setErrors(prev => ({ ...prev, [field]: '' }));
     };
 
     // ---------------- VALIDATION ----------------
-
     const validate = (): boolean => {
         const newErrors: Record<string, string> = {};
         const nameErr = validateRequired(formData.name.trim(), 'Name');
@@ -81,7 +87,6 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
     };
 
     // ---------------- SUBMIT ----------------
-
     const handleSubmit = async () => {
         if (!validate()) return;
 
@@ -115,13 +120,16 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
     };
 
     // ---------------- UI ----------------
+    if (loadingPermissions) {
+        return <div>Loading Permissions...</div>; // Show loading message while permissions are being fetched
+    }
 
     return (
         <div className="entity-form">
             <FormInput
                 label="Profile Name"
                 value={formData.name}
-                onChange={e => handleChange('name', e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('name', e.target.value)}
                 error={errors.name}
                 required
             />
@@ -129,7 +137,7 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
             <FormInput
                 label="Code"
                 value={formData.code}
-                onChange={e => handleChange('code', e.target.value.toUpperCase())}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('code', e.target.value.toUpperCase())}
                 error={errors.code}
                 disabled={isEditing}
                 required
@@ -141,7 +149,7 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
                 <textarea
                     className="form-textarea"
                     value={formData.description}
-                    onChange={e => handleChange('description', e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleChange('description', e.target.value)}
                     rows={3}
                 />
             </div>
@@ -181,6 +189,7 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
         </div>
     );
 }
+
 export function submitProfileForm() {
     document.getElementById('profile-form-submit')?.click();
 }

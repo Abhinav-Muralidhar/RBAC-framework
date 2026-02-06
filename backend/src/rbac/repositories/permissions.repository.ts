@@ -76,9 +76,10 @@ export class PermissionsRepository implements IPermissionsRepository {
         t: ITask<unknown> | undefined,
         ids: string[]
     ): Promise<{ id: string }[]> {
+        const numericIds = ids.map(id => BigInt(id));
         return (t ?? this.db).any(
-            `SELECT id FROM ${this.tableName} WHERE id = ANY($1)`,
-            [ids]
+            `SELECT id FROM ${this.tableName} WHERE id = ANY($1::bigint[])`,
+            [numericIds]
         );
     }
 
