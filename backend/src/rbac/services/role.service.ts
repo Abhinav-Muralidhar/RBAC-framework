@@ -10,6 +10,7 @@ import { Roles } from '../models/roles.model';
 import { IRoleRepository } from '../repositories/roles.repository';
 import { IUserRoleRepository } from '../repositories/user_roles.repository';
 import { IRoleProfilesRepository } from '../repositories/role_profiles.repository';
+import { IProfilesRepository } from '../repositories/profiles.repository';
 import { IEvaluationService } from './evaluation.service';
 import { IAuditService } from './audit.service';
 import {
@@ -44,6 +45,7 @@ export class RoleService implements IRoleService {
         private roleProfilesRepository: IRoleProfilesRepository,
         private evaluationService: IEvaluationService,
         private auditService: IAuditService,
+        private profilesRepository: IProfilesRepository,
     ) { }
 
     async getById(t: TransactionTask, actingUserId: string, roleId: string): Promise<RoleResponseDto | RoleNotFoundError> {
@@ -94,9 +96,9 @@ export class RoleService implements IRoleService {
         });
         const profileIds = data.profile_ids ?? []; // convert null/undefined to empty array
         if (profileIds.length > 0) {
-            const profiles = await this.roleProfilesRepository.findByIds(t, profileIds);
+            const profiles = await this.profilesRepository.findByIds(t, profileIds);
             if (profiles.length !== profileIds.length) {
-                const foundIds = new Set(profiles.map(p => p.profile_id));
+                const foundIds = new Set(profiles.map(p => p.id));
                 const missing = profileIds.filter(id => !foundIds.has(id));
                 throw new ProfileNotFoundError(missing.join(', '));
             }
@@ -136,9 +138,9 @@ export class RoleService implements IRoleService {
 
         const profileIds = data.profile_ids ?? []; // convert null/undefined to empty array
         if (profileIds.length > 0) {
-            const profiles = await this.roleProfilesRepository.findByIds(t, profileIds);
+            const profiles = await this.profilesRepository.findByIds(t, profileIds);
             if (profiles.length !== profileIds.length) {
-                const foundIds = new Set(profiles.map(p => p.profile_id));
+                const foundIds = new Set(profiles.map(p => p.id));
                 const missing = profileIds.filter(id => !foundIds.has(id));
                 throw new ProfileNotFoundError(missing.join(', '));
             }

@@ -69,8 +69,12 @@ export class ProfileService implements IProfileService {
             created_by: actingUserId
         });
         const perms = data.permission_ids ?? []
+        console.log('Creating profile with permission_ids:', perms);  // Debugging log
+
         if (perms.length > 0) {
             const permissions = await this.permissionsRepository.findByIds(t, perms as string[]);
+            console.log('Permissions found:', permissions);  // Debugging log
+
             if (permissions.length !== perms.length) {
                 const foundIds = new Set(permissions.map(p => p.id));
                 const missing = perms.filter(id => !foundIds.has(id));

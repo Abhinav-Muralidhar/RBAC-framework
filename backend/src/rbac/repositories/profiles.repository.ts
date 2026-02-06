@@ -61,9 +61,10 @@ export class ProfilesRepository implements IProfilesRepository {
     t: ITask<unknown> | undefined,
     ids: string[]
   ): Promise<Profiles[]> {
+    const numericIds = ids.map(id => BigInt(id));
     return (t ?? this.db).any<Profiles>(
-      `SELECT * FROM ${this.tableName} WHERE id = ANY($1)`,
-      [ids]
+      `SELECT * FROM ${this.tableName} WHERE id = ANY($1::bigint[])`,
+      [numericIds]
     );
   }
 

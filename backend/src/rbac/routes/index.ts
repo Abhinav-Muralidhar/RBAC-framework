@@ -41,6 +41,8 @@ import { createSmtpRouter } from './smtp.routes';
 import { SmtpConfigRepository } from '../repositories/smtp_config.repository';
 import { SmtpConfigService } from '../services/smtpConfig.service';
 import { createPermissionsRouter } from './permissions.routes';
+import { PermissionService } from '../services/permission.service';
+import { ModuleService } from '../services/module.service';
 
 
 /**
@@ -67,7 +69,6 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     const userGroupsRepository = new UserGroupsRepository(db);
     const organizationRepository = new OrganizationRepository(db);
     const smtpConfigRepository = new SmtpConfigRepository(db);
-    // ============================
     // Services
     // ============================
     const evaluationService = new EvaluationService(new PermissionsRepository(db));
@@ -76,10 +77,14 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     const groupService = new UnifiedGroupService(groupRepository, groupRoleRepository, auditService, userGroupsRepository);
     const authSessionService = new AuthSessionService(authSessionsRepository, auditService, evaluationService);
     const userService = new UserService(usersRepo, userRolesRepository, evaluationService, auditService);
-    const roleService = new RoleService(roleRepository, userRolesRepository, roleProfilesRepository, evaluationService, auditService);
+    const roleService = new RoleService(roleRepository, userRolesRepository, roleProfilesRepository, evaluationService, auditService, profilesRepository);
     const profileService = new ProfileService(profilesRepository, profilePermissionsRepository, permissionsRepository, evaluationService, auditService);
     const organizationService = new OrganizationService(organizationRepository, auditService);
     const smtpConfigService = new SmtpConfigService(smtpConfigRepository, auditService);
+    const permissionService = new PermissionService(permissionsRepository, profilesRepository, profilePermissionsRepository, roleProfilesRepository, moduleRepository, roleRepository, evaluationService, auditService
+    );
+
+    const moduleService = new ModuleService(moduleRepository, evaluationService, auditService);
     // ============================
     // Middleware
     // ============================
@@ -94,7 +99,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     router.use('/users', createUsersRouter(db, userService));
     router.use('/roles', createRolesRouter(db, auditService, evaluationService, roleService));
     router.use('/profiles', createProfilesRouter(db, auditService, evaluationService, profileService));
-    router.use('/permissions', createPermissionsRouter(permissionsRepository));
+    router.use('/permissions', createPermissionsRouter(permissionService, moduleService));
     router.use('/groups', createGroupsRouter(db, evaluationService, auditService, groupService));
     router.use('/audit-logs', createAuditLogsRouter(db, auditService, evaluationService));
     router.use('/sessions', createSessionsRouter(db, auditService, evaluationService, authSessionService));

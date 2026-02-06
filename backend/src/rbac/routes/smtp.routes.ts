@@ -93,7 +93,7 @@ export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditServ
     });
 
     // --- Update an existing SMTP config ---
-    router.put('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
+    router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const result = await withTransaction(async (t: TransactionTask) => {
                 const id = getRequiredParam(req.params, 'id');
