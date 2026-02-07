@@ -86,24 +86,56 @@ export function SharingRules() {
                     <thead>
                         <tr>
                             <th>Module</th>
+                            <th>Rule Type</th>
                             <th>Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         {rules.map(rule => (
                             <tr key={rule.id}>
-                                <td>{rule.name}</td> {/* Show friendly module name */}
+                                <td>{rule.name}</td>
                                 <td>
                                     <button
-                                        className={`btn-toggle ${rule.is_active ? 'public' : 'private'}`}
                                         onClick={() => toggleRule(rule)}
                                         disabled={updatingIds.includes(rule.id)}
+                                        style={{
+                                            padding: '6px 12px',
+                                            borderRadius: '6px',
+                                            border: 'none',
+                                            cursor: updatingIds.includes(rule.id) ? 'not-allowed' : 'pointer',
+                                            backgroundColor: rule.is_active ? '#3b82f6' : '#2d2d44',
+                                            color: '#fff',
+                                            minWidth: '80px',
+                                            transition: '0.2s',
+                                        }}
                                     >
                                         {updatingIds.includes(rule.id)
                                             ? 'Updating...'
                                             : rule.is_active
                                                 ? 'Public'
                                                 : 'Private'}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button
+                                        onClick={() => toggleRule(rule)}
+                                        disabled={updatingIds.includes(rule.id)}
+                                        style={{
+                                            padding: '6px 12px',
+                                            borderRadius: '6px',
+                                            border: 'none',
+                                            cursor: updatingIds.includes(rule.id) ? 'not-allowed' : 'pointer',
+                                            backgroundColor: rule.is_active ? '#16a34a' : '#ef4444',
+                                            color: '#fff',
+                                            minWidth: '80px',
+                                            transition: '0.2s',
+                                        }}
+                                    >
+                                        {updatingIds.includes(rule.id)
+                                            ? 'Updating...'
+                                            : rule.is_active
+                                                ? 'Active'
+                                                : 'Inactive'}
                                     </button>
                                 </td>
                             </tr>

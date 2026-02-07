@@ -127,8 +127,7 @@ export class SharingRulesRepository implements ISharingRulesRepository {
     const res = await (t ?? this.db).oneOrNone<SharingRules>(
       `UPDATE ${this.tableName}
        SET rule_type = $1,
-           is_active = $2,
-           updated_at = NOW()
+           is_active = $2
        WHERE id = $3
        RETURNING *`,
       [
@@ -148,8 +147,7 @@ export class SharingRulesRepository implements ISharingRulesRepository {
   ): Promise<void> {
     await (t ?? this.db).none(
       `UPDATE ${this.tableName}
-       SET is_active = false,
-           updated_at = NOW()
+       SET is_active = false
        WHERE id = $1`,
       [id]
     );
