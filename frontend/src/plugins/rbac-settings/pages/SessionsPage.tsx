@@ -14,6 +14,7 @@ import { useModal } from '../../../core/hooks';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import './SettingsPage.css';
 
+
 export function SessionsPage() {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [currentSession, setCurrentSession] = useState<Session | null>(null);
@@ -21,38 +22,22 @@ export function SessionsPage() {
     const [error, setError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
 
-    const { user } = useAuth();
-    const [targetUserId, setTargetUserId] = useState('');
-
     // Modal hooks for confirmations
     const revokeModal = useModal<Session>();
-    const revokeAllModal = useModal();
+    const revokeAllModal = useModal<Session>();
     const [revokeLoading, setRevokeLoading] = useState(false);
 
     useEffect(() => {
-        loadCurrentSession();
-        if (user?.id) {
-            setTargetUserId(user.id);
-            loadUserSessions(user.id);
-        }
-    }, [user]);
+        loadAllSessions();
+    }, []);
 
-    const loadCurrentSession = async () => {
-        try {
-            const session = await sessionsApi.getCurrent();
-            setCurrentSession(session);
-        } catch {
-            // Ignore
-        }
-    };
-
-    const loadUserSessions = async (userId: string) => {
+    const loadAllSessions = async () => {
         try {
             setIsLoading(true);
             setError('');
-            const response = await sessionsApi.getByUser(userId);
+            const response = await sessionsApi.getAll(); // fetch all sessions
             if (response && Array.isArray(response.data)) {
-                setSessions(response.data);
+                setSessions(response.data); // use response.data
             } else {
                 setSessions([]);
             }
@@ -64,13 +49,14 @@ export function SessionsPage() {
         }
     };
 
+
     const handleRevoke = async () => {
         if (!revokeModal.data) return;
         setRevokeLoading(true);
         try {
             await sessionsApi.revoke(revokeModal.data.id);
             revokeModal.close();
-            if (targetUserId) loadUserSessions(targetUserId);
+            loadAllSessions(); // reload all sessions after revoke
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to revoke session');
         } finally {
@@ -79,12 +65,12 @@ export function SessionsPage() {
     };
 
     const handleRevokeAll = async () => {
-        if (!targetUserId) return;
+        if (!revokeAllModal.data) return;
         setRevokeLoading(true);
         try {
-            await sessionsApi.revokeAllByUser(targetUserId);
+            await sessionsApi.revokeAllByUser(revokeAllModal.data.user_id);
             revokeAllModal.close();
-            loadUserSessions(targetUserId);
+            loadAllSessions(); // reload all sessions after revoke all
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to revoke sessions');
         } finally {
@@ -92,14 +78,16 @@ export function SessionsPage() {
         }
     };
 
+
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        if (searchQuery) {
-            setTargetUserId(searchQuery);
-            loadUserSessions(searchQuery);
-        }
+        setSearchQuery(searchQuery.trim());
     };
 
+    // Filter sessions if searchQuery is set
+    const filteredSessions = searchQuery
+        ? sessions.filter(s => s.user_id.includes(searchQuery))
+        : sessions;
     return (
         <div className="settings-page">
             <header className="page-header">
@@ -110,8 +98,8 @@ export function SessionsPage() {
                 <div className="header-actions">
                     <button
                         className="btn btn-danger"
-                        onClick={() => revokeAllModal.open()}
-                        disabled={!sessions.length}
+                        onClick={() => revokeAllModal.open(filteredSessions[0] || null)}
+                        disabled={!filteredSessions.length}
                     >
                         <ShieldAlert size={18} />
                         Revoke All
@@ -139,7 +127,9 @@ export function SessionsPage() {
             )}
 
             <div className="session-info-bar">
-                <p>Showing sessions for User ID: <strong>{targetUserId || 'None'}</strong></p>
+                <p>
+                    Showing sessions {searchQuery ? `for User ID: ${searchQuery}` : 'for all users'}
+                </p>
             </div>
 
             {isLoading ? (
@@ -150,6 +140,7 @@ export function SessionsPage() {
                         <thead>
                             <tr>
                                 <th>Session ID</th>
+                                <th>User ID</th>
                                 <th>IP Address</th>
                                 <th>User Agent</th>
                                 <th>Login Time</th>
@@ -159,7 +150,7 @@ export function SessionsPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {sessions.map(session => {
+                            {filteredSessions.map(session => {
                                 const isCurrent = currentSession?.id === session.id;
                                 return (
                                     <tr key={session.id} className={isCurrent ? 'bg-blue-50' : ''}>
@@ -167,6 +158,7 @@ export function SessionsPage() {
                                             <code title={session.id}>{session.id.slice(0, 8)}...</code>
                                             {isCurrent && <span className="badge badge-primary ml-2">Current</span>}
                                         </td>
+                                        <td>{session.user_id}</td>
                                         <td>{session.ip_address}</td>
                                         <td className="max-w-xs truncate" title={session.user_agent}>
                                             {session.user_agent}
@@ -185,13 +177,20 @@ export function SessionsPage() {
                                             >
                                                 <LogOut size={16} />
                                             </button>
+                                            <button
+                                                className="btn-icon btn-warning ml-1"
+                                                title="Revoke All for User"
+                                                onClick={() => revokeAllModal.open(session)}
+                                            >
+                                                <ShieldAlert size={16} />
+                                            </button>
                                         </td>
                                     </tr>
                                 );
                             })}
-                            {sessions.length === 0 && (
+                            {filteredSessions.length === 0 && (
                                 <tr>
-                                    <td colSpan={7} className="empty-state">No active sessions found</td>
+                                    <td colSpan={8} className="empty-state">No active sessions found</td>
                                 </tr>
                             )}
                         </tbody>
@@ -212,11 +211,12 @@ export function SessionsPage() {
                 onCancel={revokeModal.close}
             />
 
-            {/* Revoke All Sessions Confirmation */}
+            {/* Revoke All Sessions for User Confirmation */}
             <ConfirmModal
                 isOpen={revokeAllModal.isOpen}
                 title="Revoke All Sessions"
                 message="Are you sure you want to revoke ALL sessions for this user? They will be logged out of all devices."
+                itemName={revokeAllModal.data?.user_id}
                 confirmLabel="Revoke All"
                 variant="danger"
                 isLoading={revokeLoading}

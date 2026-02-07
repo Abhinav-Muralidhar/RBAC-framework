@@ -178,9 +178,8 @@ export const auditLogsApi = {
 // ============================================================================
 
 export const sessionsApi = {
-    getCurrent: async (): Promise<Session> => {
-        const response = await get<ApiResponse<Session>>('/rbac/sessions/current');
-        return response.data;
+    getAll: async (params?: PaginationParams) => {
+        return get<PaginatedResponse<Session>>('/rbac/sessions', params);
     },
 
     getByUser: async (userId: string) => {

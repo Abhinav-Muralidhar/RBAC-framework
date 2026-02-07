@@ -10,6 +10,7 @@ import { useAdminSettings } from '../../contexts/AdminSettingsContext';
 import { SETTINGS_SECTIONS, type SettingsSection } from '../../../routes/routes';
 import {
     Users,
+    Clock,
     Shield,
     Key,
     FolderTree,
@@ -18,7 +19,7 @@ import {
     Mail,
     X,
 } from 'lucide-react';
-import { UsersPage, RolesPage, ProfilesPage, GroupsPage, AuditLogsPage, SmtpPage, OrganizationPage } from '../../../plugins/rbac-settings/pages';
+import { UsersPage, SessionsPage, RolesPage, ProfilesPage, GroupsPage, AuditLogsPage, SmtpPage, OrganizationPage } from '../../../plugins/rbac-settings/pages';
 import './AdminSettingsModal.css';
 
 interface SectionConfig {
@@ -30,6 +31,7 @@ interface SectionConfig {
 
 const sections: SectionConfig[] = [
     { id: SETTINGS_SECTIONS.ORGANIZATIONS, label: 'Organizations', icon: <Building2 size={18} />, component: OrganizationPage },
+    { id: SETTINGS_SECTIONS.SESSIONS, label: 'Sessions', icon: <Clock size={18} />, component: SessionsPage },
     { id: SETTINGS_SECTIONS.USERS, label: 'Users', icon: <Users size={18} />, component: UsersPage },
     { id: SETTINGS_SECTIONS.ROLES, label: 'Roles', icon: <Shield size={18} />, component: RolesPage },
     { id: SETTINGS_SECTIONS.PROFILES, label: 'Profiles', icon: <Key size={18} />, component: ProfilesPage },
