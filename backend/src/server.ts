@@ -4,7 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { db } from './db';
-import { createRBACRouter } from './rbac/routes';
+import { createRBACRouter, createPublicAuthRouter } from './rbac/routes';
 import { createAuthRouter } from './rbac/routes/auth.routes';
 import { errorHandler, notFoundHandler } from './rbac/middleware/errorHandler.middleware';
 import { standardLimiter } from './rbac/middleware/rateLimit.middleware';
@@ -52,6 +52,7 @@ app.use('/auth', createAuthRouter(db));
 // RBAC routes (protected)
 app.use('/rbac', createRBACRouter(db));
 
+app.use('/public', createPublicAuthRouter(db));
 
 // Error handling middleware (must be after all routes)
 app.use(notFoundHandler);

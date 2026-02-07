@@ -252,24 +252,24 @@ export const authApi = {
      */
     sendOtp: async (email: string): Promise<void> => {
         // Adjust route based on your backend, e.g. '/auth/otp/send' or '/auth/challenge'
-        await post('/auth/otp/send', { email });
+        await post('/public/otp/send', { email });
     },
 
     /**
      * Verifies the code entered by the user.
      * Throws an error if invalid.
      */
-    verifyOtp: async (email: string, code: string): Promise<void> => {
+    verifyOtp: async (email: string, otp: string): Promise<void> => {
         // Adjust route based on your backend
-        await post('/auth/otp/verify', { email, code });
+        await post('/public/otp/verify', { email, otp });
     },
 
     /**
      * (Optional) If you want to handle the password update via Auth API 
      * instead of Users API for stricter security checks.
      */
-    resetPassword: async (token: string, newPassword: string): Promise<void> => {
-        await post('/auth/reset-password', { token, password: newPassword });
+    resetPassword: async (email: string, otp: string, newPassword: string): Promise<void> => {
+        await post('/public/otp/password/reset', { email, otp, newPassword });
     }
 };
 

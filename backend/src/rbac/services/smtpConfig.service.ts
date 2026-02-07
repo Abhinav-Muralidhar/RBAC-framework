@@ -29,6 +29,7 @@ export interface ISmtpConfigService {
         data: SmtpConfigCreate,
         actingUserId: string
     ): Promise<SmtpConfig>;
+    getActive(t: TransactionTask): Promise<SmtpConfig>;
     update(
         t: TransactionTask,
         configId: string,
@@ -89,6 +90,22 @@ export class SmtpConfigService implements ISmtpConfigService {
         const params = normalizePaginationParams(paginationParams);
         return this.smtpConfigRepository.findAll(t, filters, params);
     }
+
+    // ✅ Get active SMTP config (used by EmailService)
+    async getActive(t: TransactionTask): Promise<SmtpConfig> {
+        const result = await this.smtpConfigRepository.findAll(
+            t,
+            { isActive: true },
+            { page: 1, limit: 1 }
+        );
+
+        if (result.data.length === 0) {
+            throw new RBACInternalError('No active SMTP configuration found');
+        }
+
+        return result.data[0]!;
+    }
+
 
     async create(
         t: TransactionTask,

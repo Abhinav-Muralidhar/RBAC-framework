@@ -91,8 +91,7 @@ export function LoginPage() {
 
         setIsLoading(true);
         try {
-            // token = otp (since backend already verified email+otp)
-            await authApi.resetPassword(otp, newPassword);
+            await authApi.resetPassword(email, otp, newPassword);
             setView('login');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to reset password');

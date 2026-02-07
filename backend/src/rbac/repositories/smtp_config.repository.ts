@@ -45,7 +45,7 @@ export class SmtpConfigRepository implements ISmtpConfigRepository {
     const total = await (t ?? this.db).one<{ count: string }>(
       `SELECT COUNT(*) FROM ${this.tableName}`
     );
-    const whereClause = filters?.isActive !== undefined ? `WHERE is_active = $1` : '';
+    const whereClause = filters?.isActive !== undefined ? `WHERE is_active = $1::boolean` : '';
     const items = await (t ?? this.db).any<SmtpConfig>(
       `SELECT *
            FROM ${this.tableName} 

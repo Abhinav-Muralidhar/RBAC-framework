@@ -9,8 +9,9 @@ const OTP_EXPIRY_MINUTES = 5;        // OTP validity duration
 
 export interface IOtpService {
   generateOtp(t: TransactionTask, userId: string, sentTo: string, otpHash: string, ipAddress?: string, userAgent?: string): Promise<OtpTokens>;
-  validateOtp(t: TransactionTask, userId: string, otpHash: string): Promise<boolean>;
+  validateOtp(t: TransactionTask, sentTo: string, otp: string): Promise<boolean>;
   cleanupExpiredOtps(t: TransactionTask): Promise<void>;
+  deleteOtp(t: TransactionTask, userId: string): Promise<void>;
 }
 
 export class OtpService implements IOtpService {
@@ -40,16 +41,33 @@ export class OtpService implements IOtpService {
     return this.otpRepo.create(input, t);
   }
 
-  async validateOtp(t: TransactionTask, userId: string, otpHash: string): Promise<boolean> {
-    const valiasd = await this.otpRepo.findLatestByUser(userId, t);
-    if ((valiasd?.attempt_count ?? 0) >= 5) {
-      throw new Error(`Maximum OTP generation attempts (${MAX_OTP_GENERATE}) reached`);
-    }
-    if (!await verifyPassword(valiasd?.otp_hash ?? '', otpHash)) {
-      const count = await this.otpRepo.incrementAttempts(userId, t);
+  async validateOtp(
+    t: TransactionTask,
+    sentTo: string,
+    otp: string
+  ): Promise<boolean> {
+
+    const record = await this.otpRepo.findLatestBySentTo(sentTo, t);
+
+    if (!record) return false;
+
+    // expired
+    if (record.expires_at < new Date()) return false;
+
+    // too many attempts
+    if ((record.attempt_count ?? 0) >= 5) return false;
+
+    const match = await verifyPassword(otp, record.otp_hash);
+
+    if (!match) {
+      await this.otpRepo.incrementAttempts(record.id, t);
       return false;
     }
     return true;
+  }
+
+  async deleteOtp(t: TransactionTask, userId: string): Promise<void> {
+    await this.otpRepo.delete(userId, t);
   }
 
 

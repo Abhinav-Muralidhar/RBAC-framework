@@ -56,15 +56,18 @@ export class EmailService {
             'from_email' | 'from_name' | 'reply_to_email'
         >
     ): Promise<void> {
+        if (!options.text && !options.html) {
+            throw new RBACInternalError('Email must contain text or html');
+        }
         await this.transporter.sendMail({
             from: configMeta
                 ? `"${configMeta.from_name}" <${configMeta.from_email}>`
-                : undefined,
+                : `"App" <no-reply@app.com>`,
             to: options.to,
             subject: options.subject,
             text: options.text,
             html: options.html,
-            replyTo: configMeta?.reply_to_email ?? undefined
+            replyTo: configMeta?.reply_to_email ?? "no-reply@app.com"
         });
     }
 }
