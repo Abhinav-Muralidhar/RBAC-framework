@@ -1,30 +1,61 @@
-/**
- * Groups Page
- *
- * Manage user groups with forms and confirmation modals.
- */
-
+import { useState } from 'react';
 import { groupsApi } from '../../../core/api/rbac.api';
 import type { Group } from '../../../core/types/group.types';
 import { Plus, Edit2, Trash2, Search, Users } from 'lucide-react';
-import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { FormModal } from '../../../core/components/FormModal';
+import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { GroupForm, submitGroupForm } from '../components';
-import { useCrudPage } from '../../../core/hooks';
+import { usePaginatedData } from '../../../core/hooks/usePaginatedData';
 import './SettingsPage.css';
 
 export function GroupsPage() {
-    const crud = useCrudPage<Group>({
-        listFn: groupsApi.list,
-        deleteFn: groupsApi.delete,
-        entityName: 'groups',
-        initialLimit: 100,
-    });
+    const [searchQuery, setSearchQuery] = useState('');
+    const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+    const [showFormModal, setShowFormModal] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deletingGroup, setDeletingGroup] = useState<Group | null>(null);
 
-    const filteredGroups = crud.items.filter(group =>
-        group.name.toLowerCase().includes(crud.searchQuery.toLowerCase()) ||
-        (group.code ?? '').toLowerCase().includes(crud.searchQuery.toLowerCase())
+    const {
+        data: groups,
+        isLoading,
+        error,
+        page,
+        totalPages,
+        limit,
+        setPage,
+        reload
+    } = usePaginatedData<Group>(groupsApi.list, 100);
+
+    const filteredGroups = (groups || []).filter(group =>
+        group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (group.code ?? '').toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+    const openCreate = () => {
+        setEditingGroup(null);
+        setShowFormModal(true);
+    };
+
+    const openEdit = (group: Group) => {
+        setEditingGroup(group);
+        setShowFormModal(true);
+    };
+
+    const openDelete = (group: Group) => {
+        setDeletingGroup(group);
+        setShowDeleteModal(true);
+    };
+
+    const handleDelete = async () => {
+        if (!deletingGroup) return;
+        try {
+            await groupsApi.delete(deletingGroup.id);
+            setShowDeleteModal(false);
+            reload();
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
     return (
         <div className="settings-page">
@@ -33,9 +64,8 @@ export function GroupsPage() {
                     <h1>Groups</h1>
                     <p>Manage user groups and their roles</p>
                 </div>
-                <button className="btn btn-primary" onClick={crud.openCreate}>
-                    <Plus size={18} />
-                    Add Group
+                <button className="btn btn-primary" onClick={openCreate}>
+                    <Plus size={18} /> Add Group
                 </button>
             </header>
 
@@ -45,115 +75,97 @@ export function GroupsPage() {
                     <input
                         type="text"
                         placeholder="Search groups..."
-                        value={crud.searchQuery}
-                        onChange={(e) => crud.setSearchQuery(e.target.value)}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
             </div>
 
-            {crud.error && (
-                <div className="error-banner">
-                    {crud.error}
-                    <button onClick={crud.clearError}>×</button>
-                </div>
-            )}
+            {error && <div className="error-banner">{error}</div>}
 
-            {crud.isLoading ? (
+            {isLoading ? (
                 <div className="loading-state">Loading groups...</div>
             ) : (
-                <div className="data-table-wrapper">
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Code</th>
-                                <th className="hide-mobile">Description</th>
-                                <th>Users</th>
-                                <th>Roles</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredGroups.map(group => (
-                                <tr key={group.id}>
-                                    <td className="font-medium">{group.name}</td>
-                                    <td><code>{group.code || '-'}</code></td>
-                                    <td className="hide-mobile">{group.description || '-'}</td>
-                                    <td>
-                                        <span className="user-count">
-                                            <Users size={14} />
-                                            {group.user_count || 0}
-                                        </span>
-                                    </td>
-                                    <td>{group.roles?.length || 0}</td>
-                                    <td>
-                                        <span
-                                            className={`status-badge status-${group.is_active ? 'active' : 'inactive'}`}
-                                        >
-                                            {group.is_active ? 'Active' : 'Inactive'}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div className="action-buttons">
-                                            <button
-                                                className="btn-icon"
-                                                title="Edit"
-                                                onClick={() => crud.openEdit(group)}
-                                            >
-                                                <Edit2 size={16} />
-                                            </button>
-                                            <button
-                                                className="btn-icon btn-danger"
-                                                title="Delete"
-                                                onClick={() => crud.openDelete(group)}
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                            {filteredGroups.length === 0 && (
+                <>
+                    <div className="data-table-wrapper">
+                        <table className="data-table">
+                            <thead>
                                 <tr>
-                                    <td colSpan={7} className="empty-state">
-                                        No groups found
-                                    </td>
+                                    <th>Name</th>
+                                    <th>Code</th>
+                                    <th className="hide-mobile">Description</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {filteredGroups.length > 0 ? filteredGroups.map(group => (
+                                    <tr key={group.id}>
+                                        <td className="font-medium">{group.name}</td>
+                                        <td><code>{group.code || '-'}</code></td>
+                                        <td className="hide-mobile">{group.description || '-'}</td>
+                                        <td>
+                                            <span className={`status-badge status-${group.is_active ? 'active' : 'inactive'}`}>
+                                                {group.is_active ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div className="action-buttons">
+                                                <button className="btn-icon" title="Edit" onClick={() => openEdit(group)}>
+                                                    <Edit2 size={16} />
+                                                </button>
+                                                <button className="btn-icon btn-danger" title="Delete" onClick={() => openDelete(group)}>
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )) : (
+                                    <tr>
+                                        <td colSpan={7} className="empty-state">No groups found</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Pagination */}
+                    <div className="pagination">
+                        <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
+                        <span>Page {page} of {totalPages}</span>
+                        <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
+                    </div>
+                </>
             )}
 
             {/* Create/Edit Modal */}
             <FormModal
-                isOpen={crud.showFormModal}
-                title={crud.editingItem ? 'Edit Group' : 'Add New Group'}
-                isLoading={crud.formLoading}
+                isOpen={showFormModal}
+                title={editingGroup ? 'Edit Group' : 'Add New Group'}
+                isLoading={false}
                 onSubmit={() => submitGroupForm()}
-                onCancel={crud.closeForm}
+                onCancel={() => setShowFormModal(false)}
                 size="md"
             >
                 <GroupForm
-                    group={crud.editingItem}
-                    onSuccess={crud.handleFormSuccess}
-                    onError={crud.setError}
-                    setLoading={crud.setFormLoading}
+                    group={editingGroup}
+                    onSuccess={() => { setShowFormModal(false); reload(); }}
+                    onError={(err) => console.error(err)}
+                    setLoading={() => { }}
                 />
             </FormModal>
 
             {/* Delete Confirmation */}
             <ConfirmModal
-                isOpen={crud.showDeleteModal}
+                isOpen={showDeleteModal}
                 title="Delete Group"
                 message="Are you sure you want to delete this group? Users in this group may lose associated role permissions."
-                itemName={crud.deletingItem?.name}
+                itemName={deletingGroup?.name}
                 confirmLabel="Delete"
                 variant="danger"
-                isLoading={crud.deleteLoading}
-                onConfirm={crud.confirmDelete}
-                onCancel={crud.closeDelete}
+                isLoading={false}
+                onConfirm={handleDelete}
+                onCancel={() => setShowDeleteModal(false)}
             />
         </div>
     );
