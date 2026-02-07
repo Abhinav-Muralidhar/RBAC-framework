@@ -28,6 +28,7 @@ export interface IUserService {
     getById(t: TransactionTask, actingUserId: string, id: string): Promise<UserDetail | null>;
     findByUsername(t: TransactionTask, username: string): Promise<Users | null>;
     findByEmail(t: TransactionTask, email: string): Promise<Users | null>;
+    updatePassword(t: TransactionTask, userId: string, newHashedPassword: string): Promise<void>;
 }
 
 export class UserService implements IUserService {
@@ -179,4 +180,36 @@ export class UserService implements IUserService {
             status: 'success'
         })
     }
+
+    async updatePassword(
+        t: TransactionTask,
+        userId: string,
+        newHashedPassword: string
+    ): Promise<void> {
+
+        const oldUser = await this.userRepository.findById(t, userId);
+        if (!oldUser) throw new Error('User not found');
+
+        const updatedUser: Users = {
+            ...oldUser,
+            password: newHashedPassword,
+            password_changed_at: new Date()
+        };
+
+        await this.userRepository.update(t, updatedUser);
+
+        // ✅ Audit only here (important change)
+        await this.auditService.log(t, {
+            user_id: userId,
+            action: 'update',
+            module_code: MODULE_CODE,
+            entity_type: 'user',
+            entity_id: userId,
+            old_values: { password: '[REDACTED]' },
+            new_values: { password: '[REDACTED]' },
+            status: 'success'
+        });
+    }
+
+
 }

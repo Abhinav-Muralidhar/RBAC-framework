@@ -45,6 +45,7 @@ import { PermissionService } from '../services/permission.service';
 import { ModuleService } from '../services/module.service';
 
 
+
 /**
  * Create the main RBAC router with all sub-routes
  */
@@ -105,6 +106,56 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     router.use('/sessions', createSessionsRouter(db, auditService, evaluationService, authSessionService));
     router.use('/organizations', createOrganizationsRouter(db, evaluationService, auditService, organizationService));
     router.use('/smtpconfig', createSmtpRouter(db, auditService, evaluationService, smtpConfigService))
+
+    return router;
+}
+
+
+// ============================
+// PUBLIC ROUTES (NO AUTH)
+// ============================
+
+import { createOtpRouter } from './otp.routes';
+import { OtpService } from '../services/otp.service';
+import { OtpTokenRepository } from '../repositories/otp_token.repository';
+
+export function createPublicAuthRouter(db: IDatabase<unknown>): Router {
+    const router = Router();
+
+    // repositories
+    const usersRepo = new UsersRepository(db);
+    const userRolesRepository = new UserRoleRepository(db);
+    const otpTokenRepository = new OtpTokenRepository(db);
+    const smtpConfigRepository = new SmtpConfigRepository(db);
+    const auditLogsRepository = new AuditLogsRepository(db);
+    const moduleRepository = new ModuleRepository(db);
+
+    // services
+    const evaluationService = new EvaluationService(new PermissionsRepository(db));
+    const auditService = new AuditService(auditLogsRepository, evaluationService, moduleRepository);
+
+    const userService = new UserService(
+        usersRepo,
+        userRolesRepository,
+        evaluationService,
+        auditService
+    );
+
+    const otpService = new OtpService(otpTokenRepository);
+    const smtpConfigService = new SmtpConfigService(smtpConfigRepository, auditService);
+
+    // mount otp
+    router.use(
+        '/otp',
+        createOtpRouter(
+            db,
+            auditService,
+            evaluationService,
+            userService,
+            otpService,
+            smtpConfigService
+        )
+    );
 
     return router;
 }

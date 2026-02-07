@@ -5,10 +5,10 @@ import { TransactionTask } from '../utils/transaction.utils';
 
 export interface IOtpTokenRepository {
   create(input: CreateOtpTokenInput, t: TransactionTask): Promise<OtpTokens>;
-  findLatestByUser(userId: string, t: TransactionTask): Promise<OtpTokens | null>;
-  incrementAttempts(userId: string, t: TransactionTask): Promise<number>;
+  findLatestBySentTo(sentTo: string, t: TransactionTask): Promise<OtpTokens | null>;
+  incrementAttempts(id: string, t: TransactionTask): Promise<void>;
   deleteExpired(t: TransactionTask): Promise<void>;
-  deleteOnSuccess(userId: string, otpHash: string, t: TransactionTask): Promise<boolean>;
+  delete(userId: string, t: TransactionTask): Promise<void>;
   countRecentOtps(userId: string, minutesWindow: number, t: TransactionTask): Promise<number>;
 }
 
@@ -57,34 +57,29 @@ export class OtpTokenRepository implements IOtpTokenRepository {
 
 
   /** Get the latest valid OTP token for a user */
-  async findLatestByUser(userId: string, t: TransactionTask): Promise<OtpTokens | null> {
+  async findLatestBySentTo(sentTo: string, t: TransactionTask): Promise<OtpTokens | null> {
     const res = await this.query<OtpTokens>(
       t,
       `SELECT * FROM ${this.tableName}
-       WHERE user_id = $1 AND expires_at > NOW()
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [userId]
+     WHERE sent_to = $1 AND expires_at > NOW()
+     ORDER BY created_at DESC
+     LIMIT 1`,
+      [sentTo]
     );
     return res[0] ?? null;
   }
 
+
   /** Increment attempts counter for the latest valid OTP token */
-  async incrementAttempts(userId: string, t: TransactionTask): Promise<number> {
-    const res = await t.oneOrNone<{ attempt_count: number }>(
+  async incrementAttempts(id: string, t: TransactionTask): Promise<void> {
+    await t.none(
       `UPDATE ${this.tableName}
-       SET attempt_count = attempt_count + 1
-       WHERE id = (
-         SELECT id FROM ${this.tableName}
-         WHERE user_id = $1 AND expires_at > NOW()
-         ORDER BY created_at DESC
-         LIMIT 1
-       )
-       RETURNING attempt_count`,
-      [userId]
+     SET attempt_count = attempt_count + 1
+     WHERE id = $1`,
+      [id]
     );
-    return res?.attempt_count ?? 0;
   }
+
 
   /** Delete all expired OTP tokens (on-demand cleanup) */
   async deleteExpired(t: TransactionTask): Promise<void> {
@@ -92,15 +87,11 @@ export class OtpTokenRepository implements IOtpTokenRepository {
   }
 
   /** Atomically validate OTP and delete if correct */
-  async deleteOnSuccess(userId: string, otpHash: string, t: TransactionTask): Promise<boolean> {
-    const res = await t.result(
+  async delete(userId: string, t: TransactionTask): Promise<void> {
+    await t.none(
       `DELETE FROM ${this.tableName}
-     WHERE id = (SELECT id FROM ${this.tableName} 
-     WHERE user_id = $1
-         AND otp_hash = $2
-         AND expires_at > NOW())`,
-      [userId, otpHash]
+     WHERE user_id = $1`,
+      [userId]
     );
-    return res.rowCount > 0; // true = OTP existed and deleted
   }
 }

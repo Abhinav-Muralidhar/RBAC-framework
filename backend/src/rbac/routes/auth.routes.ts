@@ -12,7 +12,7 @@ import { AuditLogsRepository } from '../repositories/audit_logs.repository';
 import { AuthSessionService } from '../services/authSession.service';
 import { AuditService } from '../services/audit.service';
 import { authLimiter } from '../middleware/rateLimit.middleware';
-import { verifyPassword } from '../utils/crypto.utils';
+import { hashPassword, verifyPassword } from '../utils/crypto.utils';
 import { createAuthenticateMiddleware } from '../middleware/authenticate.middleware';
 import { EvaluationService } from '../services/evaluation.service';
 import { PermissionsRepository } from '../repositories/permissions.repository';
@@ -27,6 +27,8 @@ import { ModuleRepository } from '../repositories/modules.repository';
 import { PermissionEffect } from '../models/profile_permissions.model';
 import { UserRoleRepository } from '../repositories/user_roles.repository';
 import { PERMISSION_ACTIONS, PermissionAction } from '../models/permissions.model';
+import { OtpService } from '../services/otp.service';
+import { OtpTokenRepository } from '../repositories/otp_token.repository';
 import { withTransaction } from '../utils/transaction.utils';
 // Cookie configuration
 const COOKIE_OPTIONS: CookieOptions = {
@@ -75,6 +77,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
     const authSessionService = new AuthSessionService(sessionsRepo, auditService, evaluationService);
     const requireAuth = createAuthenticateMiddleware(authSessionService);
     const usersService = new UserService(usersRepo, userRolesRepository, evaluationService, auditService);
+    const otpService = new OtpService(new OtpTokenRepository(db));
 
     /**
      * POST /auth/login

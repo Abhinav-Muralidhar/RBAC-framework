@@ -6,7 +6,7 @@
 
 import { useState, useEffect, type FormEvent } from 'react';
 import { useAuth } from '../core/contexts/AuthContext';
-import { usersApi } from '../core/api/rbac.api';
+import { usersApi, authApi } from '../core/api/rbac.api';
 import { FormInput, FormSwitch } from '../core/components/FormElements';
 import {
     User, Mail, Lock, Save, Key, Phone,
@@ -159,22 +159,42 @@ export function ProfilePage() {
     /* ---------------- OTP Flow ---------------- */
 
     const startSensitiveFlow = async (type: 'password' | 'email') => {
+        if (!user) return;
         setActiveFlow(type);
         setOtpStep('sending');
         setError('');
-
-        setTimeout(() => setOtpStep('sent'), 800);
+        try {
+            await authApi.sendOtp(user.primary_email);
+            setOtpStep('sent');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to send OTP');
+            setOtpStep('idle');
+        }
     };
+
 
     const verifyOtp = async () => {
-        if (otpCode.length !== 6) return;
+        const code = otpCode?.toString().trim(); // ensure string
+
+        if (!code) {
+            setError('OTP code is required.');
+            return;
+        }
 
         setOtpStep('verifying');
+        setError('');
 
-        setTimeout(() => {
+        try {
+            await authApi.verifyOtp(user.primary_email, code); // send as string
             setOtpStep('verified');
-        }, 800);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'OTP verification failed');
+            setOtpStep('sent'); // allow retry
+            setOtpCode(''); // clear input for retry
+        }
     };
+
+
 
     /* ---------------- Final Password ---------------- */
 
