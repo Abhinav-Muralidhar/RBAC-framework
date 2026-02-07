@@ -1,54 +1,36 @@
-/**
- * Sessions Page
- * 
- * Manage user sessions with confirmation modals.
- */
-
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { sessionsApi } from '../../../core/api/rbac.api';
 import type { Session } from '../../../core/types/session.types';
 import { Search, LogOut, ShieldAlert } from 'lucide-react';
 import { format } from 'date-fns';
-import { useAuth } from '../../../core/contexts/AuthContext';
 import { useModal } from '../../../core/hooks';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
+import { usePaginatedData } from '../../../core/hooks/usePaginatedData';
 import './SettingsPage.css';
 
-
 export function SessionsPage() {
-    const [sessions, setSessions] = useState<Session[]>([]);
-    const [currentSession, setCurrentSession] = useState<Session | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
-
-    // Modal hooks for confirmations
     const revokeModal = useModal<Session>();
     const revokeAllModal = useModal<Session>();
     const [revokeLoading, setRevokeLoading] = useState(false);
 
-    useEffect(() => {
-        loadAllSessions();
-    }, []);
+    // Fetch paginated sessions
+    const {
+        data: sessions,
+        isLoading,
+        error,
+        page,
+        totalPages,
+        limit,
+        setPage,
+        setLimit,
+        reload
+    } = usePaginatedData<Session>(sessionsApi.getAll, 20);
 
-    const loadAllSessions = async () => {
-        try {
-            setIsLoading(true);
-            setError('');
-            const response = await sessionsApi.getAll(); // fetch all sessions
-            if (response && Array.isArray(response.data)) {
-                setSessions(response.data); // use response.data
-            } else {
-                setSessions([]);
-            }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load sessions');
-            setSessions([]);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
+    const filteredSessions = (sessions || []).filter(s =>
+        !searchQuery ||
+        s.user_id.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
     const handleRevoke = async () => {
         if (!revokeModal.data) return;
@@ -56,9 +38,7 @@ export function SessionsPage() {
         try {
             await sessionsApi.revoke(revokeModal.data.id);
             revokeModal.close();
-            loadAllSessions(); // reload all sessions after revoke
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to revoke session');
+            reload();
         } finally {
             setRevokeLoading(false);
         }
@@ -70,24 +50,12 @@ export function SessionsPage() {
         try {
             await sessionsApi.revokeAllByUser(revokeAllModal.data.user_id);
             revokeAllModal.close();
-            loadAllSessions(); // reload all sessions after revoke all
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to revoke sessions');
+            reload();
         } finally {
             setRevokeLoading(false);
         }
     };
 
-
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        setSearchQuery(searchQuery.trim());
-    };
-
-    // Filter sessions if searchQuery is set
-    const filteredSessions = searchQuery
-        ? sessions.filter(s => s.user_id.includes(searchQuery))
-        : sessions;
     return (
         <div className="settings-page">
             <header className="page-header">
@@ -101,14 +69,13 @@ export function SessionsPage() {
                         onClick={() => revokeAllModal.open(filteredSessions[0] || null)}
                         disabled={!filteredSessions.length}
                     >
-                        <ShieldAlert size={18} />
-                        Revoke All
+                        <ShieldAlert size={18} /> Revoke All
                     </button>
                 </div>
             </header>
 
             <div className="page-toolbar">
-                <form className="search-box" onSubmit={handleSearch}>
+                <div className="search-box">
                     <Search size={18} />
                     <input
                         type="text"
@@ -116,64 +83,50 @@ export function SessionsPage() {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
-                </form>
+                </div>
             </div>
 
             {error && (
                 <div className="error-banner">
-                    {error}
-                    <button onClick={() => setError('')}>×</button>
+                    {error} <button onClick={() => { }}>×</button>
                 </div>
             )}
-
-            <div className="session-info-bar">
-                <p>
-                    Showing sessions {searchQuery ? `for User ID: ${searchQuery}` : 'for all users'}
-                </p>
-            </div>
 
             {isLoading ? (
                 <div className="loading-state">Loading sessions...</div>
             ) : (
-                <div className="data-table-wrapper">
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Session ID</th>
-                                <th>User ID</th>
-                                <th>IP Address</th>
-                                <th>User Agent</th>
-                                <th>Login Time</th>
-                                <th>Expires</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredSessions.map(session => {
-                                const isCurrent = currentSession?.id === session.id;
-                                return (
-                                    <tr key={session.id} className={isCurrent ? 'bg-blue-50' : ''}>
+                <>
+                    <div className="data-table-wrapper">
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Session ID</th>
+                                    <th>User ID</th>
+                                    <th>IP Address</th>
+                                    <th>User Agent</th>
+                                    <th>Login Time</th>
+                                    <th>Expires</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredSessions.map(session => (
+                                    <tr key={session.id}>
                                         <td>
-                                            <code title={session.id}>{session.id.slice(0, 8)}...</code>
-                                            {isCurrent && <span className="badge badge-primary ml-2">Current</span>}
+                                            <code>{session.id.slice(0, 8)}...</code>
                                         </td>
                                         <td>{session.user_id}</td>
                                         <td>{session.ip_address}</td>
-                                        <td className="max-w-xs truncate" title={session.user_agent}>
-                                            {session.user_agent}
-                                        </td>
+                                        <td title={session.user_agent}>{session.user_agent}</td>
                                         <td>{format(new Date(session.login_at), 'MMM d, HH:mm')}</td>
                                         <td>{format(new Date(session.expires_at), 'MMM d, HH:mm')}</td>
-                                        <td>
-                                            <span className="status-badge status-active">Active</span>
-                                        </td>
+                                        <td><span className="status-badge status-active">Active</span></td>
                                         <td>
                                             <button
                                                 className="btn-icon btn-danger"
                                                 title="Revoke Session"
                                                 onClick={() => revokeModal.open(session)}
-                                                disabled={isCurrent}
                                             >
                                                 <LogOut size={16} />
                                             </button>
@@ -186,23 +139,30 @@ export function SessionsPage() {
                                             </button>
                                         </td>
                                     </tr>
-                                );
-                            })}
-                            {filteredSessions.length === 0 && (
-                                <tr>
-                                    <td colSpan={8} className="empty-state">No active sessions found</td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                ))}
+                                {filteredSessions.length === 0 && (
+                                    <tr>
+                                        <td colSpan={8} className="empty-state">No sessions found</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Pagination */}
+                    <div className="pagination">
+                        <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
+                        <span>Page {page} of {totalPages}</span>
+                        <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
+                    </div>
+                </>
             )}
 
-            {/* Revoke Single Session Confirmation */}
+            {/* Confirm modals */}
             <ConfirmModal
                 isOpen={revokeModal.isOpen}
                 title="Revoke Session"
-                message="Are you sure you want to revoke this session? The user will be logged out."
+                message="Are you sure you want to revoke this session?"
                 itemName={revokeModal.data?.id.slice(0, 8) + '...'}
                 confirmLabel="Revoke"
                 variant="danger"
@@ -211,11 +171,10 @@ export function SessionsPage() {
                 onCancel={revokeModal.close}
             />
 
-            {/* Revoke All Sessions for User Confirmation */}
             <ConfirmModal
                 isOpen={revokeAllModal.isOpen}
                 title="Revoke All Sessions"
-                message="Are you sure you want to revoke ALL sessions for this user? They will be logged out of all devices."
+                message="Are you sure you want to revoke all sessions for this user?"
                 itemName={revokeAllModal.data?.user_id}
                 confirmLabel="Revoke All"
                 variant="danger"

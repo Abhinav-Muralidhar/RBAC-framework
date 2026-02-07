@@ -120,6 +120,7 @@ export function UsersPage() {
                         <span>Page {crud.page} of {crud.totalPages}</span>
                         <button disabled={crud.page >= crud.totalPages} onClick={crud.nextPage}>Next</button>
                     </div>
+
                 </>
             )}
 
