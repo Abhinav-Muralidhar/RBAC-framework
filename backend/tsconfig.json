@@ -19,6 +19,7 @@
     "declaration": true,
     "declarationMap": true,
     // Stricter Typechecking Options
+    "strictNullChecks": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     // Style Options
@@ -41,6 +42,7 @@
     "outDir": "dist"
   },
   "include": [
-    "src"
+    "src",
+    "types"
   ]
 }

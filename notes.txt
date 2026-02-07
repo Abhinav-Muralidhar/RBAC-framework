@@ -1,0 +1,533 @@
+# RBAC FRAMEWORK - ARCHITECTURAL REVIEW & PRODUCTION NOTES
+Document Created: 2026-01-31
+Author: Senior Backend Engineering Review
+
+---
+
+## 1. EXECUTIVE SUMMARY
+
+This document captures the authoritative decisions for the RBAC framework's routing, authentication, authorization, and audit logging architecture. All decisions here are final and must be followed during implementation.
+
+**Key Findings:**
+1. ✅ Authentication middleware is correctly implemented (fail-closed model)
+2. ✅ Authorization is correctly delegated to service layer via `EvaluationService`
+3. ⚠️ `routes.txt` is a rough planning document with typos, not actual implementation
+4. ❌ **CRITICAL: Audit logging is NOT implemented for CREATE/UPDATE/DELETE/EXPORT operations in services**
+5. ❌ No actual route definitions exist beyond a health check
+
+---
+
+## 2. ROUTING RULES REVIEW
+
+### 2.1 Analysis of routes.txt
+
+The file `routes.txt` is an informal planning document with numerous typos and inconsistencies. It does NOT represent actual implemented routes. The current production server (`server.ts`) only implements a health check endpoint.
+
+### 2.2 Route Classification
+
+#### A) RULES THAT MUST REMAIN AT ROUTE LAYER
+
+| Category | Rule | Rationale |
+|----------|------|-----------|
+| Authentication | Session validation via `authenticate` middleware | Identity must be verified before any processing |
+| Input Validation | Request body/param validation | Malformed input rejected before service layer |
+| Rate Limiting | Per-endpoint throttling | Protection against abuse at entry point |
+| Request Parsing | Cookie parsing, JSON body parsing | Protocol-level concerns |
+
+#### B) RULES THAT MUST BE REMOVED FROM ROUTE LAYER (If Present)
+
+| Anti-Pattern | Correct Location |
+|--------------|------------------|
+| Permission checking (e.g., `if user.role === 'admin'`) | Service layer via `EvaluationService.enforcePermission()` |
+| Business logic validation | Service layer |
+| Data filtering by ownership | Service layer |
+| Audit logging of business operations | Service layer |
+
+#### C) RULES THAT ARE MISSING AND REQUIRED
+
+| Missing Rule | Priority | Action Required |
+|--------------|----------|-----------------|
+| Audit logging for all mutations | **CRITICAL** | Inject `AuditService` into all services |
+| CORS configuration for production | HIGH | Configure allowed origins explicitly |
+| Request ID generation | MEDIUM | Add request ID middleware for traceability |
+| Input sanitization | MEDIUM | Sanitize all string inputs |
+| Response envelope standardization | HIGH| Consistent `{ data, error, meta }` structure |
+
+### 2.3 Recommended Route Structure
+
+All RBAC-related routes MUST be under the `/rbac` prefix. All routes MUST enforce authentication via middleware before reaching controllers:
+
+```
+PUBLIC ROUTES (No Authentication):
+├── POST /auth/login
+├── POST /auth/logout (uses session cookie, but graceful)
+├── GET /health
+
+PROTECTED ROUTES (Require Authentication Middleware):
+├── /rbac/users/*
+├── /rbac/roles/*
+├── /rbac/profiles/*
+├── /rbac/groups/*
+├── /rbac/permissions/*
+├── /rbac/sharing-rules/*
+├── /rbac/smtp/*
+├── /rbac/audit-logs/* (read-only)
+├── /rbac/sessions/*
+├── /rbac/organizations/*
+```
+
+**Rationale for `/rbac` prefix:** All access control administration routes are grouped under a single namespace. This makes it easier to:
+- Apply authentication middleware once at the router level
+- Separate RBAC management from business domain routes
+- Configure CORS/rate-limiting specifically for admin endpoints
+
+---
+
+## 3. AUTHENTICATION VS AUTHORIZATION BOUNDARY
+
+### 3.1 Authentication Layer (Route/Middleware)
+
+**Responsibility:** Verify the caller's identity.
+**Location:** `authenticate.middleware.ts` + `requireActiveSession.middleware.ts`
+**Decision:** APPROVED AS-IS
+
+The current implementation correctly:
+- Reads `sessionId` from HTTP-only cookie
+- Resolves session via `AuthSessionService.resolveSession()`
+- Populates `req.user = { id, sessionId }`
+- Fails closed on any error (returns 401)
+
+**Rule:** Authentication middleware MUST be applied to ALL protected routes. No exceptions.
+
+### 3.2 Authorization Layer (Service)
+
+**Responsibility:** Determine if the authenticated user is permitted to perform the requested action.
+**Location:** All service classes via `EvaluationService.enforcePermission()`
+**Decision:** APPROVED AS-IS (with audit logging addition required)
+
+The current implementation correctly:
+- Uses `evaluationService.enforcePermission(actingUserId, moduleCode, action)`
+- Throws `PermissionDeniedError` on denial
+- Follows deny-by-default and deny-override policies
+
+**Rule:** Authorization MUST remain exclusively in the service layer. No permission logic in routes, controllers, or repositories.
+
+### 3.3 Boundary Enforcement Rules
+
+| Layer | Does | Does NOT Do |
+|-------|------|-------------|
+| Route/Middleware | Verify identity, validate input shape | Evaluate permissions |
+| Service | Enforce permissions, business logic | Parse HTTP, manage sessions |
+| Repository | Execute SQL | Make any access decisions |
+
+---
+
+## 4. AUDIT LOGGING GAPS ANALYSIS
+
+### 4.1 Current State
+
+**CRITICAL DEFICIENCY:** Audit logging is only implemented in `requirePermission.middleware.ts` for permission DENIALS. There is NO audit logging for successful CREATE, UPDATE, DELETE, or EXPORT operations.
+
+**Current audit logging locations:**
+- `requirePermission.middleware.ts:82` - Permission denial
+- `requirePermission.middleware.ts:111` - Invalid module/action
+- `requirePermission.middleware.ts:135` - Internal RBAC error
+- `requirePermission.middleware.ts:158` - Unknown error
+- `requirePermission.middleware.ts:183` - Middleware error
+
+**Missing audit logging locations:**
+| Service | Method | Audit Required |
+|---------|--------|----------------|
+| UserService | create() | CREATE user |
+| UserService | update() | UPDATE user |
+| UserService | delete() | DELETE user |
+| RoleService | create() | CREATE role |
+| RoleService | update() | UPDATE role |
+| RoleService | delete() | DELETE role |
+| RoleService | assignToUser() | UPDATE role assignment |
+| RoleService | revokeFromUser() | DELETE role assignment |
+| RoleService | updateRoleProfiles() | UPDATE role-profile mapping |
+| GroupService | create() | CREATE group |
+| GroupService | update() | UPDATE group |
+| GroupService | delete() | DELETE group |
+| GroupService | assignRole() | UPDATE group-role |
+| GroupService | removeRole() | DELETE group-role |
+| GroupService | replaceRoles() | UPDATE group-roles (bulk) |
+| ProfileService | create() | CREATE profile |
+| ProfileService | update() | UPDATE profile |
+| ProfileService | delete() | DELETE profile |
+| ProfileService | assignPermission() | UPDATE profile-permission |
+| ProfileService | revokePermission() | DELETE profile-permission |
+| ProfileService | createProfile() | CREATE profile (with perms) |
+| ProfileService | updateProfilePermissions() | UPDATE profile-perms (bulk) |
+| SharingRuleService | create() | CREATE sharing rule |
+| SharingRuleService | update() | UPDATE sharing rule |
+| SharingRuleService | delete() | DELETE sharing rule |
+| AuthSessionService | create() | CREATE session (login) |
+| AuthSessionService | logout() | UPDATE session (logout) |
+| AuthSessionService | revoke() | DELETE session |
+| AuthSessionService | revokeAllByUser() | DELETE sessions (bulk) |
+| AuditService | - | EXPORT audit logs (when implemented) |
+
+### 4.2 Required Changes
+
+Each service that performs mutations MUST:
+1. Accept `IAuditService` as a constructor dependency
+2. Call `auditService.log()` AFTER every successful mutation
+3. Include: `user_id`, `action`, `entity_type`, `entity_id`, `old_values`, `new_values`, `status: 'success'`
+
+**Pattern:**
+```typescript
+async create(actingUserId: string, data: CreateDto): Promise<Entity> {
+    await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'create');
+    
+    const entity = await this.repository.create(data);
+    
+    // AUDIT: Log after successful creation
+    await this.auditService.log({
+        user_id: actingUserId,
+        action: 'create',
+        entity_type: 'user',
+        entity_id: entity.id,
+        old_values: null,
+        new_values: data,
+        status: 'success'
+    });
+    
+    return entity;
+}
+```
+
+### 4.3 Edge Cases Requiring Special Attention
+
+| Edge Case | Handling |
+|-----------|----------|
+| Bulk operations | Log each item individually OR log batch with array of IDs |
+| Cascading deletes | Log primary delete; cascade is system operation |(*we only do soft deleted everywhere os not a problem)
+| Background jobs | Pass system user ID for audit; include job context |
+| Soft deletes | Log as 'update' with `is_deleted: true` in new_values |
+| Failed mutations | Log with `status: 'failure'` and error in new_values |
+| Export operations | Log 'export' action with query params as new_values |
+
+---
+
+## 5. FORWARD PLAN (TWO PHASES)
+
+### Phase 1: Audit Logging + Response DTO Strategy (Week 1-2)
+
+**Objective:** Fix all audit logging gaps AND ensure all API responses return meaningful data (not raw IDs).
+
+**Part A: Audit Logging Implementation**
+
+1. Update all service constructors to accept `IAuditService`
+2. Implement audit calls in UserService
+3. Implement audit calls in RoleService
+4. Implement audit calls in ProfileService
+5. Implement audit calls in GroupService
+6. Implement audit calls in SharingRuleService
+7. Implement audit calls in AuthSessionService
+
+**Part B: Response DTO Implementation**
+
+1. Create Response DTOs for all entities (see Section 8)
+2. Update repositories to include JOINs for related data
+3. Update services to return DTOs instead of raw entities
+4. Specifically for audit logs:
+   - Include `user_name` alongside `user_id`
+   - Include `role_name` alongside `role_id`
+   - Include `module_name` alongside `module_id`
+
+**Verification:**
+- Unit tests: Mock `auditService.log()` and verify correct parameters
+- Integration tests: Verify audit log records exist after mutations
+- Runtime check: Query `audit_logs` table and verify related names are populated
+- API response check: Verify no endpoint returns only IDs without names
+
+---
+
+### Phase 2: Route Implementation + Production Hardening (Week 3-4)
+
+**Part A: Route Implementation**
+
+1. Create route files for each domain under `/rbac/*`:
+   - `rbac/users.routes.ts`
+   - `rbac/roles.routes.ts`
+   - `rbac/profiles.routes.ts`
+   - `rbac/groups.routes.ts`
+   - `rbac/audit-logs.routes.ts`
+   - `rbac/sessions.routes.ts`
+2. Wire authentication middleware to `/rbac/*` router
+3. Implement controllers that delegate to services
+4. Add input validation middleware per route
+
+**Part B: Production Hardening**
+
+1. Configure CORS for production domains
+2. Add rate limiting middleware
+3. Add request ID middleware
+4. Add response envelope standardization: `{ data, error, meta }`
+5. Add request logging middleware
+
+**Verification:**
+- All protected routes return 401 without valid session
+- All routes forward to services (no business logic in routes)
+- Integration tests for each endpoint
+- Load testing under rate limits
+- CORS headers verified in responses
+- Request IDs present in all logs
+
+### 5.1 Risks and Edge Cases
+
+| Risk | Mitigation |
+|------|------------|
+| Audit logging failures blocking mutations | Wrap audit calls in try-catch; log failure but don't block operation |
+| Performance impact of audit logging | Use async fire-and-forget pattern with `.catch(console.error)` |
+| Missing audit entries on crashes | Implement database-level triggers as backup (optional) |
+| Concurrent session limits bypass | Verify limit check and creation are atomic (transaction) |
+
+### 5.2 Correctness Validation
+
+**Manual Verification:**
+1. Perform each CRUD operation via API
+2. Query `audit_logs` table to confirm entry exists
+3. Verify `old_values` and `new_values` are accurate
+
+**Automated Verification:**
+- Integration test suite that asserts audit log count after operations
+- CI pipeline that fails if any mutation method lacks audit call
+
+---
+
+## 6. ARCHITECTURAL DECISIONS LOG
+
+| Decision | Rationale | Date |
+|----------|-----------|------|
+| Authentication in middleware only | Separation of concerns; single point of failure | 2026-01-31 |
+| Authorization in service layer only | Consistent enforcement; testable without HTTP | 2026-01-31 |
+| Audit logging after successful mutations | No false positives; accurate record | 2026-01-31 |
+| Fire-and-forget audit logging | Don't block user operations on audit failures | 2026-01-31 |
+| Per-entity audit (not bulk) | Full traceability of individual records | 2026-01-31 |
+| All RBAC routes under `/rbac/*` prefix | Clear namespace separation; easier middleware config | 2026-01-31 |
+| Response DTOs with JOINs | Human-readable responses; API consumers need names not IDs | 2026-01-31 |
+| Two-phase implementation | Avoid overextension; complete audit+DTO before routes | 2026-01-31 |
+
+---
+
+## 7. CLEANUP TRACKING
+
+### From routes.txt - Items to Formalize
+
+| routes.txt Line | Status | Formal Route | Notes |
+|-----------------|--------|--------------|-------|
+| GET /groups/active | Pending | GET /rbac/groups?status=active | Use query param |
+| GET /groups/name/:name | Pending | GET /rbac/groups?name=:name | Use query param |
+| GET /audit-logs | Pending | GET /rbac/audit-logs | Implement |
+| GET /audit-logs/export | Pending | GET /rbac/audit-logs/export | Add CSV export |
+| POST /auth/login | Pending | POST /auth/login | Public route, not under /rbac |
+| Session routes | Pending | GET/DELETE /rbac/sessions/* | Implement |
+| OTP routes | Pending | POST /auth/otp/* | Public route for auth flow |
+| SMTP routes | Pending | /rbac/smtp/* | Low priority |
+
+---
+
+## 8. RESPONSE DTO STRATEGY
+
+### 8.1 Problem Statement
+
+Currently, API responses return raw entity IDs without human-readable context. Example:
+
+```json
+// CURRENT (Bad)
+{
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "role_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "module_id": "a87ff679-a2f3-71e3-9b09-4f80eb5a8ee3"
+}
+
+// REQUIRED (Good)
+{
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "user_name": "John Doe",
+  "user_email": "john@example.com",
+  "role_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "role_name": "Sales Manager",
+  "module_id": "a87ff679-a2f3-71e3-9b09-4f80eb5a8ee3",
+  "module_name": "INVOICES"
+}
+```
+
+### 8.2 Implementation Strategy
+
+**Layer Responsibilities:**
+
+| Layer | Responsibility |
+|-------|----------------|
+| Repository | Execute JOINs, return raw joined data |
+| Service | Transform raw data into Response DTOs |
+| Route/Controller | Pass through DTOs, no transformation |
+
+### 8.3 Response DTOs Required
+
+#### AuditLogResponseDto
+```typescript
+interface AuditLogResponseDto {
+  id: string;
+  action: AuditAction;
+  entity_type: string;
+  entity_id: string;
+  
+  // User context (JOINed)
+  user_id: string | null;
+  user_name: string | null;
+  user_email: string | null;
+  
+  // Role context (JOINed)
+  role_id: string | null;
+  role_name: string | null;
+  
+  // Module context (JOINed)
+  module_id: string | null;
+  module_name: string | null;
+  module_code: string | null;
+  
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  
+  ip_address: string;
+  user_agent: string;
+  status: AuditStatus;
+  created_at: Date;
+}
+```
+
+#### UserResponseDto
+```typescript
+interface UserResponseDto {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  status: UserStatus;
+  
+  // Roles (JOINed)
+  roles: Array<{ id: string; name: string; code: string }>;
+  
+  // Groups (JOINed)
+  groups: Array<{ id: string; name: string }>;
+  
+  created_at: Date;
+  updated_at: Date;
+}
+```
+
+#### RoleResponseDto
+```typescript
+interface RoleResponseDto {
+  id: string;
+  name: string;
+  code: string;
+  description: string | null;
+  is_active: boolean;
+  
+  // Parent role (JOINed)
+  parent_role: { id: string; name: string } | null;
+  
+  // Profiles (JOINed)
+  profiles: Array<{ id: string; name: string; code: string }>;
+  
+  // Counts
+  user_count: number;
+  child_role_count: number;
+}
+```
+
+#### ProfileResponseDto
+```typescript
+interface ProfileResponseDto {
+  id: string;
+  name: string;
+  code: string;
+  description: string | null;
+  is_active: boolean;
+  
+  // Permissions (JOINed via profile_permissions)
+  permissions: Array<{
+    id: string;
+    action: PermissionAction;
+    effect: PermissionEffect;
+    module_id: string;
+    module_name: string;
+    module_code: string;
+  }>;
+}
+```
+
+#### GroupResponseDto
+```typescript
+interface GroupResponseDto {
+  id: string;
+  name: string;
+  code: string;
+  description: string | null;
+  is_active: boolean;
+  
+  // Roles (JOINed via group_roles)
+  roles: Array<{ id: string; name: string; code: string }>;
+  
+  // User count
+  user_count: number;
+}
+```
+
+### 8.4 Repository JOIN Examples
+
+**AuditLogsRepository - findAllWithDetails():**
+```sql
+SELECT 
+  al.*,
+  u.first_name || ' ' || u.last_name AS user_name,
+  u.email AS user_email,
+  r.name AS role_name,
+  m.name AS module_name,
+  m.code AS module_code
+FROM audit_logs al
+LEFT JOIN users u ON al.user_id = u.id
+LEFT JOIN roles r ON al.role_id = r.id
+LEFT JOIN modules m ON al.module_id = m.id
+ORDER BY al.created_at DESC
+```
+
+### 8.5 DTO File Location
+
+All Response DTOs should be created in: `backend/src/rbac/dto/`
+
+| DTO File | Contents |
+|----------|----------|
+| `audit-log.dto.ts` | AuditLogResponseDto, AuditLogListResponseDto |
+| `user.dto.ts` | UserResponseDto (extend existing) |
+| `role.dto.ts` | RoleResponseDto (extend existing) |
+| `profile.dto.ts` | ProfileResponseDto (extend existing) |
+| `group.dto.ts` | GroupResponseDto (extend existing) |
+
+---
+
+## APPENDIX: ROUTES.TXT CLEANUP NOTES
+
+The following corrections should be noted (typos in original):
+- Line 9: "grpoups" → "groups"
+- Line 24: "uiser" → "user"
+- Line 25: "paginatioN" → "pagination"
+- Line 37: "geenmrate" → "generate"
+- Line 43: "prfoiles" → "profiles"
+- Line 46: "profuioles" → "profiles"
+- Line 49: "assigne dot" → "assigned to"
+- Line 50: "PREMISSIOSN" → "PERMISSIONS", "menthionds" → "mentions", "wihcn" → "which"
+- Line 63: "posdt" → "post"
+- Line 64: "del /groups/id" under Roles section → "del /roles/:id"
+- Line 85: "suers" → "users"
+
+---
+
+**END OF DOCUMENT**
+
+This document is authoritative. Any implementation that deviates from these decisions requires explicit review and amendment of this document.
