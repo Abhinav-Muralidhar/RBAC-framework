@@ -246,7 +246,7 @@ export class GroupRepository implements IGroupRepository {
       `SELECT *
      FROM ${this.tableName}
      ${whereClause}
-     ORDER BY created_at DESC
+     ORDER BY created_at DESC, id DESC
      LIMIT $${params.length - 1}
      OFFSET $${params.length}`,
       params,

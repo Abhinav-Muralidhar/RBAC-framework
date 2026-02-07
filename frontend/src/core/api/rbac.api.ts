@@ -12,6 +12,7 @@ import type { Group, CreateGroupDto, UpdateGroupDto } from '../types/group.types
 import type { AuditLog } from '../types/audit.types';
 import type { Session } from '../types/session.types';
 import type { Organization, UpdateOrganizationDto } from '../types/organization.types';
+import type { SharingRule, CreateSharingRuleDto, UpdateSharingRuleDto } from '../types/sharingrule.types';
 
 export interface PaginationParams {
     page?: number;
@@ -313,5 +314,49 @@ export const permissionsApi = {
     list: async (): Promise<Permission[]> => {
         const response = await get<ApiResponse<Permission[]>>('/rbac/permissions');
         return response.data;
+    },
+};
+// ============================================================================
+// Sharing Rules
+// ============================================================================
+
+export const sharingRulesApi = {
+    /**
+     * List all sharing rules with optional pagination
+     */
+    list: async (params?: { page?: number; limit?: number; is_active?: boolean }) => {
+        const response = await apiClient.get<PaginatedResponse<SharingRule>>('/rbac/sharing-rules', { params });
+        return response.data;
+    },
+
+    /**
+     * Get a single sharing rule by ID
+     */
+    getById: async (id: number | string): Promise<SharingRule> => {
+        const response = await apiClient.get<ApiResponse<SharingRule>>(`/rbac/sharing-rules/${id}`);
+        return response.data.data;
+    },
+
+    /**
+     * Create a new sharing rule
+     */
+    create: async (data: CreateSharingRuleDto): Promise<SharingRule> => {
+        const response = await apiClient.post<ApiResponse<SharingRule>>('/rbac/sharing-rules', data);
+        return response.data.data;
+    },
+
+    /**
+     * Update an existing sharing rule
+     */
+    update: async (id: number | string, data: UpdateSharingRuleDto): Promise<SharingRule> => {
+        const response = await apiClient.patch<ApiResponse<SharingRule>>(`/rbac/sharing-rules/${id}`, data);
+        return response.data.data;
+    },
+
+    /**
+     * Delete a sharing rule
+     */
+    delete: async (id: number | string): Promise<void> => {
+        await apiClient.delete(`/rbac/sharing-rules/${id}`);
     },
 };

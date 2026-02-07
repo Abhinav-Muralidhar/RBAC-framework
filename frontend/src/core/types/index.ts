@@ -4,6 +4,6 @@ export * from './profile.types';
 export * from './group.types';
 export * from './audit.types';
 export * from './session.types';
-export * from './sharing-rule.types';
+export * from './sharingrule.types';
 export * from './organization.types';
 export * from './smtp.types';

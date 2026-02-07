@@ -18,8 +18,9 @@ import {
     Building2,
     Mail,
     X,
+    Share,
 } from 'lucide-react';
-import { UsersPage, SessionsPage, RolesPage, ProfilesPage, GroupsPage, AuditLogsPage, SmtpPage, OrganizationPage } from '../../../plugins/rbac-settings/pages';
+import { UsersPage, SessionsPage, RolesPage, SharingRules, ProfilesPage, GroupsPage, AuditLogsPage, SmtpPage, OrganizationPage } from '../../../plugins/rbac-settings/pages';
 import './AdminSettingsModal.css';
 
 interface SectionConfig {
@@ -36,6 +37,7 @@ const sections: SectionConfig[] = [
     { id: SETTINGS_SECTIONS.ROLES, label: 'Roles', icon: <Shield size={18} />, component: RolesPage },
     { id: SETTINGS_SECTIONS.PROFILES, label: 'Profiles', icon: <Key size={18} />, component: ProfilesPage },
     { id: SETTINGS_SECTIONS.GROUPS, label: 'Groups', icon: <FolderTree size={18} />, component: GroupsPage },
+    { id: SETTINGS_SECTIONS.SHARING_RULES, label: 'Sharing Rules', icon: <Share size={18} />, component: SharingRules },
     { id: SETTINGS_SECTIONS.AUDIT_LOGS, label: 'Audit Logs', icon: <FileText size={18} />, component: AuditLogsPage },
     { id: SETTINGS_SECTIONS.SMTP, label: 'SMTP Config', icon: <Mail size={18} />, component: SmtpPage },
 ];

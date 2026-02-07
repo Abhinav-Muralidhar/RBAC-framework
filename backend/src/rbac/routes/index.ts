@@ -70,6 +70,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     const userGroupsRepository = new UserGroupsRepository(db);
     const organizationRepository = new OrganizationRepository(db);
     const smtpConfigRepository = new SmtpConfigRepository(db);
+    const sharingRuleRepository = new SharingRulesRepository(db);
     // Services
     // ============================
     const evaluationService = new EvaluationService(new PermissionsRepository(db));
@@ -84,6 +85,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     const smtpConfigService = new SmtpConfigService(smtpConfigRepository, auditService);
     const permissionService = new PermissionService(permissionsRepository, profilesRepository, profilePermissionsRepository, roleProfilesRepository, moduleRepository, roleRepository, evaluationService, auditService
     );
+    const sharingRuleService = new SharingRuleService(sharingRuleRepository, evaluationService, auditService);
 
     const moduleService = new ModuleService(moduleRepository, evaluationService, auditService);
     // ============================
@@ -105,8 +107,8 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     router.use('/audit-logs', createAuditLogsRouter(db, auditService, evaluationService));
     router.use('/sessions', createSessionsRouter(db, auditService, evaluationService, authSessionService));
     router.use('/organizations', createOrganizationsRouter(db, evaluationService, auditService, organizationService));
-    router.use('/smtpconfig', createSmtpRouter(db, auditService, evaluationService, smtpConfigService))
-
+    router.use('/smtpconfig', createSmtpRouter(db, auditService, evaluationService, smtpConfigService));
+    router.use('/sharing-rules', createSharingRulesRouter(db, auditService, evaluationService, sharingRuleService));
     return router;
 }
 
@@ -118,6 +120,9 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
 import { createOtpRouter } from './otp.routes';
 import { OtpService } from '../services/otp.service';
 import { OtpTokenRepository } from '../repositories/otp_token.repository';
+import { createSharingRulesRouter } from './sharingrules.routes';
+import { SharingRuleService } from '../services/sharingRule.service';
+import { SharingRulesRepository } from '../repositories/sharing_rules.repository';
 
 export function createPublicAuthRouter(db: IDatabase<unknown>): Router {
     const router = Router();
