@@ -209,7 +209,7 @@ export class RoleRepository implements IRoleRepository {
     const data = await this.query<Roles>(
       `SELECT * FROM ${this.tableName}
        ${whereClause}
-       ORDER BY created_at DESC
+       ORDER BY created_at DESC, id DESC
        LIMIT $${idx} OFFSET $${idx + 1}`,
       [...values, p.limit, offset],
       t

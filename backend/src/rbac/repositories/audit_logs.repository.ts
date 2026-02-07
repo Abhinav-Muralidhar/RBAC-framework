@@ -158,7 +158,7 @@ export class AuditLogsRepository implements IAuditLogsRepository {
     );
 
     const rows = await this.query<AuditLogWithDetailsRow>(
-      `${this.selectWithJoinsQuery} ${where} ORDER BY al.created_at DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      `${this.selectWithJoinsQuery} ${where} ORDER BY al.created_at DESC, al.id DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
       [...values, p.limit, offset],
       t
     );

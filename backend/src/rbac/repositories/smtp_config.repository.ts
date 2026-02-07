@@ -50,6 +50,7 @@ export class SmtpConfigRepository implements ISmtpConfigRepository {
       `SELECT *
            FROM ${this.tableName} 
            ${whereClause}
+           ORDER id DESC
            LIMIT $1 OFFSET $2`,
       [p.limit, offset]
     );

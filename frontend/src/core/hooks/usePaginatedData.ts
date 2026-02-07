@@ -37,7 +37,7 @@ export function usePaginatedData<T>(
             console.log('API response:', response);  // Log the response
 
             const { data: responseData = [], meta } = response;
-            const pagination = meta?.pagination ?? {
+            const pagination = meta ?? {
                 page: 1,
                 limit,
                 total: responseData.length,
@@ -48,6 +48,8 @@ export function usePaginatedData<T>(
 
             setData(responseData);
             setTotalPages(pagination.totalPages);
+            setPage(pagination.page ?? 1);
+            setLimit(pagination.limit ?? limit);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load data');
         } finally {

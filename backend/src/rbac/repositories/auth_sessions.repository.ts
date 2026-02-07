@@ -134,7 +134,7 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     const rows = await task.any<AuthSessions>(
       `SELECT * FROM ${this.tableName}
        WHERE user_id = $1
-       ORDER BY login_at DESC
+       ORDER BY login_at DESC, id DESC
        LIMIT $2 OFFSET $3`,
       [userId, p.limit, offset]
     );

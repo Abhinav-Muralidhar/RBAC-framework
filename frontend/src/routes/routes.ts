@@ -33,6 +33,7 @@ export const SETTINGS_SECTIONS = {
     GROUPS: 'groups',
     ORGANIZATIONS: 'organizations',
     AUDIT_LOGS: 'audit-logs',
+    SHARING_RULES: 'sharing-rules',
     SMTP: 'smtp',
 } as const;
 

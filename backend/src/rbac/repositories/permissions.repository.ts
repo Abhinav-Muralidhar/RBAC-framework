@@ -94,20 +94,22 @@ export class PermissionsRepository implements IPermissionsRepository {
     ): Promise<PermissionEffect[]> {
         const rows = await this.query<{ effect: PermissionEffect }>(
             `
-            SELECT DISTINCT pp.effect
-            FROM users u
-            JOIN user_roles ur ON ur.user_id = u.id
-            JOIN role_profiles rp ON rp.role_id = ur.role_id
-            JOIN profiles po ON po.id = rp.profile_id
-            JOIN profile_permissions pp ON pp.profile_id = po.id
-            JOIN permissions p ON p.id = pp.permission_id
-            JOIN modules m ON m.id = p.module_id
-            WHERE u.id = $1
-              AND u.status NOT IN ('deleted', 'inactive')
-              AND po.is_active = true
-              AND m.code = $2
-              AND p.action = $3
-            `,
+        SELECT DISTINCT pp.effect
+        FROM users u
+        JOIN user_roles ur ON ur.user_id = u.id
+        JOIN roles r ON r.id = ur.role_id
+        JOIN role_profiles rp ON rp.role_id = r.id
+        JOIN profiles po ON po.id = rp.profile_id
+        JOIN profile_permissions pp ON pp.profile_id = po.id
+        JOIN permissions p ON p.id = pp.permission_id
+        JOIN modules m ON m.id = p.module_id
+        WHERE u.id = $1
+          AND u.status NOT IN ('deleted', 'inactive')
+          AND r.is_active = true
+          AND po.is_active = true
+          AND m.code = $2
+          AND p.action = $3
+        `,
             [userId, moduleCode, action],
             t
         );

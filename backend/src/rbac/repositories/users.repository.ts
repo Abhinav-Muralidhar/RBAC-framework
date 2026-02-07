@@ -238,7 +238,7 @@ export class UsersRepository implements IUsersRepository {
       `SELECT *
        FROM ${this.tableName}
        ${whereSql}
-       ORDER BY created_at DESC
+       ORDER BY created_at DESC, id DESC
        LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
       [...params, p.limit, offset]
     );

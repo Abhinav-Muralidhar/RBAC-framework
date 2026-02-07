@@ -62,7 +62,7 @@ export class SharingRulesRepository implements ISharingRulesRepository {
     const whereClause = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
     const items = await (t ?? this.db).any<SharingRuleDetail>(
-      `SELECT sr.*,m.module_name
+      `SELECT sr.*,m.name
        FROM ${this.tableName} sr
        INNER JOIN modules m ON m.id = sr.module_id
        ${whereClause}
