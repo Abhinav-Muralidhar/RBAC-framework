@@ -27,6 +27,7 @@ export const ROUTES = {
 // Settings sections for the modal
 export const SETTINGS_SECTIONS = {
     USERS: 'users',
+    SESSIONS: 'sessions',
     ROLES: 'roles',
     PROFILES: 'profiles',
     GROUPS: 'groups',
