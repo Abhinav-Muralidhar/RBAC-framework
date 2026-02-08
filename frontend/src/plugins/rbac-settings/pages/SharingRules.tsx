@@ -95,26 +95,36 @@ export function SharingRules() {
                             <tr key={rule.id}>
                                 <td>{rule.name}</td>
 
-                                {/* Type toggle */}
+                                {/* Rule Type Toggle */}
                                 <td>
                                     <button
-                                        onClick={() => toggleRule(rule)}
+                                        onClick={async () => {
+                                            try {
+                                                const newType = rule.rule_type === 'public' ? 'private' : 'public';
+                                                await sharingRulesApi.update(rule.id, { rule_type: newType });
+                                                setRules(prev =>
+                                                    prev.map(r => r.id === rule.id ? { ...r, rule_type: newType } : r)
+                                                );
+                                            } catch (err) {
+                                                console.error(err);
+                                            }
+                                        }}
                                         style={{
                                             padding: '6px 12px',
                                             borderRadius: '6px',
                                             border: 'none',
                                             cursor: 'pointer',
-                                            backgroundColor: rule.is_active ? '#3b82f6' : '#2d2d44',
+                                            backgroundColor: rule.rule_type === 'public' ? '#3b82f6' : '#2d2d44',
                                             color: '#fff',
                                             minWidth: '80px',
                                             transition: '0.2s',
                                         }}
                                     >
-                                        {rule.is_active ? 'Public' : 'Private'}
+                                        {rule.rule_type === 'public' ? 'Public' : 'Private'}
                                     </button>
                                 </td>
 
-                                {/* Status switch */}
+                                {/* Status Toggle */}
                                 <td>
                                     <div className="form-switch-wrapper">
                                         <button
@@ -122,7 +132,17 @@ export function SharingRules() {
                                             role="switch"
                                             aria-checked={rule.is_active}
                                             className={`form-switch ${rule.is_active ? 'form-switch--on' : ''}`}
-                                            onClick={() => toggleRule(rule)}
+                                            onClick={async () => {
+                                                try {
+                                                    const newStatus = !rule.is_active;
+                                                    await sharingRulesApi.update(rule.id, { is_active: newStatus });
+                                                    setRules(prev =>
+                                                        prev.map(r => r.id === rule.id ? { ...r, is_active: newStatus } : r)
+                                                    );
+                                                } catch (err) {
+                                                    console.error(err);
+                                                }
+                                            }}
                                         >
                                             <span className="form-switch__thumb" />
                                         </button>

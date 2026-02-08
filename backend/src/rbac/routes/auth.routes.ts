@@ -92,7 +92,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
             }
             const result = await withTransaction(async (t: TransactionTask) => {
                 const { username, password } = req.body;
-                const user = await usersService.findByUsername(t, username);
+                const user = await usersService.findByUsername(t, username.toLowerCase());
                 if (!user) throw new Error('AUTH_FAILED');
 
                 // Check user status
