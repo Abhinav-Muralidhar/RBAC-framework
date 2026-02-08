@@ -25,7 +25,7 @@ export function SessionsPage() {
         setPage,
         setLimit,
         reload
-    } = usePaginatedData<Session>(sessionsApi.getAll, 20);
+    } = usePaginatedData<Session>(sessionsApi.getAll, 10);
 
     const filteredSessions = (sessions || []).filter(s =>
         !searchQuery ||
@@ -105,7 +105,7 @@ export function SessionsPage() {
                                     <th>IP Address</th>
                                     <th>User Agent</th>
                                     <th>Login Time</th>
-                                    <th>Expires</th>
+                                    <th>Logout/Expires</th>
                                     <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
@@ -114,14 +114,17 @@ export function SessionsPage() {
                                 {filteredSessions.map(session => (
                                     <tr key={session.id}>
                                         <td>
-                                            <code>{session.id.slice(0, 8)}...</code>
+                                            <code>{session.id.slice(0, 8)}</code>
                                         </td>
                                         <td>{session.user_id}</td>
                                         <td>{session.ip_address}</td>
                                         <td title={session.user_agent}>{session.user_agent}</td>
                                         <td>{format(new Date(session.login_at), 'MMM d, HH:mm')}</td>
-                                        <td>{format(new Date(session.expires_at), 'MMM d, HH:mm')}</td>
-                                        <td><span className="status-badge status-active">Active</span></td>
+                                        <td>{session.logout_at ? "Logout at " + format(new Date(session.logout_at), 'MMM d, HH:mm') : "Expires at " + format(new Date(session.expires_at), 'MMM d, HH:mm')}</td>
+                                        <td>{session.logout_at
+                                            ? <span className="status-badge status-inactive">Inactive</span>
+                                            : <span className="status-badge status-active">Active</span>
+                                        }</td>
                                         <td>
                                             <button
                                                 className="btn-icon btn-danger"

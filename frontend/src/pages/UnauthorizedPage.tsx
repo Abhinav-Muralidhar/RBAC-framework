@@ -25,13 +25,8 @@ export function UnauthorizedPage() {
                 </p>
 
                 <div className="unauthorized-actions">
-                    <button
-                        className="btn btn-primary"
-                        onClick={() => navigate(-1)}
-                    >
-                        <ArrowLeft size={18} />
-                        Go Back
-                    </button>
+
+
 
                     <a
                         href="mailto:support@example.com"
