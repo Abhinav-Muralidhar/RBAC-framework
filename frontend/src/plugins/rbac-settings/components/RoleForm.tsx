@@ -150,11 +150,11 @@ export function RoleForm({ role, onSuccess, onError, setLoading }: RoleFormProps
                 />
             </div>
 
-            {/*<FormSwitch
+            <FormSwitch
                 label="Active"
                 checked={formData.is_active}
                 onChange={checked => handleChange('is_active', checked)}
-            />*/}
+            />
 
             {/* Profiles selection */}
             <div className="form-field">

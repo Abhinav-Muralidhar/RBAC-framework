@@ -43,15 +43,15 @@ export function OrganizationPage() {
                     <h1>Organization</h1>
                     <p>Manage organization details and branding</p>
                 </div>
-                {organization && (
-                    <button
+                {/*organization && (
+                    {<button
                         className="btn btn-primary"
                         onClick={() => setShowForm(true)}
                     >
                         <Edit2 size={18} />
                         Edit Organization
                     </button>
-                )}
+                )}*/}
             </header>
 
             {error && (

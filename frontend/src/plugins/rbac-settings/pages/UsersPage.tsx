@@ -1,63 +1,47 @@
 /**
  * Users Page
  *
- * Manage user accounts with forms and confirmation modals.
+ * Manage user accounts using centralized CRUD page hook.
  */
 
-import { useState } from 'react';
+import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { usersApi } from '../../../core/api/rbac.api';
 import type { User } from '../../../core/types/user.types';
-import { Plus, Edit2, Trash2, Search } from 'lucide-react';
+import { useCrudPage } from '../../../core/hooks';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { FormModal } from '../../../core/components/FormModal';
 import { UserForm, submitUserForm } from '../components';
-import { usePaginatedData } from '../../../core/hooks/usePaginatedData';
 import './SettingsPage.css';
 
 export function UsersPage() {
-    const [searchQuery, setSearchQuery] = useState('');
-    const [editingUser, setEditingUser] = useState<User | null>(null);
-    const [showFormModal, setShowFormModal] = useState(false);
-    const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [deletingUser, setDeletingUser] = useState<User | null>(null);
-
     const {
-        data: users,
+        items: users,
         isLoading,
         error,
+        searchQuery,
+        setSearchQuery,
         page,
         totalPages,
         setPage,
         reload,
-    } = usePaginatedData<User>(usersApi.list, 20);
-
-    const filteredUsers = (users || []).filter(user =>
-        user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.primary_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.last_name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    const openCreate = () => {
-        setEditingUser(null);
-        setShowFormModal(true);
-    };
-
-    const openEdit = (user: User) => {
-        setEditingUser(user);
-        setShowFormModal(true);
-    };
-
-    const openDelete = (user: User) => {
-        setDeletingUser(user);
-        setShowDeleteModal(true);
-    };
-
-    const handleDelete = async () => {
-        if (!deletingUser) return;
-        await usersApi.delete(deletingUser.id);
-        setShowDeleteModal(false);
-        reload();
-    };
+        showFormModal,
+        editingItem,
+        openCreate,
+        openEdit,
+        closeForm,
+        handleFormSuccess,
+        showDeleteModal,
+        deletingItem,
+        deleteLoading,
+        openDelete,
+        confirmDelete,
+        closeDelete,
+    } = useCrudPage<User>({
+        listFn: usersApi.list,
+        deleteFn: usersApi.delete,
+        entityName: 'users',
+        initialLimit: 20,
+    });
 
     return (
         <div className="settings-page">
@@ -101,8 +85,8 @@ export function UsersPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredUsers.length > 0 ? (
-                                    filteredUsers.map(user => (
+                                {users.length > 0 ? (
+                                    users.map(user => (
                                         <tr key={user.id}>
                                             <td className="font-medium">{user.username}</td>
                                             <td>{user.first_name} {user.last_name}</td>
@@ -134,14 +118,13 @@ export function UsersPage() {
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={6} className="empty-state">No users found</td>
+                                        <td colSpan={5} className="empty-state">No users found</td>
                                     </tr>
                                 )}
                             </tbody>
                         </table>
                     </div>
 
-                    {/* Pagination (always visible, disabled when needed) */}
                     <div className="pagination">
                         <button
                             disabled={page <= 1}
@@ -163,18 +146,15 @@ export function UsersPage() {
             {/* Create / Edit Modal */}
             <FormModal
                 isOpen={showFormModal}
-                title={editingUser ? 'Edit User' : 'Add New User'}
+                title={editingItem ? 'Edit User' : 'Add New User'}
                 isLoading={false}
                 onSubmit={() => submitUserForm()}
-                onCancel={() => setShowFormModal(false)}
+                onCancel={closeForm}
                 size="md"
             >
                 <UserForm
-                    user={editingUser}
-                    onSuccess={() => {
-                        setShowFormModal(false);
-                        reload();
-                    }}
+                    user={editingItem}
+                    onSuccess={handleFormSuccess}
                     onError={console.error}
                     setLoading={() => { }}
                 />
@@ -185,12 +165,12 @@ export function UsersPage() {
                 isOpen={showDeleteModal}
                 title="Delete User"
                 message="Are you sure you want to delete this user? This action cannot be undone."
-                itemName={deletingUser?.username}
+                itemName={deletingItem?.username}
                 confirmLabel="Delete"
                 variant="danger"
-                isLoading={false}
-                onConfirm={handleDelete}
-                onCancel={() => setShowDeleteModal(false)}
+                isLoading={deleteLoading}
+                onConfirm={confirmDelete}
+                onCancel={closeDelete}
             />
         </div>
     );

@@ -94,52 +94,46 @@ export function SharingRules() {
                         {rules.map(rule => (
                             <tr key={rule.id}>
                                 <td>{rule.name}</td>
+
+                                {/* Type toggle */}
                                 <td>
                                     <button
                                         onClick={() => toggleRule(rule)}
-                                        disabled={updatingIds.includes(rule.id)}
                                         style={{
                                             padding: '6px 12px',
                                             borderRadius: '6px',
                                             border: 'none',
-                                            cursor: updatingIds.includes(rule.id) ? 'not-allowed' : 'pointer',
+                                            cursor: 'pointer',
                                             backgroundColor: rule.is_active ? '#3b82f6' : '#2d2d44',
                                             color: '#fff',
                                             minWidth: '80px',
                                             transition: '0.2s',
                                         }}
                                     >
-                                        {updatingIds.includes(rule.id)
-                                            ? 'Updating...'
-                                            : rule.is_active
-                                                ? 'Public'
-                                                : 'Private'}
+                                        {rule.is_active ? 'Public' : 'Private'}
                                     </button>
                                 </td>
+
+                                {/* Status switch */}
                                 <td>
-                                    <button
-                                        onClick={() => toggleRule(rule)}
-                                        disabled={updatingIds.includes(rule.id)}
-                                        style={{
-                                            padding: '6px 12px',
-                                            borderRadius: '6px',
-                                            border: 'none',
-                                            cursor: updatingIds.includes(rule.id) ? 'not-allowed' : 'pointer',
-                                            backgroundColor: rule.is_active ? '#16a34a' : '#ef4444',
-                                            color: '#fff',
-                                            minWidth: '80px',
-                                            transition: '0.2s',
-                                        }}
-                                    >
-                                        {updatingIds.includes(rule.id)
-                                            ? 'Updating...'
-                                            : rule.is_active
-                                                ? 'Active'
-                                                : 'Inactive'}
-                                    </button>
+                                    <div className="form-switch-wrapper">
+                                        <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={rule.is_active}
+                                            className={`form-switch ${rule.is_active ? 'form-switch--on' : ''}`}
+                                            onClick={() => toggleRule(rule)}
+                                        >
+                                            <span className="form-switch__thumb" />
+                                        </button>
+                                        <label className="form-switch-label">
+                                            {rule.is_active ? 'Active' : 'Inactive'}
+                                        </label>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
+
                     </tbody>
                 </table>
             </div>

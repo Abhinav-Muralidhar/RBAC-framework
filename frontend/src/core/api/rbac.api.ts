@@ -17,6 +17,7 @@ import type { SharingRule, CreateSharingRuleDto, UpdateSharingRuleDto } from '..
 export interface PaginationParams {
     page?: number;
     limit?: number;
+    search?: string;
 }
 
 // Helper to cast response to expected type since interceptor unwraps it
@@ -295,7 +296,7 @@ export const organizationApi = {
         data: Partial<Organization>
     ): Promise<Organization> => {
         const response = await patch<ApiResponse<Organization>>(
-            `/rbac/organization/${id}`,
+            `/rbac/organizations/${id}`,
             data
         );
         return response.data;

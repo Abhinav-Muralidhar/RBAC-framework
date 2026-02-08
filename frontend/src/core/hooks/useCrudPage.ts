@@ -7,7 +7,7 @@
  * - Delete confirmation modal management
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 
 export interface ListParams {
     page?: number;
@@ -98,10 +98,25 @@ export function useCrudPage<T extends { id: string }>({
     const [deletingItem, setDeletingItem] = useState<T | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
 
+    // Debounce search
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchQuery);
+            setPage(1); // Reset to page 1 when search changes
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
     const loadItems = useCallback(async () => {
         try {
             setIsLoading(true);
-            const response = await listFn({ page, limit: initialLimit });
+            const response = await listFn({
+                page,
+                limit: initialLimit,
+                search: debouncedSearch || undefined
+            });
             setItems(response.data || []);
             setTotalPages(response.meta?.totalPages || 1);
         } catch (err) {
@@ -109,7 +124,7 @@ export function useCrudPage<T extends { id: string }>({
         } finally {
             setIsLoading(false);
         }
-    }, [listFn, page, initialLimit, entityName]);
+    }, [listFn, page, initialLimit, entityName, debouncedSearch]);
 
     useEffect(() => {
         loadItems();

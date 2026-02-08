@@ -63,7 +63,7 @@ export function SessionsPage() {
                     <h1>User Sessions</h1>
                     <p>Manage active sessions and security</p>
                 </div>
-                <div className="header-actions">
+                {/*<div className="header-actions">
                     <button
                         className="btn btn-danger"
                         onClick={() => revokeAllModal.open(filteredSessions[0] || null)}
@@ -71,7 +71,7 @@ export function SessionsPage() {
                     >
                         <ShieldAlert size={18} /> Revoke All
                     </button>
-                </div>
+                </div>*/}
             </header>
 
             <div className="page-toolbar">

@@ -1,61 +1,47 @@
-import { useState } from 'react';
+/**
+ * Profiles Page
+ *
+ * Manage permission profiles using centralized CRUD page hook.
+ */
+
+import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { profilesApi } from '../../../core/api/rbac.api';
 import type { Profile } from '../../../core/types/profile.types';
-import { Plus, Edit2, Trash2, Search, Key } from 'lucide-react';
+import { useCrudPage } from '../../../core/hooks';
 import { FormModal } from '../../../core/components/FormModal';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { ProfileForm, submitProfileForm } from '../components/ProfileForm';
-import { usePaginatedData } from '../../../core/hooks/usePaginatedData';
 import './SettingsPage.css';
 
 export function ProfilesPage() {
-    const [searchQuery, setSearchQuery] = useState('');
-    const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
-    const [showFormModal, setShowFormModal] = useState(false);
-    const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [deletingProfile, setDeletingProfile] = useState<Profile | null>(null);
-
     const {
-        data: profiles,
+        items: profiles,
         isLoading,
         error,
+        searchQuery,
+        setSearchQuery,
         page,
         totalPages,
-        limit,
         setPage,
-        reload
-    } = usePaginatedData<Profile>(profilesApi.list, 100);
-
-    const filteredProfiles = (profiles || []).filter(profile =>
-        profile.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        profile.code.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    const openEdit = (profile: Profile) => {
-        setEditingProfile(profile);
-        setShowFormModal(true);
-    };
-
-    const openCreate = () => {
-        setEditingProfile(null);
-        setShowFormModal(true);
-    };
-
-    const openDelete = (profile: Profile) => {
-        setDeletingProfile(profile);
-        setShowDeleteModal(true);
-    };
-
-    const handleDelete = async () => {
-        if (!deletingProfile) return;
-        try {
-            await profilesApi.delete(deletingProfile.id);
-            setShowDeleteModal(false);
-            reload();
-        } catch (err) {
-            console.error(err);
-        }
-    };
+        reload,
+        showFormModal,
+        editingItem,
+        openCreate,
+        openEdit,
+        closeForm,
+        handleFormSuccess,
+        showDeleteModal,
+        deletingItem,
+        deleteLoading,
+        openDelete,
+        confirmDelete,
+        closeDelete,
+    } = useCrudPage<Profile>({
+        listFn: profilesApi.list,
+        deleteFn: profilesApi.delete,
+        entityName: 'profiles',
+        initialLimit: 100,
+    });
 
     return (
         <div className="settings-page">
@@ -99,7 +85,7 @@ export function ProfilesPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredProfiles.length > 0 ? filteredProfiles.map(profile => (
+                                {profiles.length > 0 ? profiles.map(profile => (
                                     <tr key={profile.id}>
                                         <td className="font-medium">{profile.name}</td>
                                         <td><code>{profile.code}</code></td>
@@ -122,14 +108,13 @@ export function ProfilesPage() {
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan={6} className="empty-state">No profiles found</td>
+                                        <td colSpan={5} className="empty-state">No profiles found</td>
                                     </tr>
                                 )}
                             </tbody>
                         </table>
                     </div>
 
-                    {/* Pagination */}
                     <div className="pagination">
                         <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
                         <span>Page {page} of {totalPages}</span>
@@ -141,15 +126,15 @@ export function ProfilesPage() {
             {/* Create/Edit Modal */}
             <FormModal
                 isOpen={showFormModal}
-                title={editingProfile ? 'Edit Profile' : 'Add New Profile'}
+                title={editingItem ? 'Edit Profile' : 'Add New Profile'}
                 isLoading={false}
                 onSubmit={() => submitProfileForm()}
-                onCancel={() => setShowFormModal(false)}
+                onCancel={closeForm}
                 size="md"
             >
                 <ProfileForm
-                    profile={editingProfile}
-                    onSuccess={() => { setShowFormModal(false); reload(); }}
+                    profile={editingItem}
+                    onSuccess={handleFormSuccess}
                     onError={(err) => console.error(err)}
                     setLoading={() => { }}
                 />
@@ -160,12 +145,12 @@ export function ProfilesPage() {
                 isOpen={showDeleteModal}
                 title="Delete Profile"
                 message="Are you sure you want to delete this profile? Roles using this profile will lose associated permissions."
-                itemName={deletingProfile?.name}
+                itemName={deletingItem?.name}
                 confirmLabel="Delete"
                 variant="danger"
-                isLoading={false}
-                onConfirm={handleDelete}
-                onCancel={() => setShowDeleteModal(false)}
+                isLoading={deleteLoading}
+                onConfirm={confirmDelete}
+                onCancel={closeDelete}
             />
         </div>
     );

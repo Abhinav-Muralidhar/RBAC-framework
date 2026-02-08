@@ -10,6 +10,9 @@ import { UserService } from '../services/user.service';
 import { parseId, parsePagination } from './_paramUtils';
 import { IDatabase } from 'pg-promise';
 import { TransactionTask, withTransaction } from '../utils/transaction.utils';
+import { requirePermission } from '../middleware/requirePermission.middleware';
+import { EvaluationService } from '../services/evaluation.service';
+import { AuditService } from '../services/audit.service';
 
 /**
  * Standard response envelope
@@ -32,17 +35,18 @@ function parseFilters(query: any): any {
     if (query.email) filters.email = query.email;
     if (query.username) filters.username = query.username;
     if (query.status) filters.status = query.status;
+    if (query.search) filters.search = query.search;
     return filters;
 }
 
-export function createUsersRouter(db: IDatabase<unknown>, userService: UserService): Router {
+export function createUsersRouter(db: IDatabase<unknown>, evaluationService: EvaluationService, auditService: AuditService, userService: UserService): Router {
     const router = Router();
 
     /**
      * GET /rbac/users
      * List all users (paginated)
      */
-    router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+    router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
@@ -90,7 +94,7 @@ export function createUsersRouter(db: IDatabase<unknown>, userService: UserServi
      * POST /rbac/users
      * Create new user
      */
-    router.post('/', async (req: Request, res: Response, next: NextFunction) => {
+    router.post('/', requirePermission('SETTINGS', 'create', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
@@ -107,7 +111,7 @@ export function createUsersRouter(db: IDatabase<unknown>, userService: UserServi
      * PATCH /rbac/users/:id
      * Update user
      */
-    router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
@@ -125,7 +129,7 @@ export function createUsersRouter(db: IDatabase<unknown>, userService: UserServi
      * DELETE /rbac/users/:id
      * Delete user (soft delete)
      */
-    router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;

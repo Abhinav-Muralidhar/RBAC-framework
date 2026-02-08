@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { FormInput, FormSelect } from '../../../core/components/FormElements';
+import { FormInput, FormSwitch } from '../../../core/components/FormElements';
 import type { User, CreateUserDto, UpdateUserDto } from '../../../core/types/user.types';
 import type { Role } from '../../../core/types/role.types';
 import { usersApi, rolesApi } from '../../../core/api/rbac.api';
@@ -205,14 +205,11 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             </div>
 
             <div className="form-row">
-                <FormSelect
-                    label="Status"
-                    value={formData.status}
-                    onChange={e => handleChange('status', e.target.value)}
-                    options={[
-                        { value: 'active', label: 'Active' },
-                        { value: 'inactive', label: 'Inactive' },
-                    ]}
+                <FormSwitch
+                    label="Active"
+                    checked={formData.status === 'active'}
+                    onChange={checked => handleChange('status', checked ? 'active' : 'inactive')}
+                    hint="Inactive profiles cannot be assigned"
                 />
 
                 <FormInput

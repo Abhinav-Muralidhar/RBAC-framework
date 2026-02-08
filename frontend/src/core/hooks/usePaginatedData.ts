@@ -34,7 +34,6 @@ export function usePaginatedData<T>(
         setError('');
         try {
             const response = await fetchFn({ page, limit });
-            console.log('API response:', response);  // Log the response
 
             const { data: responseData = [], meta } = response;
             const pagination = meta ?? {
@@ -43,8 +42,6 @@ export function usePaginatedData<T>(
                 total: responseData.length,
                 totalPages: 1,
             };
-
-            console.log('Pagination data:', pagination); // Log pagination data
 
             setData(responseData);
             setTotalPages(pagination.totalPages);

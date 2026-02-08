@@ -218,9 +218,10 @@ export class GroupRepository implements IGroupRepository {
     const params: unknown[] = [];
     const where: string[] = [];
 
-    // isActive (default true)
-    params.push(filters?.isActive ?? true);
-    where.push(`is_active = $${params.length}`);
+    if (filters?.isActive !== undefined) {
+      params.push(filters.isActive);
+      where.push(`is_active = $${params.length}`);
+    }
 
     if (filters?.name) {
       params.push(`%${filters.name}%`);

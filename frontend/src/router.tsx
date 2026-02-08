@@ -9,6 +9,7 @@ import { AppShell } from './core/components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { ROUTES } from './routes/routes';
 
 export const router = createBrowserRouter([
@@ -31,6 +32,10 @@ export const router = createBrowserRouter([
             {
                 path: 'profile',
                 element: <ProfilePage />,
+            },
+            {
+                path: 'unauthorized',
+                element: <UnauthorizedPage />,
             },
             // Settings routes removed - handled by AdminSettingsModal
         ],
