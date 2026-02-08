@@ -13,7 +13,7 @@ export interface IOrganizationService {
     getOrganizations(t: TransactionTask, filters?: { is_active?: boolean; name?: string; code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Organizations>>;
     updateOrganization(t: TransactionTask, id: string, data: UpdateOrganizationRequestDto): Promise<Organizations>;
 }
-const MODULE_CODE = 'organization';
+const MODULE_CODE = 'SETTINGS';
 
 export class OrganizationService implements IOrganizationService {
     constructor(

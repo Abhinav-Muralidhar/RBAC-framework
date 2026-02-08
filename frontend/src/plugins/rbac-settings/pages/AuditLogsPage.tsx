@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { auditLogsApi } from '../../../core/api/rbac.api';
 import type { AuditLog } from '../../../core/types/audit.types';
 import { Search, Filter } from 'lucide-react';
@@ -31,12 +31,6 @@ export function AuditLogsPage() {
         setLimit,
         reload
     } = usePaginatedData<AuditLog>(auditLogsApi.list, 20);
-
-    // Debugging: Log the values of the current page and the API response
-    useEffect(() => {
-        console.log(`Current page: ${page}`);
-        console.log(`Total pages: ${totalPages}`);
-    }, [page, totalPages]);
 
     // Filter the logs based on search query
     const filteredLogs = (logs || []).filter(log =>

@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     userPermissions.push({
                         module,
                         action,
-                        effect: actions[action] as 'allow' | 'deny'
+                        effect: actions[action]
                     });
                 }
             }

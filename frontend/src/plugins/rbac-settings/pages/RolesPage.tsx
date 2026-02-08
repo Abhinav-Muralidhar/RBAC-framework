@@ -1,61 +1,47 @@
-import { useState } from 'react';
+/**
+ * Roles Page
+ *
+ * Manage user roles using centralized CRUD page hook.
+ */
+
+import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { rolesApi } from '../../../core/api/rbac.api';
 import type { Role } from '../../../core/types/role.types';
-import { Plus, Edit2, Trash2, Search } from 'lucide-react';
-import { FormModal } from '../../../core/components/FormModal';
+import { useCrudPage } from '../../../core/hooks';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
+import { FormModal } from '../../../core/components/FormModal';
 import { RoleForm, submitRoleForm } from '../components';
-import { usePaginatedData } from '../../../core/hooks/usePaginatedData';
 import './SettingsPage.css';
 
 export function RolesPage() {
-    const [searchQuery, setSearchQuery] = useState('');
-    const [editingRole, setEditingRole] = useState<Role | null>(null);
-    const [showFormModal, setShowFormModal] = useState(false);
-    const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [deletingRole, setDeletingRole] = useState<Role | null>(null);
-
     const {
-        data: roles,
+        items: roles,
         isLoading,
         error,
+        searchQuery,
+        setSearchQuery,
         page,
         totalPages,
-        limit,
         setPage,
         reload,
-    } = usePaginatedData<Role>(rolesApi.list, 100);
-
-    const filteredRoles = (roles || []).filter(role =>
-        role.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        role.code.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    const openEdit = (role: Role) => {
-        setEditingRole(role);
-        setShowFormModal(true);
-    };
-
-    const openCreate = () => {
-        setEditingRole(null);
-        setShowFormModal(true);
-    };
-
-    const openDelete = (role: Role) => {
-        setDeletingRole(role);
-        setShowDeleteModal(true);
-    };
-
-    const handleDelete = async () => {
-        if (!deletingRole) return;
-        try {
-            await rolesApi.delete(deletingRole.id);
-            setShowDeleteModal(false);
-            reload();
-        } catch (err) {
-            console.error(err);
-        }
-    };
+        showFormModal,
+        editingItem,
+        openCreate,
+        openEdit,
+        closeForm,
+        handleFormSuccess,
+        showDeleteModal,
+        deletingItem,
+        deleteLoading,
+        openDelete,
+        confirmDelete,
+        closeDelete,
+    } = useCrudPage<Role>({
+        listFn: rolesApi.list,
+        deleteFn: rolesApi.delete,
+        entityName: 'roles',
+        initialLimit: 100,
+    });
 
     return (
         <div className="settings-page">
@@ -99,7 +85,7 @@ export function RolesPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredRoles.length > 0 ? filteredRoles.map(role => (
+                                {roles.length > 0 ? roles.map(role => (
                                     <tr key={role.id}>
                                         <td className="font-medium">{role.name}</td>
                                         <td><code>{role.code}</code></td>
@@ -122,14 +108,13 @@ export function RolesPage() {
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan={6} className="empty-state">No roles found</td>
+                                        <td colSpan={5} className="empty-state">No roles found</td>
                                     </tr>
                                 )}
                             </tbody>
                         </table>
                     </div>
 
-                    {/* Pagination */}
                     <div className="pagination">
                         <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
                         <span>Page {page} of {totalPages}</span>
@@ -141,15 +126,15 @@ export function RolesPage() {
             {/* Create/Edit Modal */}
             <FormModal
                 isOpen={showFormModal}
-                title={editingRole ? 'Edit Role' : 'Add New Role'}
+                title={editingItem ? 'Edit Role' : 'Add New Role'}
                 isLoading={false}
                 onSubmit={() => submitRoleForm()}
-                onCancel={() => setShowFormModal(false)}
+                onCancel={closeForm}
                 size="md"
             >
                 <RoleForm
-                    role={editingRole}
-                    onSuccess={() => { setShowFormModal(false); reload(); }}
+                    role={editingItem}
+                    onSuccess={handleFormSuccess}
                     onError={(err) => console.error(err)}
                     setLoading={() => { }}
                 />
@@ -160,12 +145,12 @@ export function RolesPage() {
                 isOpen={showDeleteModal}
                 title="Delete Role"
                 message="Are you sure you want to delete this role? Users assigned this role will lose associated permissions."
-                itemName={deletingRole?.name}
+                itemName={deletingItem?.name}
                 confirmLabel="Delete"
                 variant="danger"
-                isLoading={false}
-                onConfirm={handleDelete}
-                onCancel={() => setShowDeleteModal(false)}
+                isLoading={deleteLoading}
+                onConfirm={confirmDelete}
+                onCancel={closeDelete}
             />
         </div>
     );

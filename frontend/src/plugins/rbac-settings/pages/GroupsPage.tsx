@@ -1,61 +1,47 @@
-import { useState } from 'react';
+/**
+ * Groups Page
+ *
+ * Manage user groups using centralized CRUD page hook.
+ */
+
+import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { groupsApi } from '../../../core/api/rbac.api';
 import type { Group } from '../../../core/types/group.types';
-import { Plus, Edit2, Trash2, Search, Users } from 'lucide-react';
+import { useCrudPage } from '../../../core/hooks';
 import { FormModal } from '../../../core/components/FormModal';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { GroupForm, submitGroupForm } from '../components';
-import { usePaginatedData } from '../../../core/hooks/usePaginatedData';
 import './SettingsPage.css';
 
 export function GroupsPage() {
-    const [searchQuery, setSearchQuery] = useState('');
-    const [editingGroup, setEditingGroup] = useState<Group | null>(null);
-    const [showFormModal, setShowFormModal] = useState(false);
-    const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [deletingGroup, setDeletingGroup] = useState<Group | null>(null);
-
     const {
-        data: groups,
+        items: groups,
         isLoading,
         error,
+        searchQuery,
+        setSearchQuery,
         page,
         totalPages,
-        limit,
         setPage,
-        reload
-    } = usePaginatedData<Group>(groupsApi.list, 100);
-
-    const filteredGroups = (groups || []).filter(group =>
-        group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (group.code ?? '').toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    const openCreate = () => {
-        setEditingGroup(null);
-        setShowFormModal(true);
-    };
-
-    const openEdit = (group: Group) => {
-        setEditingGroup(group);
-        setShowFormModal(true);
-    };
-
-    const openDelete = (group: Group) => {
-        setDeletingGroup(group);
-        setShowDeleteModal(true);
-    };
-
-    const handleDelete = async () => {
-        if (!deletingGroup) return;
-        try {
-            await groupsApi.delete(deletingGroup.id);
-            setShowDeleteModal(false);
-            reload();
-        } catch (err) {
-            console.error(err);
-        }
-    };
+        reload,
+        showFormModal,
+        editingItem,
+        openCreate,
+        openEdit,
+        closeForm,
+        handleFormSuccess,
+        showDeleteModal,
+        deletingItem,
+        deleteLoading,
+        openDelete,
+        confirmDelete,
+        closeDelete,
+    } = useCrudPage<Group>({
+        listFn: groupsApi.list,
+        deleteFn: groupsApi.delete,
+        entityName: 'groups',
+        initialLimit: 100,
+    });
 
     return (
         <div className="settings-page">
@@ -99,7 +85,7 @@ export function GroupsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredGroups.length > 0 ? filteredGroups.map(group => (
+                                {groups.length > 0 ? groups.map(group => (
                                     <tr key={group.id}>
                                         <td className="font-medium">{group.name}</td>
                                         <td><code>{group.code || '-'}</code></td>
@@ -122,14 +108,13 @@ export function GroupsPage() {
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan={7} className="empty-state">No groups found</td>
+                                        <td colSpan={5} className="empty-state">No groups found</td>
                                     </tr>
                                 )}
                             </tbody>
                         </table>
                     </div>
 
-                    {/* Pagination */}
                     <div className="pagination">
                         <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
                         <span>Page {page} of {totalPages}</span>
@@ -141,15 +126,15 @@ export function GroupsPage() {
             {/* Create/Edit Modal */}
             <FormModal
                 isOpen={showFormModal}
-                title={editingGroup ? 'Edit Group' : 'Add New Group'}
+                title={editingItem ? 'Edit Group' : 'Add New Group'}
                 isLoading={false}
                 onSubmit={() => submitGroupForm()}
-                onCancel={() => setShowFormModal(false)}
+                onCancel={closeForm}
                 size="md"
             >
                 <GroupForm
-                    group={editingGroup}
-                    onSuccess={() => { setShowFormModal(false); reload(); }}
+                    group={editingItem}
+                    onSuccess={handleFormSuccess}
                     onError={(err) => console.error(err)}
                     setLoading={() => { }}
                 />
@@ -160,12 +145,12 @@ export function GroupsPage() {
                 isOpen={showDeleteModal}
                 title="Delete Group"
                 message="Are you sure you want to delete this group? Users in this group may lose associated role permissions."
-                itemName={deletingGroup?.name}
+                itemName={deletingItem?.name}
                 confirmLabel="Delete"
                 variant="danger"
-                isLoading={false}
-                onConfirm={handleDelete}
-                onCancel={() => setShowDeleteModal(false)}
+                isLoading={deleteLoading}
+                onConfirm={confirmDelete}
+                onCancel={closeDelete}
             />
         </div>
     );

@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { FormInput } from '../../../core/components/FormElements';
+import { FormInput, FormSwitch } from '../../../core/components/FormElements';
 import type { Group, CreateGroupDto, UpdateGroupDto } from '../../../core/types/group.types';
 import type { Role } from '../../../core/types/role.types';
 import type { User } from '../../../core/types/user.types';
@@ -27,6 +27,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
         name: group?.name || '',
         code: group?.code || '',
         description: group?.description || '',
+        is_active: group?.is_active || false,
     });
 
     const [selectedRoles, setSelectedRoles] = useState<string[]>(
@@ -74,7 +75,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
 
     // ---------------- HANDLERS ----------------
 
-    const handleChange = (field: string, value: string) => {
+    const handleChange = (field: string, value: string | boolean) => {
         setFormData(prev => ({ ...prev, [field]: value }));
         if (errors[field]) {
             setErrors(prev => ({ ...prev, [field]: '' }));
@@ -132,6 +133,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
                     name: formData.name.trim(),
                     description: formData.description || undefined,
                     role_ids: selectedRoles,
+                    is_active: formData.is_active,
                 };
 
                 await groupsApi.update(group.id, updateData);
@@ -141,6 +143,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
                     code: formData.code.trim(),
                     description: formData.description || undefined,
                     role_ids: selectedRoles,
+                    is_active: formData.is_active,
                 };
 
                 await groupsApi.create(createData);
@@ -196,6 +199,11 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
                     rows={3}
                 />
             </div>
+            <FormSwitch
+                label="Active"
+                checked={formData.is_active}
+                onChange={checked => handleChange('is_active', checked)}
+            />
 
             {/* Roles selection */}
             <div className="form-field">

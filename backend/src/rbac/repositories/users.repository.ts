@@ -198,7 +198,7 @@ export class UsersRepository implements IUsersRepository {
 
   async findAllPaginated(
     t: TransactionTask | null,
-    filters?: { status: string; email: string; username: string; name: string },
+    filters?: { status: string; email: string; username: string; name: string; search?: string },
     pagination?: Partial<PaginationParams>
   ): Promise<PaginatedResult<Users>> {
     const p = normalizePaginationParams(pagination);
@@ -225,6 +225,19 @@ export class UsersRepository implements IUsersRepository {
       params.push(`%${filters.name}%`);
       paramIndex++;
     }
+    if (filters?.search) {
+      whereClauses.push(`
+    (
+      username ILIKE $${paramIndex}
+      OR primary_email ILIKE $${paramIndex}
+      OR first_name ILIKE $${paramIndex}
+      OR last_name ILIKE $${paramIndex}
+    )
+  `);
+      params.push(`%${filters.search}%`);
+      paramIndex++;
+    }
+
 
     const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
@@ -248,7 +261,7 @@ export class UsersRepository implements IUsersRepository {
 
   async create(t: TransactionTask | null, input: CreateUserInput): Promise<Users> {
     const values = [
-      input.username,
+      input.username.toLowerCase(),
       input.password,
       input.last_name,
       input.primary_email,
@@ -317,7 +330,7 @@ export class UsersRepository implements IUsersRepository {
 
   async update(t: TransactionTask | null, input: Users): Promise<Users> {
     const values = [
-      input.username,
+      input.username.toLowerCase(),
       input.password,
       input.last_name,
       input.primary_email,

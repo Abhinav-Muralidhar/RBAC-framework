@@ -89,7 +89,7 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     await this.getTask(t).none(
       `UPDATE ${this.tableName} 
        SET logout_at = NOW(), expires_at = NOW() 
-       WHERE id = $1 AND user_id = $2`,
+       WHERE id = $1`,
       [sessionId, actingUserId]
     );
   }

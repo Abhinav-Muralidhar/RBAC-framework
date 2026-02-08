@@ -99,7 +99,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     // ============================
     // Routes
     // ============================
-    router.use('/users', createUsersRouter(db, userService));
+    router.use('/users', createUsersRouter(db, evaluationService, auditService, userService));
     router.use('/roles', createRolesRouter(db, auditService, evaluationService, roleService));
     router.use('/profiles', createProfilesRouter(db, auditService, evaluationService, profileService));
     router.use('/permissions', createPermissionsRouter(permissionService, moduleService));
