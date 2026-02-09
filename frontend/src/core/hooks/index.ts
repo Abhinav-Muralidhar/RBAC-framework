@@ -21,9 +21,3 @@ export type { UseCrudPageOptions, UseCrudPageReturn, ListParams, ListResponse } 
 
 export { usePaginatedData } from './usePaginatedData';
 export type { UsePaginatedDataResult, PaginationParams } from './usePaginatedData';
-
-export { useSearch } from './useSearch';
-export type { UseSearchReturn } from './useSearch';
-
-export { usePermission } from './usePermission';
-export type { UsePermissionReturn } from './usePermission';
