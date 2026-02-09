@@ -153,7 +153,7 @@ export class AuditLogsRepository implements IAuditLogsRepository {
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const totalRes = await (t ?? this.db).one<{ count: string }>(
-      `SELECT COUNT(*) FROM ${this.tableName} ${where}`,
+      `SELECT COUNT(*) FROM ${this.tableName} al ${where}`,
       values
     );
 

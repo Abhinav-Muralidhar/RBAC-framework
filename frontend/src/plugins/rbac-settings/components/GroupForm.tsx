@@ -27,7 +27,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
         name: group?.name || '',
         code: group?.code || '',
         description: group?.description || '',
-        is_active: group?.is_active || false,
+        is_active: group?.is_active ?? true,
     });
 
     const [selectedRoles, setSelectedRoles] = useState<string[]>(
@@ -48,6 +48,20 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
     useEffect(() => {
         loadRoles();
     }, []);
+
+    // Keep state in sync with props
+    useEffect(() => {
+        if (group) {
+            setFormData({
+                name: group.name || '',
+                code: group.code || '',
+                description: group.description || '',
+                is_active: group.is_active ?? true,
+            });
+            setSelectedRoles(group.roles?.map(r => r.id) || []);
+            setSelectedUsers(group.users?.map(u => u.id) || []);
+        }
+    }, [group]);
 
     const loadRoles = async () => {
         try {

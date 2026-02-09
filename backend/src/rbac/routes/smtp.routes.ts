@@ -35,10 +35,12 @@ function sendError(res: Response, status: number, message: string, code?: string
 /**
  * Parse filters from query parameters
  */
-function parseFilters(query: any): { isActive?: boolean } {
-    if (query.is_active === 'true') return { isActive: true };
-    if (query.is_active === 'false') return { isActive: false };
-    return {};
+function parseFilters(query: any): { isActive?: boolean; search?: string } {
+    const filters: { isActive?: boolean; search?: string } = {};
+    if (query.is_active === 'true') filters.isActive = true;
+    if (query.is_active === 'false') filters.isActive = false;
+    if (query.search) filters.search = query.search;
+    return filters;
 }
 
 export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditService, evaluationService: EvaluationService, smtpService: SmtpConfigService): Router {

@@ -209,47 +209,59 @@ export class GroupRepository implements IGroupRepository {
 
   async findAllPaginated(
     t: TransactionTask,
-    filters?: { isActive?: boolean; name?: string; code?: string },
+    filters?: { isActive?: boolean; name?: string; code?: string; search?: string },
     pagination?: Partial<PaginationParams>
   ): Promise<PaginatedResult<Groups>> {
     const p = normalizePaginationParams(pagination);
     const offset = getPaginationOffset(p.page, p.limit);
 
     const params: unknown[] = [];
-    const where: string[] = [];
+    const whereClauses: string[] = [];
 
+    // isActive filter
     if (filters?.isActive !== undefined) {
       params.push(filters.isActive);
-      where.push(`is_active = $${params.length}`);
+      whereClauses.push(`is_active = $${params.length}`);
     }
 
+    // Specific name filter
     if (filters?.name) {
       params.push(`%${filters.name}%`);
-      where.push(`name ILIKE $${params.length}`);
+      whereClauses.push(`name ILIKE $${params.length}`);
     }
 
+    // Specific code filter
     if (filters?.code) {
       params.push(`%${filters.code}%`);
-      where.push(`code ILIKE $${params.length}`);
+      whereClauses.push(`code ILIKE $${params.length}`);
     }
 
-    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    // General search across name, code, and description
+    if (filters?.search) {
+      params.push(`%${filters.search}%`);
+      whereClauses.push(`(name ILIKE $${params.length} OR code ILIKE $${params.length} OR description ILIKE $${params.length})`);
+    }
 
+    const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    // Count total with filters applied
     const totalRes = await this.query<{ count: string }>(
       `SELECT COUNT(*) FROM ${this.tableName} ${whereClause}`,
       params,
       t
     );
 
+    // Add pagination params to the end
     params.push(p.limit, offset);
 
+    // Fetch paginated results with filters
     const res = await this.query<Groups>(
       `SELECT *
-     FROM ${this.tableName}
-     ${whereClause}
-     ORDER BY created_at DESC, id DESC
-     LIMIT $${params.length - 1}
-     OFFSET $${params.length}`,
+       FROM ${this.tableName}
+       ${whereClause}
+       ORDER BY created_at DESC, id DESC
+       LIMIT $${params.length - 1}
+       OFFSET $${params.length}`,
       params,
       t
     );

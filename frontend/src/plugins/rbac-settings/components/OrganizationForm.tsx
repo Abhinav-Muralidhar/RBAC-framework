@@ -37,10 +37,34 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
         linkedin: organization?.linkedin || '',
         financial_year_start_month: organization?.financial_year_start_month?.toString() || '',
         gstin: organization?.gstin || '',
-        is_active: organization?.is_active ?? true,
+        is_active: organization?.is_active ? true : false,
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // Keep state in sync with props
+    useEffect(() => {
+        if (organization) {
+            setFormData({
+                company_name: organization.company_name || '',
+                address: organization.address || '',
+                city: organization.city || '',
+                state: organization.state || '',
+                postal_code: organization.postal_code || '',
+                country: organization.country || '',
+                country_code: organization.country_code || '',
+                phone: organization.phone || '',
+                fax: organization.fax || '',
+                website: organization.website || '',
+                facebook: organization.facebook || '',
+                twitter: organization.twitter || '',
+                linkedin: organization.linkedin || '',
+                financial_year_start_month: organization.financial_year_start_month?.toString() || '',
+                gstin: organization.gstin || '',
+                is_active: organization.is_active ? true : false,
+            });
+        }
+    }, [organization]);
 
     const handleChange = (field: string, value: string | boolean) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -230,15 +254,15 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
                     ]}
                 />
 
-                <FormSelect
+                {/*<FormSelect
                     label="Status"
-                    value={formData.is_active ? 'active' : 'inactive'}
-                    onChange={e => handleChange('is_active', e.target.value === 'active')}
+                    value={formData.is_active ? 'active' : 'inactive'} // map boolean -> string
+                    onChange={e => handleChange('is_active', e.target.value === 'active')} // map string -> boolean
                     options={[
                         { value: 'active', label: 'Active' },
                         { value: 'inactive', label: 'Inactive' },
                     ]}
-                />
+                />*/}
             </div>
 
             {/* Hidden submit button */}

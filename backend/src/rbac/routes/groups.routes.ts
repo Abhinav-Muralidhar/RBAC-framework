@@ -31,8 +31,12 @@ function sendError(res: Response, status: number, message: string, code?: string
 function parseFilter(query: any): any {
     const filter: any = {};
     if (query.name) filter.name = query.name;
-    if (query.is_active) filter.is_active = query.is_active;
+    // Parse isActive as boolean - frontend sends 'true'/'false' strings
+    if (query.isActive !== undefined) {
+        filter.isActive = query.isActive === 'true';
+    }
     if (query.code) filter.code = query.code;
+    if (query.search) filter.search = query.search;
     return filter;
 }
 

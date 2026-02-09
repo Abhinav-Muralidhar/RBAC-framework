@@ -31,8 +31,10 @@ function parseFilter(query: any): any {
     const filter: any = {};
     if (query.is_active) filter.is_active = query.is_active;
     if (query.code) filter.code = query.code;
+    if (query.search) filter.search = query.search;
     return filter;
 }
+
 
 export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAuditService, evaluationService: EvaluationService, profileService: ProfileService): Router {
     const router = Router();
