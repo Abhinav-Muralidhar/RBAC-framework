@@ -46,17 +46,64 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     const [roleSearch, setRoleSearch] = useState('');
+    const [roleSearchLoading, setRoleSearchLoading] = useState(false);
+    const [isSearching, setIsSearching] = useState(false);
 
+    // Debounce timer for role search
+    const [roleSearchTimer, setRoleSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+
+    // Load roles on mount and when search changes (debounced)
     useEffect(() => {
-        loadRoles();
+        // Clear any existing timer
+        if (roleSearchTimer) {
+            clearTimeout(roleSearchTimer);
+        }
+
+        // Only search if user is actively searching
+        if (isSearching) {
+            const timer = setTimeout(() => {
+                loadRoles(roleSearch);
+            }, 300); // 300ms debounce
+
+            setRoleSearchTimer(timer);
+
+            return () => {
+                if (timer) clearTimeout(timer);
+            };
+        }
+    }, [roleSearch, isSearching]);
+
+    // Initial load
+    useEffect(() => {
+        loadRoles('');
     }, []);
 
-    const loadRoles = async () => {
+    // Keep state in sync with props
+    useEffect(() => {
+        if (user) {
+            setFormData({
+                username: user.username || '',
+                primary_email: user.primary_email || '',
+                first_name: user.first_name || '',
+                last_name: user.last_name || '',
+                title: user.title || '',
+                department: user.department || '',
+                status: (user.status || 'active') as 'active' | 'inactive',
+                password: '',
+            });
+            setSelectedRole(user.rolesid || '');
+        }
+    }, [user]);
+
+    const loadRoles = async (searchQuery: string) => {
+        setRoleSearchLoading(true);
         try {
-            const response = await rolesApi.list({ limit: 100 });
+            const response = await rolesApi.list({ limit: 100, search: searchQuery || undefined });
             setAvailableRoles(response.data || []);
         } catch (err) {
             console.error('Failed to load roles', err);
+        } finally {
+            setRoleSearchLoading(false);
         }
     };
 
@@ -67,11 +114,54 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
         }
     };
 
-    const toggleRole = (roleId: string) => {
-        setSelectedRole(prev => (prev === roleId ? null : roleId));
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+
+    // Get display value for the input
+    const getDisplayValue = () => {
+        if (isSearching) {
+            return roleSearch;
+        }
+        if (selectedRole) {
+            const role = availableRoles.find(r => r.id === selectedRole);
+            return role?.name || '';
+        }
+        return '';
     };
 
-    const [dropdownOpen, setDropdownOpen] = useState(false);
+    // Handle input change
+    const handleRoleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        setRoleSearch(value);
+        setIsSearching(true);
+
+        // If user clears the input, also clear the selection
+        if (!value) {
+            setSelectedRole('');
+        }
+    };
+
+    // Handle role selection
+    const handleRoleSelect = (roleId: string) => {
+        setSelectedRole(roleId);
+        setRoleSearch('');
+        setIsSearching(false);
+        setDropdownOpen(false);
+    };
+
+    // Handle input focus
+    const handleRoleInputFocus = () => {
+        setDropdownOpen(true);
+        // Don't set isSearching here - let the user see current selection
+    };
+
+    // Handle input blur with delay to allow clicking dropdown items
+    const handleRoleInputBlur = () => {
+        setTimeout(() => {
+            setDropdownOpen(false);
+            setIsSearching(false);
+            setRoleSearch('');
+        }, 200);
+    };
 
     // ---------------- VALIDATION ----------------
 
@@ -222,21 +312,17 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                 />
             </div>
 
-            {/* Roles */}
-            {/* Roles */}
+            {/* Roles Dropdown */}
             <div className="form-field" style={{ position: 'relative' }}>
                 <label className="form-label">Assign Role</label>
 
                 <input
                     type="text"
                     placeholder="Select a role..."
-                    value={
-                        selectedRole
-                            ? availableRoles.find(r => r.id === selectedRole)?.name || ''
-                            : roleSearch
-                    }
-                    onChange={e => setRoleSearch(e.target.value)}
-                    onFocus={() => setDropdownOpen(true)}
+                    value={getDisplayValue()}
+                    onChange={handleRoleInputChange}
+                    onFocus={handleRoleInputFocus}
+                    onBlur={handleRoleInputBlur}
                     style={{ width: '100%', padding: '0.5rem' }}
                     autoComplete="off"
                 />
@@ -257,38 +343,40 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                             zIndex: 1000,
                         }}
                     >
-                        {availableRoles
-                            .filter(role =>
-                                role.name.toLowerCase().includes(roleSearch.toLowerCase())
-                            )
-                            .map(role => {
-                                const isCurrent = role.id === user?.rolesid; // cannot select user's own role
-                                return (
-                                    <div
-                                        key={role.id}
-                                        className={`dropdown-item ${isCurrent ? 'disabled' : ''}`}
-                                        style={{
-                                            padding: '0.5rem',
-                                            cursor: isCurrent ? 'not-allowed' : 'pointer',
-                                            color: isCurrent ? '#999' : '#000',
-                                        }}
-                                        onClick={() => {
-                                            if (!isCurrent) {
-                                                setSelectedRole(role.id);
-                                                setRoleSearch('');
-                                                setDropdownOpen(false);
-                                            }
-                                        }}
-                                    >
-                                        {role.name} {isCurrent && '(Current)'}
-                                    </div>
-                                );
-                            })}
-                        {availableRoles.filter(role =>
-                            role.name.toLowerCase().includes(roleSearch.toLowerCase())
-                        ).length === 0 && (
-                                <div style={{ padding: '0.5rem', color: '#999' }}>No roles found</div>
-                            )}
+                        {roleSearchLoading ? (
+                            <div style={{ padding: '0.5rem', color: '#999' }}>Loading...</div>
+                        ) : (
+                            <>
+                                {availableRoles.map(role => {
+                                    const isCurrent = role.id === user?.rolesid;
+                                    const isSelected = role.id === selectedRole;
+                                    return (
+                                        <div
+                                            key={role.id}
+                                            className={`dropdown-item ${isCurrent ? 'disabled' : ''} ${isSelected ? 'selected' : ''}`}
+                                            style={{
+                                                padding: '0.5rem',
+                                                cursor: isCurrent ? 'not-allowed' : 'pointer',
+                                                color: isCurrent ? '#999' : '#000',
+                                                backgroundColor: isSelected ? '#e3f2fd' : 'transparent',
+                                            }}
+                                            onMouseDown={(e) => {
+                                                // Use onMouseDown instead of onClick to fire before onBlur
+                                                e.preventDefault();
+                                                if (!isCurrent) {
+                                                    handleRoleSelect(role.id);
+                                                }
+                                            }}
+                                        >
+                                            {role.name} {isCurrent && '(Current)'} {isSelected && '✓'}
+                                        </div>
+                                    );
+                                })}
+                                {availableRoles.length === 0 && (
+                                    <div style={{ padding: '0.5rem', color: '#999' }}>No roles found</div>
+                                )}
+                            </>
+                        )}
                     </div>
                 )}
             </div>

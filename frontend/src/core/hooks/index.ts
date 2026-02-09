@@ -16,8 +16,8 @@ export type { UseModalReturn } from './useModal';
 export { useSidebar } from './useSidebar';
 export type { UseSidebarReturn } from './useSidebar';
 
-export { useCrudPage } from './useCrudPage';
-export type { UseCrudPageOptions, UseCrudPageReturn, ListParams, ListResponse } from './useCrudPage';
+export { useCrud } from './useCrud';
+export type { UseCrudOptions, UseCrudReturn } from './useCrud';
 
 export { usePaginatedData } from './usePaginatedData';
 export type { UsePaginatedDataResult, PaginationParams } from './usePaginatedData';

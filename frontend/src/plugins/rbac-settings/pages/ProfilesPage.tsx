@@ -1,13 +1,14 @@
 /**
  * Profiles Page
  *
- * Manage permission profiles using centralized CRUD page hook.
+ * Manage permission profiles using centralized hooks for pagination and CRUD.
  */
 
-import { Plus, Edit2, Trash2, Search } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import { profilesApi } from '../../../core/api/rbac.api';
 import type { Profile } from '../../../core/types/profile.types';
-import { useCrudPage } from '../../../core/hooks';
+import { usePaginatedData, useCrud } from '../../../core/hooks';
 import { FormModal } from '../../../core/components/FormModal';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { ProfileForm, submitProfileForm } from '../components/ProfileForm';
@@ -20,15 +21,20 @@ import './SettingsPage.css';
 
 export function ProfilesPage() {
     const {
-        items: profiles,
+        data: profiles,
         isLoading,
-        error,
+        error: listError,
         searchQuery,
         setSearchQuery,
         page,
         totalPages,
         setPage,
         reload,
+        filters,
+        setFilters
+    } = usePaginatedData<Profile>(profilesApi.list, { initialLimit: 100 });
+
+    const {
         showFormModal,
         editingItem,
         openCreate,
@@ -41,12 +47,17 @@ export function ProfilesPage() {
         openDelete,
         confirmDelete,
         closeDelete,
-    } = useCrudPage<Profile>({
-        listFn: profilesApi.list,
+        editLoading,
+        error: crudError,
+    } = useCrud<Profile>({
         deleteFn: profilesApi.delete,
+        getByIdFn: profilesApi.getById,
         entityName: 'profiles',
-        initialLimit: 100,
+        onSuccess: reload,
     });
+
+    const [showFilterModal, setShowFilterModal] = useState(false);
+    const error = listError || crudError;
 
     return (
         <div className="settings-page">
@@ -70,6 +81,13 @@ export function ProfilesPage() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
+                <button
+                    className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setShowFilterModal(true)}
+                >
+                    <Filter size={18} /> Filter
+                    {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
+                </button>
             </div>
 
             {error && <div className="error-banner">{error}</div>}
@@ -102,7 +120,7 @@ export function ProfilesPage() {
                                         </td>
                                         <td>
                                             <div className="action-buttons">
-                                                <button className="btn-icon" title="Edit" onClick={() => openEdit(profile)}>
+                                                <button className="btn-icon" title="Edit" onClick={() => openEdit(profile)} disabled={editLoading}>
                                                     <Edit2 size={16} />
                                                 </button>
                                                 <button className="btn-icon btn-danger" title="Delete" onClick={() => openDelete(profile)}>
@@ -157,6 +175,45 @@ export function ProfilesPage() {
                 onConfirm={confirmDelete}
                 onCancel={closeDelete}
             />
+
+            {/* Filter Modal Placeholder */}
+            <FormModal
+                isOpen={showFilterModal}
+                title="Filter Profiles"
+                onSubmit={() => setShowFilterModal(false)}
+                onCancel={() => setShowFilterModal(false)}
+                size="sm"
+            >
+                <div className="filter-form">
+                    <div className="form-field">
+                        <label className="form-label">Status</label>
+                        <select
+                            className="form-control"
+                            value={filters.is_active === undefined ? '' : filters.is_active.toString()}
+                            onChange={(e) => setFilters({
+                                ...filters,
+                                is_active: e.target.value === '' ? undefined : e.target.value === 'true'
+                            })}
+                        >
+                            <option value="">All Statuses</option>
+                            <option value="true">Active</option>
+                            <option value="false">Inactive</option>
+                        </select>
+                    </div>
+                    {Object.keys(filters).length > 0 && (
+                        <button
+                            className="btn btn-text"
+                            onClick={() => {
+                                setFilters({});
+                                setShowFilterModal(false);
+                            }}
+                            style={{ marginTop: '1rem' }}
+                        >
+                            Clear All Filters
+                        </button>
+                    )}
+                </div>
+            </FormModal>
         </div>
     );
 }

@@ -105,7 +105,7 @@ export interface IAuthSessionService {
      */
     resolveSession(t: TransactionTask | undefined, sessionToken: string): Promise<AuthSessions>;
 
-    findAll(t: TransactionTask, pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessions>>;
+    findAll(t: TransactionTask, filters?: { userId?: string; isActive?: boolean; search?: string }, pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessions>>;
 }
 
 /**
@@ -126,8 +126,8 @@ export class AuthSessionService implements IAuthSessionService {
         return session;
     }
 
-    async findAll(t: TransactionTask, pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessions>> {
-        return this.authSessionsRepository.findAll(t, pagination);
+    async findAll(t: TransactionTask, filters?: { userId?: string; isActive?: boolean; search?: string }, pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessions>> {
+        return this.authSessionsRepository.findAll(t, filters, pagination);
     }
 
     async revokeOneForUser(t: TransactionTask, sessionId: string, userId: string, actingUserId: string): Promise<void> {

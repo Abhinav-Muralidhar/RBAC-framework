@@ -38,22 +38,49 @@ export class SmtpConfigRepository implements ISmtpConfigRepository {
     return res[0] ?? null;
   }
 
-  async findAll(t: TransactionTask, filters?: { isActive?: boolean }, paginationParams?: PaginationParams): Promise<PaginatedResult<SmtpConfig>> {
+  async findAll(
+    t: TransactionTask,
+    filters?: { isActive?: boolean; search?: string },
+    paginationParams?: PaginationParams
+  ): Promise<PaginatedResult<SmtpConfig>> {
     const p = normalizePaginationParams(paginationParams);
     const offset = getPaginationOffset(p.page, p.limit);
 
-    const total = await (t ?? this.db).one<{ count: string }>(
-      `SELECT COUNT(*) FROM ${this.tableName}`
+    // Build WHERE clause and parameters
+    const params: unknown[] = [];
+    const whereClauses: string[] = [];
+
+    if (filters?.isActive !== undefined) {
+      params.push(filters.isActive);
+      whereClauses.push(`is_active = $${params.length}`);
+    }
+
+    if (filters?.search) {
+      params.push(`%${filters.search}%`);
+      whereClauses.push(`(name ILIKE $${params.length} OR host ILIKE $${params.length} OR from_email ILIKE $${params.length})`);
+    }
+
+    const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    // Count total with filters
+    const total = await t.one<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName} ${whereClause}`,
+      params
     );
-    const whereClause = filters?.isActive !== undefined ? `WHERE is_active = $1::boolean` : '';
-    const items = await (t ?? this.db).any<SmtpConfig>(
+
+    // Add pagination params
+    params.push(p.limit, offset);
+
+    // Fetch items with filters and pagination
+    const items = await t.any<SmtpConfig>(
       `SELECT *
-           FROM ${this.tableName} 
-           ${whereClause}
-           ORDER BY id DESC
-           LIMIT $1 OFFSET $2`,
-      [p.limit, offset]
+       FROM ${this.tableName} 
+       ${whereClause}
+       ORDER BY id DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
     );
+
     return buildPaginatedResult(items, parseInt(total.count, 10), p);
   }
 

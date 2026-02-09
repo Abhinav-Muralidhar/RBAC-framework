@@ -204,9 +204,8 @@ export const sessionsApi = {
 import type { SmtpConfig, CreateSmtpConfigDto, UpdateSmtpConfigDto } from '../types/smtp.types';
 
 export const smtpApi = {
-    list: async (): Promise<SmtpConfig[]> => {
-        const response = await get<ApiResponse<SmtpConfig[]>>('/rbac/smtpconfig');
-        return response.data;
+    list: async (params?: PaginationParams) => {
+        return get<PaginatedResponse<SmtpConfig>>('/rbac/smtpconfig', params);
     },
 
     getById: async (id: string): Promise<SmtpConfig> => {
