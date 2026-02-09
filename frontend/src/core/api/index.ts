@@ -1,3 +1,3 @@
 export * from './client';
 export * from './auth.api';
-export * from './rbac.api';
+// Note: rbac.api exports should be imported directly to avoid PaginationParams conflict

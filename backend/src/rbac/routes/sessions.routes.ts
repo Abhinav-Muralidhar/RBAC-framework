@@ -21,6 +21,18 @@ function sendSuccess<T>(res: Response, data: T, meta?: Record<string, unknown>) 
     res.json({ data, error: null, meta: meta ?? {} });
 }
 
+/**
+ * Parse filters from query parameters
+ */
+function parseFilters(query: any): { userId?: string; isActive?: boolean; search?: string } {
+    const filters: { userId?: string; isActive?: boolean; search?: string } = {};
+    if (query.user_id) filters.userId = query.user_id;
+    if (query.isActive === 'true') filters.isActive = true;
+    if (query.isActive === 'false') filters.isActive = false;
+    if (query.search) filters.search = query.search;
+    return filters;
+}
+
 export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAuditService, evaluationService: EvaluationService, authSessionService: AuthSessionService): Router {
     const router = Router();
 
@@ -28,7 +40,8 @@ export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAudi
         try {
             const result = await withTransaction(async (t: TransactionTask) => {
                 const pagination = parsePagination(req.query);
-                const sessions = await authSessionService.findAll(t, pagination);
+                const filters = parseFilters(req.query);
+                const sessions = await authSessionService.findAll(t, filters, pagination);
                 return sessions;
             });
             sendSuccess(res, result.data, {
@@ -105,7 +118,7 @@ export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAudi
             const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
                 const sessionId = parseId(req.params.sessionId, 'sessionId');
-                await authSessionService.revoke(t, actingUserId, sessionId);
+                await authSessionService.revoke(t, sessionId, actingUserId);
                 return { message: 'Session revoked successfully' };
             });
             sendSuccess(res, result);
@@ -123,7 +136,7 @@ export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAudi
             const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
                 const targetUserId = getRequiredQuery(req.params, 'userId');
-                const count = await authSessionService.revokeAllByUser(t, actingUserId, targetUserId);
+                const count = await authSessionService.revokeAllByUser(t, targetUserId, actingUserId);
                 return { message: 'All sessions revoked successfully' };
             });
             sendSuccess(res, result);

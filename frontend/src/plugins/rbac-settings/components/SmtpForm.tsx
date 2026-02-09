@@ -5,7 +5,7 @@
  * Uses centralized validators.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FormInput, FormSelect, FormSwitch } from '../../../core/components/FormElements';
 import type {
     SmtpConfig,
@@ -40,6 +40,24 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // Keep state in sync with props
+    useEffect(() => {
+        if (config) {
+            setFormData({
+                name: config.name || '',
+                host: config.host || '',
+                port: config.port ? String(config.port) : '587',
+                username: config.username || '',
+                password: '',
+                encryption: (config.encryption ?? 'tls') as SmtpEncryption,
+                from_email: config.from_email || '',
+                from_name: config.from_name || '',
+                reply_to_email: config.reply_to_email || '',
+                is_active: config.is_active ?? false,
+            });
+        }
+    }, [config]);
 
     const handleChange = (field: string, value: string | boolean) => {
         setFormData(prev => ({ ...prev, [field]: value }));

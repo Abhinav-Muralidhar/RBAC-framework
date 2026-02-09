@@ -11,6 +11,7 @@ export const ROUTES = {
 
     // App routes
     DASHBOARD: '/dashboard',
+    UNAUTHORIZED: '/unauthorized',
 
     // Settings (modal, not a route)
     SETTINGS: '/settings',

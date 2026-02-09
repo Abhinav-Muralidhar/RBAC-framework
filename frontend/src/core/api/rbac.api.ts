@@ -17,6 +17,7 @@ import type { SharingRule, CreateSharingRuleDto, UpdateSharingRuleDto } from '..
 export interface PaginationParams {
     page?: number;
     limit?: number;
+    search?: string;
 }
 
 // Helper to cast response to expected type since interceptor unwraps it
@@ -203,9 +204,8 @@ export const sessionsApi = {
 import type { SmtpConfig, CreateSmtpConfigDto, UpdateSmtpConfigDto } from '../types/smtp.types';
 
 export const smtpApi = {
-    list: async (): Promise<SmtpConfig[]> => {
-        const response = await get<ApiResponse<SmtpConfig[]>>('/rbac/smtpconfig');
-        return response.data;
+    list: async (params?: PaginationParams) => {
+        return get<PaginatedResponse<SmtpConfig>>('/rbac/smtpconfig', params);
     },
 
     getById: async (id: string): Promise<SmtpConfig> => {
@@ -295,7 +295,7 @@ export const organizationApi = {
         data: Partial<Organization>
     ): Promise<Organization> => {
         const response = await patch<ApiResponse<Organization>>(
-            `/rbac/organization/${id}`,
+            `/rbac/organizations/${id}`,
             data
         );
         return response.data;

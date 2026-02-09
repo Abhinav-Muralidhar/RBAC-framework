@@ -1,14 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { auditLogsApi } from '../../../core/api/rbac.api';
 import type { AuditLog } from '../../../core/types/audit.types';
 import { Search, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 import './SettingsPage.css';
 import { usePaginatedData } from '../../../core/hooks/usePaginatedData';
+import { FormModal } from '../../../core/components/FormModal';
 
 export function AuditLogsPage() {
-    const [searchQuery, setSearchQuery] = useState('');
-
     // Function to get the color based on the status
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -26,24 +25,14 @@ export function AuditLogsPage() {
         error,
         page,
         totalPages,
-        limit,
         setPage,
-        setLimit,
-        reload
-    } = usePaginatedData<AuditLog>(auditLogsApi.list, 20);
+        searchQuery,
+        setSearchQuery,
+        filters,
+        setFilters
+    } = usePaginatedData<AuditLog>(auditLogsApi.list, { initialLimit: 20 });
 
-    // Debugging: Log the values of the current page and the API response
-    useEffect(() => {
-        console.log(`Current page: ${page}`);
-        console.log(`Total pages: ${totalPages}`);
-    }, [page, totalPages]);
-
-    // Filter the logs based on search query
-    const filteredLogs = (logs || []).filter(log =>
-        log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.entity_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (log.user_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
-    );
+    const [showFilterModal, setShowFilterModal] = useState(false);
 
     return (
         <div className="settings-page">
@@ -52,10 +41,6 @@ export function AuditLogsPage() {
                     <h1>Audit Logs</h1>
                     <p>View system activity and changes</p>
                 </div>
-                <button className="btn btn-secondary">
-                    <Filter size={18} />
-                    Filters
-                </button>
             </header>
 
             <div className="page-toolbar">
@@ -68,6 +53,13 @@ export function AuditLogsPage() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
+                <button
+                    className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setShowFilterModal(true)}
+                >
+                    <Filter size={18} /> Filter
+                    {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
+                </button>
             </div>
 
             {error && <div className="error-message">{error}</div>}
@@ -89,7 +81,7 @@ export function AuditLogsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredLogs.map(log => (
+                                {logs.map(log => (
                                     <tr key={log.id}>
                                         <td className="text-muted">
                                             {log.created_at ? format(new Date(log.created_at), 'MMM d, yyyy HH:mm:ss') : '-'}
@@ -112,7 +104,7 @@ export function AuditLogsPage() {
                                         <td className="text-muted">{log.ip_address || '-'}</td>
                                     </tr>
                                 ))}
-                                {filteredLogs.length === 0 && (
+                                {logs.length === 0 && (
                                     <tr>
                                         <td colSpan={6} className="empty-state">No audit logs found</td>
                                     </tr>
@@ -123,7 +115,6 @@ export function AuditLogsPage() {
 
                     {/* Pagination Controls */}
                     <div className="pagination">
-                        {/* Previous Page Button */}
                         <button
                             disabled={page <= 1}
                             onClick={() => setPage(page - 1)}
@@ -131,13 +122,9 @@ export function AuditLogsPage() {
                         >
                             Previous
                         </button>
-
-                        {/* Page Info */}
                         <span className="pagination-info">
                             Page {page} of {totalPages}
                         </span>
-
-                        {/* Next Page Button */}
                         <button
                             disabled={page >= totalPages}
                             onClick={() => setPage(page + 1)}
@@ -148,6 +135,74 @@ export function AuditLogsPage() {
                     </div>
                 </>
             )}
+
+            {/* Filter Modal Placeholder */}
+            <FormModal
+                isOpen={showFilterModal}
+                title="Filter Audit Logs"
+                onSubmit={() => setShowFilterModal(false)}
+                onCancel={() => setShowFilterModal(false)}
+                size="sm"
+            >
+                <div className="filter-form">
+                    <div className="form-field">
+                        <label className="form-label">Status</label>
+                        <select
+                            className="form-control"
+                            value={filters.status || ''}
+                            onChange={(e) => setFilters({ ...filters, status: e.target.value || undefined })}
+                        >
+                            <option value="">All Statuses</option>
+                            <option value="success">Success</option>
+                            <option value="failure">Failure</option>
+                            <option value="denied">Denied</option>
+                        </select>
+                    </div>
+                    <div className="form-field">
+                        <label className="form-label">Action</label>
+                        <select
+                            className="form-control"
+                            value={filters.action || ''}
+                            onChange={(e) => setFilters({ ...filters, action: e.target.value || undefined })}
+                        >
+                            <option value="">All Actions</option>
+                            <option value="create">Create</option>
+                            <option value="update">Update</option>
+                            <option value="delete">Delete</option>
+                            <option value="login">Login</option>
+                            <option value="logout">Logout</option>
+                        </select>
+                    </div>
+                    <div className="form-field">
+                        <label className="form-label">Entity Type</label>
+                        <select
+                            className="form-control"
+                            value={filters.entity_type || ''}
+                            onChange={(e) => setFilters({ ...filters, entity_type: e.target.value || undefined })}
+                        >
+                            <option value="">All Entities</option>
+                            <option value="user">User</option>
+                            <option value="role">Role</option>
+                            <option value="profile">Profile</option>
+                            <option value="group">Group</option>
+                            <option value="session">Session</option>
+                        </select>
+                    </div>
+                    {Object.keys(filters).filter(k => filters[k] !== undefined).length > 0 && (
+                        <button
+                            className="btn btn-text"
+                            onClick={() => {
+                                setFilters({});
+                                setShowFilterModal(false);
+                            }}
+                            style={{ marginTop: '1rem' }}
+                        >
+                            Clear All Filters
+                        </button>
+                    )}
+                </div>
+
+            </FormModal>
         </div>
     );
 }

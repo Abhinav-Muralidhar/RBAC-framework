@@ -2,16 +2,25 @@
  * Dashboard Page
  */
 
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../core/contexts/AuthContext';
 import { Users, Shield, Key, FolderTree } from 'lucide-react';
-import { SETTINGS_SECTIONS } from '../routes/routes';
-import { Link } from 'react-router-dom';
+import { SETTINGS_SECTIONS, ROUTES } from '../routes/routes';
 import './DashboardPage.css';
 import { useAdminSettings } from '../core/contexts/AdminSettingsContext';
 
 export function DashboardPage() {
-    const { user, hasPermission } = useAuth();
+    const navigate = useNavigate();
+    const { user, hasPermission, isLoading } = useAuth();
     const { openSettings } = useAdminSettings();
+
+    // Redirect to unauthorized if no dashboard permission
+    useEffect(() => {
+        if (!isLoading && !hasPermission('DASHBOARD', 'read')) {
+            navigate(ROUTES.UNAUTHORIZED, { replace: true });
+        }
+    }, [isLoading, hasPermission, navigate]);
 
     const quickLinks = [
         { section: SETTINGS_SECTIONS.USERS, label: 'Manage Users', icon: <Users size={24} />, color: '#3b82f6' },

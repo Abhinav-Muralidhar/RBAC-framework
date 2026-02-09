@@ -65,6 +65,19 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
             });
     }, []);
 
+    // Keep state in sync with props
+    useEffect(() => {
+        if (profile) {
+            setFormData({
+                name: profile.name || '',
+                code: profile.code || '',
+                description: profile.description || '',
+                is_active: profile.is_active ?? true,
+            });
+            setSelectedPermissionIds(profile.permissions?.map(p => p.id) ?? []);
+        }
+    }, [profile]);
+
     // Handle form field changes
     const handleChange = (field: string, value: string | boolean) => {
         setFormData(prev => ({ ...prev, [field]: value }));

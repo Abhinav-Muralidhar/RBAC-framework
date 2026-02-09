@@ -1,65 +1,35 @@
 /**
- * useCrudPage Hook
+ * useCrud Hook
  * 
- * Encapsulates common CRUD page patterns:
- * - List fetching with pagination and search
+ * Encapsulates common CRUD operations:
  * - Create/Edit modal management
  * - Delete confirmation modal management
+ * - mutation handling
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 
-export interface ListParams {
-    page?: number;
-    limit?: number;
-    search?: string;
-}
-
-export interface ListResponse<T> {
-    data: T[];
-    meta?: {
-        totalPages?: number;
-        total?: number;
-        page?: number;
-    };
-}
-
-export interface UseCrudPageOptions<T> {
-    listFn: (params: ListParams) => Promise<ListResponse<T>>;
+export interface UseCrudOptions<T> {
     deleteFn: (id: string) => Promise<void>;
+    getByIdFn?: (id: string) => Promise<T>;
     entityName: string;
-    initialLimit?: number;
+    onSuccess?: () => void;
 }
 
-export interface UseCrudPageReturn<T> {
-    // List state
-    items: T[];
-    isLoading: boolean;
+export interface UseCrudReturn<T> {
+    // Error state
     error: string | null;
     setError: (error: string) => void;
     clearError: () => void;
-
-    // Search
-    searchQuery: string;
-    setSearchQuery: (query: string) => void;
-
-    // Pagination
-    page: number;
-    totalPages: number;
-    setPage: (page: number) => void;
-    nextPage: () => void;
-    prevPage: () => void;
-
-    // Reload
-    reload: () => Promise<void>;
 
     // Form modal
     showFormModal: boolean;
     editingItem: T | null;
     formLoading: boolean;
+    editLoading: boolean;
     setFormLoading: (loading: boolean) => void;
     openCreate: () => void;
-    openEdit: (item: T) => void;
+    openEdit: (item: T) => Promise<void>;
     closeForm: () => void;
     handleFormSuccess: () => void;
 
@@ -72,58 +42,26 @@ export interface UseCrudPageReturn<T> {
     closeDelete: () => void;
 }
 
-export function useCrudPage<T extends { id: string }>({
-    listFn,
+export function useCrud<T extends { id: string }>({
     deleteFn,
+    getByIdFn,
     entityName,
-    initialLimit = 10,
-}: UseCrudPageOptions<T>): UseCrudPageReturn<T> {
-    // List state
-    const [items, setItems] = useState<T[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    onSuccess,
+}: UseCrudOptions<T>): UseCrudReturn<T> {
     const [error, setError] = useState<string | null>(null);
-
-    // Search & pagination
-    const [searchQuery, setSearchQuery] = useState('');
-    const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
 
     // Form modal state
     const [showFormModal, setShowFormModal] = useState(false);
     const [editingItem, setEditingItem] = useState<T | null>(null);
     const [formLoading, setFormLoading] = useState(false);
+    const [editLoading, setEditLoading] = useState(false);
 
     // Delete modal state
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [deletingItem, setDeletingItem] = useState<T | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
 
-    const loadItems = useCallback(async () => {
-        try {
-            setIsLoading(true);
-            const response = await listFn({ page, limit: initialLimit });
-            setItems(response.data || []);
-            setTotalPages(response.meta?.totalPages || 1);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : `Failed to load ${entityName}`);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [listFn, page, initialLimit, entityName]);
-
-    useEffect(() => {
-        loadItems();
-    }, [loadItems]);
-
     const clearError = useCallback(() => setError(null), []);
-
-    const nextPage = useCallback(() => {
-        if (page < totalPages) setPage(p => p + 1);
-    }, [page, totalPages]);
-
-    const prevPage = useCallback(() => {
-        if (page > 1) setPage(p => p - 1);
-    }, [page]);
 
     // Form modal handlers
     const openCreate = useCallback(() => {
@@ -131,10 +69,23 @@ export function useCrudPage<T extends { id: string }>({
         setShowFormModal(true);
     }, []);
 
-    const openEdit = useCallback((item: T) => {
-        setEditingItem(item);
+    const openEdit = useCallback(async (item: T) => {
+        if (getByIdFn) {
+            setEditLoading(true);
+            try {
+                const fullItem = await getByIdFn(item.id);
+                setEditingItem(fullItem);
+            } catch (err) {
+                console.error(`Failed to load ${entityName} details`, err);
+                setEditingItem(item); // Fallback to basic data
+            } finally {
+                setEditLoading(false);
+            }
+        } else {
+            setEditingItem(item);
+        }
         setShowFormModal(true);
-    }, []);
+    }, [getByIdFn, entityName]);
 
     const closeForm = useCallback(() => {
         setShowFormModal(false);
@@ -143,8 +94,8 @@ export function useCrudPage<T extends { id: string }>({
 
     const handleFormSuccess = useCallback(() => {
         closeForm();
-        loadItems();
-    }, [closeForm, loadItems]);
+        if (onSuccess) onSuccess();
+    }, [closeForm, onSuccess]);
 
     // Delete modal handlers
     const openDelete = useCallback((item: T) => {
@@ -161,34 +112,26 @@ export function useCrudPage<T extends { id: string }>({
         if (!deletingItem) return;
 
         setDeleteLoading(true);
+        clearError();
         try {
             await deleteFn(deletingItem.id);
             closeDelete();
-            loadItems();
-        } catch (err) {
+            if (onSuccess) onSuccess();
+        } catch (err: any) {
             setError(err instanceof Error ? err.message : `Failed to delete ${entityName}`);
         } finally {
             setDeleteLoading(false);
         }
-    }, [deletingItem, deleteFn, closeDelete, loadItems, entityName]);
+    }, [deletingItem, deleteFn, closeDelete, onSuccess, entityName, clearError]);
 
     return {
-        items,
-        isLoading,
         error,
         setError,
         clearError,
-        searchQuery,
-        setSearchQuery,
-        page,
-        totalPages,
-        setPage,
-        nextPage,
-        prevPage,
-        reload: loadItems,
         showFormModal,
         editingItem,
         formLoading,
+        editLoading,
         setFormLoading,
         openCreate,
         openEdit,
@@ -202,3 +145,4 @@ export function useCrudPage<T extends { id: string }>({
         closeDelete,
     };
 }
+

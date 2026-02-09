@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { sessionsApi } from '../../../core/api/rbac.api';
 import type { Session } from '../../../core/types/session.types';
-import { Search, LogOut, ShieldAlert } from 'lucide-react';
+import { Search, LogOut, ShieldAlert, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 import { useModal } from '../../../core/hooks';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
+import { FormModal } from '../../../core/components/FormModal';
 import { usePaginatedData } from '../../../core/hooks/usePaginatedData';
 import './SettingsPage.css';
 
 export function SessionsPage() {
-    const [searchQuery, setSearchQuery] = useState('');
     const revokeModal = useModal<Session>();
     const revokeAllModal = useModal<Session>();
     const [revokeLoading, setRevokeLoading] = useState(false);
@@ -18,19 +18,18 @@ export function SessionsPage() {
     const {
         data: sessions,
         isLoading,
-        error,
+        error: listError,
         page,
         totalPages,
-        limit,
         setPage,
-        setLimit,
+        searchQuery,
+        setSearchQuery,
+        filters,
+        setFilters,
         reload
-    } = usePaginatedData<Session>(sessionsApi.getAll, 20);
+    } = usePaginatedData<Session>(sessionsApi.getAll, { initialLimit: 10 });
 
-    const filteredSessions = (sessions || []).filter(s =>
-        !searchQuery ||
-        s.user_id.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const [showFilterModal, setShowFilterModal] = useState(false);
 
     const handleRevoke = async () => {
         if (!revokeModal.data) return;
@@ -39,6 +38,8 @@ export function SessionsPage() {
             await sessionsApi.revoke(revokeModal.data.id);
             revokeModal.close();
             reload();
+        } catch (err: any) {
+            console.error('Failed to revoke session:', err);
         } finally {
             setRevokeLoading(false);
         }
@@ -51,6 +52,8 @@ export function SessionsPage() {
             await sessionsApi.revokeAllByUser(revokeAllModal.data.user_id);
             revokeAllModal.close();
             reload();
+        } catch (err: any) {
+            console.error('Failed to revoke all sessions:', err);
         } finally {
             setRevokeLoading(false);
         }
@@ -62,15 +65,6 @@ export function SessionsPage() {
                 <div>
                     <h1>User Sessions</h1>
                     <p>Manage active sessions and security</p>
-                </div>
-                <div className="header-actions">
-                    <button
-                        className="btn btn-danger"
-                        onClick={() => revokeAllModal.open(filteredSessions[0] || null)}
-                        disabled={!filteredSessions.length}
-                    >
-                        <ShieldAlert size={18} /> Revoke All
-                    </button>
                 </div>
             </header>
 
@@ -84,11 +78,18 @@ export function SessionsPage() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
+                <button
+                    className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setShowFilterModal(true)}
+                >
+                    <Filter size={18} /> Filter
+                    {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
+                </button>
             </div>
 
-            {error && (
+            {listError && (
                 <div className="error-banner">
-                    {error} <button onClick={() => { }}>×</button>
+                    {listError}
                 </div>
             )}
 
@@ -105,42 +106,47 @@ export function SessionsPage() {
                                     <th>IP Address</th>
                                     <th>User Agent</th>
                                     <th>Login Time</th>
-                                    <th>Expires</th>
+                                    <th>Logout/Expires</th>
                                     <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredSessions.map(session => (
+                                {sessions.map(session => (
                                     <tr key={session.id}>
                                         <td>
-                                            <code>{session.id.slice(0, 8)}...</code>
+                                            <code>{session.id.slice(0, 8)}</code>
                                         </td>
                                         <td>{session.user_id}</td>
                                         <td>{session.ip_address}</td>
                                         <td title={session.user_agent}>{session.user_agent}</td>
                                         <td>{format(new Date(session.login_at), 'MMM d, HH:mm')}</td>
-                                        <td>{format(new Date(session.expires_at), 'MMM d, HH:mm')}</td>
-                                        <td><span className="status-badge status-active">Active</span></td>
+                                        <td>{session.logout_at ? "Logout at " + format(new Date(session.logout_at), 'MMM d, HH:mm') : "Expires at " + format(new Date(session.expires_at), 'MMM d, HH:mm')}</td>
+                                        <td>{session.logout_at
+                                            ? <span className="status-badge status-inactive">Inactive</span>
+                                            : <span className="status-badge status-active">Active</span>
+                                        }</td>
                                         <td>
-                                            <button
-                                                className="btn-icon btn-danger"
-                                                title="Revoke Session"
-                                                onClick={() => revokeModal.open(session)}
-                                            >
-                                                <LogOut size={16} />
-                                            </button>
-                                            <button
-                                                className="btn-icon btn-warning ml-1"
-                                                title="Revoke All for User"
-                                                onClick={() => revokeAllModal.open(session)}
-                                            >
-                                                <ShieldAlert size={16} />
-                                            </button>
+                                            <div className="action-buttons">
+                                                <button
+                                                    className="btn-icon btn-danger"
+                                                    title="Revoke Session"
+                                                    onClick={() => revokeModal.open(session)}
+                                                >
+                                                    <LogOut size={16} />
+                                                </button>
+                                                <button
+                                                    className="btn-icon btn-warning"
+                                                    title="Revoke All for User"
+                                                    onClick={() => revokeAllModal.open(session)}
+                                                >
+                                                    <ShieldAlert size={16} />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
-                                {filteredSessions.length === 0 && (
+                                {sessions.length === 0 && (
                                     <tr>
                                         <td colSpan={8} className="empty-state">No sessions found</td>
                                     </tr>
@@ -149,7 +155,6 @@ export function SessionsPage() {
                         </table>
                     </div>
 
-                    {/* Pagination */}
                     <div className="pagination">
                         <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
                         <span>Page {page} of {totalPages}</span>
@@ -182,6 +187,45 @@ export function SessionsPage() {
                 onConfirm={handleRevokeAll}
                 onCancel={revokeAllModal.close}
             />
+
+            {/* Filter Modal Placeholder */}
+            <FormModal
+                isOpen={showFilterModal}
+                title="Filter Sessions"
+                onSubmit={() => setShowFilterModal(false)}
+                onCancel={() => setShowFilterModal(false)}
+                size="sm"
+            >
+                <div className="filter-form">
+                    <div className="form-field">
+                        <label className="form-label">Session Status</label>
+                        <select
+                            className="form-control"
+                            value={filters.isActive === undefined ? '' : filters.isActive.toString()}
+                            onChange={(e) => setFilters({
+                                ...filters,
+                                isActive: e.target.value === '' ? undefined : e.target.value === 'true'
+                            })}
+                        >
+                            <option value="">All Sessions</option>
+                            <option value="true">Active Only</option>
+                            <option value="false">Expired/Revoked Only</option>
+                        </select>
+                    </div>
+                    {Object.keys(filters).filter(k => filters[k] !== undefined).length > 0 && (
+                        <button
+                            className="btn btn-text"
+                            onClick={() => {
+                                setFilters({});
+                                setShowFilterModal(false);
+                            }}
+                            style={{ marginTop: '1rem' }}
+                        >
+                            Clear All Filters
+                        </button>
+                    )}
+                </div>
+            </FormModal>
         </div>
     );
 }

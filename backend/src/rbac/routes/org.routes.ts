@@ -117,7 +117,7 @@ export function createOrganizationsRouter(db: IDatabase<unknown>, evaluationServ
      * PUT /rbac/organizations/:id
      * Update organization
      */
-    router.put('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
+    router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
             const result = await withTransaction(async (t: TransactionTask) => {
                 const id = parseId(req.params.id, 'id');

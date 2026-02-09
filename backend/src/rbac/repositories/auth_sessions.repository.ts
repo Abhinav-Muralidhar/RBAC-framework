@@ -20,7 +20,7 @@ export interface IAuthSessionsRepository {
   findAllByUser(t: TransactionTask | undefined, userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
   findActiveByUser(t: TransactionTask | undefined, userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
   deleteAllByUser(t: TransactionTask | undefined, userId: string): Promise<void>;
-  findAll(t: TransactionTask | undefined, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
+  findAll(t: TransactionTask | undefined, filters?: { userId?: string; isActive?: boolean; search?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
   deleteExpired(t: TransactionTask | undefined): Promise<void>;
   deleteOneForUser(t: TransactionTask | undefined, sessionId: string, userId: string, actingUserId: string): Promise<void>;
 }
@@ -89,7 +89,7 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     await this.getTask(t).none(
       `UPDATE ${this.tableName} 
        SET logout_at = NOW(), expires_at = NOW() 
-       WHERE id = $1 AND user_id = $2`,
+       WHERE id = $1`,
       [sessionId, actingUserId]
     );
   }
@@ -177,21 +177,57 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     );
   }
 
-  async findAll(t: TransactionTask | undefined, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>> {
+  async findAll(
+    t: TransactionTask | undefined,
+    filters?: { userId?: string; isActive?: boolean; search?: string },
+    pagination?: Partial<PaginationParams>
+  ): Promise<PaginatedResult<AuthSessions>> {
     const p = normalizePaginationParams(pagination);
     const offset = getPaginationOffset(p.page, p.limit);
 
     const task = this.getTask(t);
 
+    // Build WHERE clause with filters
+    const params: unknown[] = [];
+    const whereClauses: string[] = [];
+
+    if (filters?.userId) {
+      params.push(filters.userId);
+      whereClauses.push(`s.user_id = $${params.length}`);
+    }
+
+    if (filters?.isActive === true) {
+      whereClauses.push(`s.logout_at IS NULL AND s.expires_at > NOW()`);
+    } else if (filters?.isActive === false) {
+      whereClauses.push(`(s.logout_at IS NOT NULL OR s.expires_at <= NOW())`);
+    }
+
+    if (filters?.search) {
+      params.push(`%${filters.search}%`);
+      whereClauses.push(`(u.username ILIKE $${params.length} OR s.ip_address ILIKE $${params.length})`);
+    }
+
+    const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    // Count total with filters
     const totalRes = await task.one<{ count: string }>(
-      `SELECT COUNT(*) FROM ${this.tableName}`
+      `SELECT COUNT(*) FROM ${this.tableName} s
+       LEFT JOIN users u ON s.user_id = u.id
+       ${whereClause}`,
+      params
     );
 
-    const rows = await task.any<AuthSessions>(
-      `SELECT * FROM ${this.tableName}
-       ORDER BY login_at DESC
-       LIMIT $1 OFFSET $2`,
-      [p.limit, offset]
+    // Add pagination params
+    params.push(p.limit, offset);
+
+    // Fetch with filters and pagination
+    const rows = await task.any<AuthSessions & { username?: string }>(
+      `SELECT s.*, u.username FROM ${this.tableName} s
+       LEFT JOIN users u ON s.user_id = u.id
+       ${whereClause}
+       ORDER BY s.login_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
     );
 
     return buildPaginatedResult(

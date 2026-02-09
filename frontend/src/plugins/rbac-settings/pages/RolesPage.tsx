@@ -1,30 +1,58 @@
 /**
  * Roles Page
- * 
- * Manage user roles with forms and confirmation modals.
+ *
+ * Manage user roles using centralized hooks for pagination and CRUD.
  */
 
+import { useState } from 'react';
+import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import { rolesApi } from '../../../core/api/rbac.api';
 import type { Role } from '../../../core/types/role.types';
-import { Plus, Edit2, Trash2, Search } from 'lucide-react';
+import { usePaginatedData, useCrud } from '../../../core/hooks';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { FormModal } from '../../../core/components/FormModal';
 import { RoleForm, submitRoleForm } from '../components';
-import { useCrudPage } from '../../../core/hooks';
 import './SettingsPage.css';
 
 export function RolesPage() {
-    const crud = useCrudPage<Role>({
-        listFn: rolesApi.list,
+    const {
+        data: roles,
+        isLoading,
+        error: listError,
+        searchQuery,
+        setSearchQuery,
+        page,
+        totalPages,
+        setPage,
+        reload,
+        filters,
+        setFilters
+    } = usePaginatedData<Role>(rolesApi.list, { initialLimit: 100 });
+
+    const {
+        showFormModal,
+        editingItem,
+        openCreate,
+        openEdit,
+        closeForm,
+        handleFormSuccess,
+        showDeleteModal,
+        deletingItem,
+        deleteLoading,
+        openDelete,
+        confirmDelete,
+        closeDelete,
+        editLoading,
+        error: crudError,
+    } = useCrud<Role>({
         deleteFn: rolesApi.delete,
+        getByIdFn: rolesApi.getById,
         entityName: 'roles',
-        initialLimit: 100,
+        onSuccess: reload,
     });
 
-    const filteredRoles = crud.items.filter(role =>
-        role.name.toLowerCase().includes(crud.searchQuery.toLowerCase()) ||
-        role.code.toLowerCase().includes(crud.searchQuery.toLowerCase())
-    );
+    const [showFilterModal, setShowFilterModal] = useState(false);
+    const error = listError || crudError;
 
     return (
         <div className="settings-page">
@@ -33,9 +61,8 @@ export function RolesPage() {
                     <h1>Roles</h1>
                     <p>Manage user roles and hierarchies</p>
                 </div>
-                <button className="btn btn-primary" onClick={crud.openCreate}>
-                    <Plus size={18} />
-                    Add Role
+                <button className="btn btn-primary" onClick={openCreate}>
+                    <Plus size={18} /> Add Role
                 </button>
             </header>
 
@@ -45,105 +72,143 @@ export function RolesPage() {
                     <input
                         type="text"
                         placeholder="Search roles..."
-                        value={crud.searchQuery}
-                        onChange={(e) => crud.setSearchQuery(e.target.value)}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
+                <button
+                    className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setShowFilterModal(true)}
+                >
+                    <Filter size={18} /> Filter
+                    {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
+                </button>
             </div>
 
-            {crud.error && (
-                <div className="error-banner">
-                    {crud.error}
-                    <button onClick={crud.clearError}>×</button>
-                </div>
-            )}
+            {error && <div className="error-banner">{error}</div>}
 
-            {crud.isLoading ? (
+            {isLoading ? (
                 <div className="loading-state">Loading roles...</div>
             ) : (
-                <div className="data-table-wrapper">
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Code</th>
-                                <th className="hide-mobile">Description</th>
-                                <th className="hide-mobile">Profiles</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredRoles.map(role => (
-                                <tr key={role.id}>
-                                    <td className="font-medium">{role.name}</td>
-                                    <td><code>{role.code}</code></td>
-                                    <td className="hide-mobile">{role.description || '-'}</td>
-                                    <td className="hide-mobile">{role.profiles?.length || 0}</td>
-                                    <td>
-                                        <span className={`status-badge status-${role.is_active ? 'active' : 'inactive'}`}>
-                                            {role.is_active ? 'Active' : 'Inactive'}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div className="action-buttons">
-                                            <button
-                                                className="btn-icon"
-                                                title="Edit"
-                                                onClick={() => crud.openEdit(role)}
-                                            >
-                                                <Edit2 size={16} />
-                                            </button>
-                                            <button
-                                                className="btn-icon btn-danger"
-                                                title="Delete"
-                                                onClick={() => crud.openDelete(role)}
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                            {filteredRoles.length === 0 && (
+                <>
+                    <div className="data-table-wrapper">
+                        <table className="data-table">
+                            <thead>
                                 <tr>
-                                    <td colSpan={6} className="empty-state">No roles found</td>
+                                    <th>Name</th>
+                                    <th>Code</th>
+                                    <th className="hide-mobile">Description</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {roles.length > 0 ? roles.map(role => (
+                                    <tr key={role.id}>
+                                        <td className="font-medium">{role.name}</td>
+                                        <td><code>{role.code}</code></td>
+                                        <td className="hide-mobile">{role.description || '-'}</td>
+                                        <td>
+                                            <span className={`status-badge status-${role.is_active ? 'active' : 'inactive'}`}>
+                                                {role.is_active ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div className="action-buttons">
+                                                <button className="btn-icon" title="Edit" onClick={() => openEdit(role)} disabled={editLoading}>
+                                                    <Edit2 size={16} />
+                                                </button>
+                                                <button className="btn-icon btn-danger" title="Delete" onClick={() => openDelete(role)}>
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )) : (
+                                    <tr>
+                                        <td colSpan={5} className="empty-state">No roles found</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="pagination">
+                        <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
+                        <span>Page {page} of {totalPages}</span>
+                        <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
+                    </div>
+                </>
             )}
 
             {/* Create/Edit Modal */}
             <FormModal
-                isOpen={crud.showFormModal}
-                title={crud.editingItem ? 'Edit Role' : 'Add New Role'}
-                isLoading={crud.formLoading}
+                isOpen={showFormModal}
+                title={editingItem ? 'Edit Role' : 'Add New Role'}
+                isLoading={false}
                 onSubmit={() => submitRoleForm()}
-                onCancel={crud.closeForm}
+                onCancel={closeForm}
                 size="md"
             >
                 <RoleForm
-                    role={crud.editingItem}
-                    onSuccess={crud.handleFormSuccess}
-                    onError={crud.setError}
-                    setLoading={crud.setFormLoading}
+                    role={editingItem}
+                    onSuccess={handleFormSuccess}
+                    onError={(err) => console.error(err)}
+                    setLoading={() => { }}
                 />
             </FormModal>
 
             {/* Delete Confirmation */}
             <ConfirmModal
-                isOpen={crud.showDeleteModal}
+                isOpen={showDeleteModal}
                 title="Delete Role"
                 message="Are you sure you want to delete this role? Users assigned this role will lose associated permissions."
-                itemName={crud.deletingItem?.name}
+                itemName={deletingItem?.name}
                 confirmLabel="Delete"
                 variant="danger"
-                isLoading={crud.deleteLoading}
-                onConfirm={crud.confirmDelete}
-                onCancel={crud.closeDelete}
+                isLoading={deleteLoading}
+                onConfirm={confirmDelete}
+                onCancel={closeDelete}
             />
+
+            {/* Filter Modal Placeholder */}
+            <FormModal
+                isOpen={showFilterModal}
+                title="Filter Roles"
+                onSubmit={() => setShowFilterModal(false)}
+                onCancel={() => setShowFilterModal(false)}
+                size="sm"
+            >
+                <div className="filter-form">
+                    <div className="form-field">
+                        <label className="form-label">Status</label>
+                        <select
+                            className="form-control"
+                            value={filters.is_active === undefined ? '' : filters.is_active.toString()}
+                            onChange={(e) => setFilters({
+                                ...filters,
+                                is_active: e.target.value === '' ? undefined : e.target.value === 'true'
+                            })}
+                        >
+                            <option value="">All Statuses</option>
+                            <option value="true">Active</option>
+                            <option value="false">Inactive</option>
+                        </select>
+                    </div>
+                    {Object.keys(filters).length > 0 && (
+                        <button
+                            className="btn btn-text"
+                            onClick={() => {
+                                setFilters({});
+                                setShowFilterModal(false);
+                            }}
+                            style={{ marginTop: '1rem' }}
+                        >
+                            Clear All Filters
+                        </button>
+                    )}
+                </div>
+            </FormModal>
         </div>
     );
 }

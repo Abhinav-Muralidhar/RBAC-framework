@@ -40,6 +40,19 @@ export function RoleForm({ role, onSuccess, onError, setLoading }: RoleFormProps
         loadProfiles();
     }, []);
 
+    // Keep state in sync with props
+    useEffect(() => {
+        if (role) {
+            setFormData({
+                name: role.name || '',
+                code: role.code || '',
+                description: role.description || '',
+                is_active: role.is_active ?? true,
+            });
+            setSelectedProfiles(role.profiles?.map(p => p.id) || []);
+        }
+    }, [role]);
+
     const loadProfiles = async () => {
         try {
             const response = await profilesApi.list({ limit: 100 });
@@ -150,11 +163,11 @@ export function RoleForm({ role, onSuccess, onError, setLoading }: RoleFormProps
                 />
             </div>
 
-            {/*<FormSwitch
+            <FormSwitch
                 label="Active"
                 checked={formData.is_active}
                 onChange={checked => handleChange('is_active', checked)}
-            />*/}
+            />
 
             {/* Profiles selection */}
             <div className="form-field">
