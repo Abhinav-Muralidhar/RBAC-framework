@@ -15,6 +15,7 @@ import { ISmtpConfigRepository } from '../repositories/smtp_config.repository';
 import { RBACInternalError, SMTPConfigError, SMTPConfigNotFoundError } from '../errors/rbac.errors';
 import { SmtpConfigCreate, SmtpConfigUpdate } from '../dto/smtp_config.dto';
 import { IAuditService } from './audit.service';
+import { decryptAES, encryptAES, hashPassword } from '../utils/crypto.utils';
 export type SmtpValidationError = string;
 const MODULE_CODE = 'SETTINGS';
 export interface ISmtpConfigService {
@@ -80,6 +81,7 @@ export class SmtpConfigService implements ISmtpConfigService {
         if (!config) {
             throw new SMTPConfigNotFoundError(`SMTP config not found: ${configId}`);
         }
+        config.password = decryptAES(config.password);
         return config;
     }
 
@@ -91,7 +93,7 @@ export class SmtpConfigService implements ISmtpConfigService {
         return this.smtpConfigRepository.findAll(t, filters, params);
     }
 
-    // ✅ Get active SMTP config (used by EmailService)
+
     async getActive(t: TransactionTask): Promise<SmtpConfig> {
         const result = await this.smtpConfigRepository.findAll(
             t,
@@ -118,7 +120,9 @@ export class SmtpConfigService implements ISmtpConfigService {
                 `Invalid SMTP config: ${errors.join(' ')}`
             );
         }
-
+        if (data.password) {
+            data.password = await encryptAES(data.password);
+        }
         const config = await this.smtpConfigRepository.create(t, data);
         await this.auditService.log(t, {
             user_id: actingUserId,

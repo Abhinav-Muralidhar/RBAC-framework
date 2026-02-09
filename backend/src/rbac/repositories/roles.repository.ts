@@ -55,6 +55,7 @@ export interface IRoleRepository {
   findChildRoles(t: ITask<unknown> | undefined, roleId: string): Promise<Roles[]>;
   findRoleTree(t: ITask<unknown> | undefined): Promise<Roles[]>;
   findByIds(t: ITask<unknown> | undefined, ids: string[]): Promise<Roles[]>;
+  hasActiveChildren(t: ITask<unknown> | undefined, roleId: string): Promise<boolean>;
 }
 
 export class RoleRepository implements IRoleRepository {
@@ -305,15 +306,40 @@ export class RoleRepository implements IRoleRepository {
   ): Promise<Roles[]> {
     const query = `
       WITH RECURSIVE role_tree AS (
-        SELECT * FROM ${this.tableName}
-        WHERE parent_role_id IS NULL AND is_active = true
-        UNION ALL
-        SELECT r.* FROM ${this.tableName} r
-        INNER JOIN role_tree rt ON r.parent_role_id = rt.id
-        WHERE r.is_active = true
-      )
-      SELECT * FROM role_tree;
+      SELECT
+        r.id,
+        r.name,
+        r.parent_role_id,
+        0 AS level
+      FROM ${this.tableName} r
+      WHERE r.parent_role_id IS NULL
+        AND r.is_active = true
+
+      UNION ALL
+
+      SELECT
+        r.id,
+        r.name,
+        r.parent_role_id,
+        rt.level + 1
+      FROM ${this.tableName} r
+      JOIN role_tree rt ON r.parent_role_id = rt.id
+      WHERE r.is_active = true
+    )
+    SELECT *
+    FROM role_tree
+    ORDER BY level, parent_role_id, id;
     `;
     return this.query<Roles>(query, [], t);
+  }
+
+  // check if role has any active children (used for delete guard)
+  async hasActiveChildren(t: ITask<unknown> | undefined, roleId: string): Promise<boolean> {
+    const result = await this.query<Roles>(
+      `SELECT 1 FROM ${this.tableName} WHERE parent_role_id = $1 AND is_active = true LIMIT 1`,
+      [roleId],
+      t
+    );
+    return result.length > 0;
   }
 }
