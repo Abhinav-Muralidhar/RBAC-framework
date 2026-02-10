@@ -71,15 +71,18 @@ const RoleTreeNode = ({
                 {/* Actions (Create / Edit / Delete) */}
                 <div className="node-actions">
                     {/* New "Add Child" Button */}
-                    {!isRoot && (
-                        <button
-                            className="btn-icon-mini success"
-                            title="Add Child Role"
-                            onClick={(e) => { e.stopPropagation(); onCreateChild(node.id); }}
-                        >
-                            <Plus size={12} />
-                        </button>
-                    )}
+                    <button
+                        className="btn-icon-mini success"
+                        title="Add Child Role"
+                        {...(!isRoot && {
+                            onClick: (e) => { e.stopPropagation(); onCreateChild(node.id); }
+                        })}
+                        {...(isRoot && {
+                            onClick: (e) => { e.stopPropagation(); onCreateChild(''); }
+                        })}
+                    >
+                        <Plus size={12} />
+                    </button>
                     {!isRoot && (
                         <button
                             className="btn-icon-mini"
