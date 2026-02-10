@@ -94,7 +94,7 @@ export class UserGroupsRepository implements IUserGroupsRepository {
     await executor.none(
       `
     INSERT INTO ${this.tableName} (user_id, group_id, assigned_by)
-    SELECT unnest($1::uuid[]), $2, $3
+    SELECT unnest($1::bigint[]), $2, $3
     ON CONFLICT DO NOTHING
     `,
       [userIds, groupId, assignedBy ?? null]

@@ -241,6 +241,9 @@ export const smtpApi = {
         await del(`/rbac/smtpconfig/${id}`);
     },
 
+    test: async (): Promise<void> => {
+        await post(`/rbac/email/test`);
+    },
     /*activate: async (id: string): Promise<void> => {
         await post(`/rbac/smtpconfig/${id}/activate`);
     },*/

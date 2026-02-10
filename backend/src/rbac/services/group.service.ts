@@ -56,9 +56,9 @@ export class UnifiedGroupService implements IUnifiedGroupService {
         if (!data.name) throw new Error('Group name is required');
         if (!data.code) throw new Error('Group code is required');
 
-        const existing = await this.groupRepository.findByCode(t, data.name);
+        const existing = await this.groupRepository.findByCode(t, data.code);
         if (existing) {
-            throw new DuplicateAssignmentError(`group name '${data.name}'`);
+            throw new DuplicateAssignmentError(`group code '${data.code}'`);
         }
 
         const group = await this.groupRepository.create(t, {

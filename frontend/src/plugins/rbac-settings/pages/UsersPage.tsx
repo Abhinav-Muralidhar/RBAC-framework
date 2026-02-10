@@ -4,13 +4,14 @@
  * Manage user accounts using centralized hooks for pagination and CRUD.
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import { usersApi } from '../../../core/api/rbac.api';
 import type { User } from '../../../core/types/user.types';
-import { usePaginatedData, useCrud } from '../../../core/hooks';
+import { usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { FormModal } from '../../../core/components/FormModal';
+import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
 import { UserForm, submitUserForm } from '../components';
 import './SettingsPage.css';
 
@@ -52,6 +53,41 @@ export function UsersPage() {
     });
 
     const [showFilterModal, setShowFilterModal] = useState(false);
+    const detailsModal = useDetailsModal();
+
+    const userFields = useMemo<FieldConfig<User>[]>(() => [
+        { label: 'Username', key: 'username' },
+        { label: 'First Name', key: 'first_name' },
+        { label: 'Last Name', key: 'last_name' },
+        { label: 'Title', key: 'title' },
+        { label: 'Department', key: 'department' },
+        {
+            label: 'Status', key: 'status', render: (v: string) => (
+                <span className={`status-badge status-${v?.toLowerCase()}`}>{v}</span>
+            )
+        },
+        { label: 'Role', key: 'rolesname' },
+        { label: 'Primary Email', key: 'primary_email' },
+        { label: 'Secondary Email', key: 'secondary_email' },
+        { label: 'Other Email', key: 'other_email' },
+        { label: 'Office Phone', key: 'office_phone' },
+        { label: 'Mobile Phone', key: 'mobile_phone' },
+        { label: 'Home Phone', key: 'home_phone' },
+        { label: 'Street', key: 'street' },
+        { label: 'City', key: 'city' },
+        { label: 'State', key: 'state' },
+        { label: 'Country', key: 'country' },
+        { label: 'Postal Code', key: 'postal_code' },
+        { label: 'Time Zone', key: 'time_zone' },
+        {
+            label: 'Groups', key: 'groups', render: (v: any) => {
+                if (!v || !Array.isArray(v) || v.length === 0) return '—';
+                return v.map((g: any) => g.name).join(', ');
+            }
+        },
+        { label: 'Created At', key: 'created_at', render: (v: any) => v ? new Date(v).toLocaleString() : '—' },
+        { label: 'Last Login', key: 'last_login_at', render: (v: any) => v ? new Date(v).toLocaleString() : '—' },
+    ], []);
 
     const error = listError || crudError;
 
@@ -107,10 +143,10 @@ export function UsersPage() {
                                 {users.length > 0 ? (
                                     users.map(user => (
                                         <tr key={user.id}>
-                                            <td className="font-medium">{user.username}</td>
-                                            <td>{user.first_name} {user.last_name}</td>
-                                            <td className="hide-mobile">{user.primary_email}</td>
-                                            <td>
+                                            <td className="clickable-cell" onClick={() => detailsModal.open(user.id)}>{user.username}</td>
+                                            <td className="clickable-cell" onClick={() => detailsModal.open(user.id)}>{user.first_name} {user.last_name}</td>
+                                            <td className="hide-mobile clickable-cell" onClick={() => detailsModal.open(user.id)}>{user.primary_email}</td>
+                                            <td className="clickable-cell" onClick={() => detailsModal.open(user.id)}>
                                                 <span className={`status-badge status-${user.status.toLowerCase()}`}>
                                                     {user.status}
                                                 </span>
@@ -229,6 +265,17 @@ export function UsersPage() {
                     )}
                 </div>
             </FormModal>
+
+            {/* Details Modal */}
+            <DetailsModal<User>
+                isOpen={detailsModal.isOpen}
+                title="User Details"
+                entityId={detailsModal.selectedId}
+                fetchFn={usersApi.getById}
+                fields={userFields}
+                onClose={detailsModal.close}
+                size="lg"
+            />
         </div>
     );
 }

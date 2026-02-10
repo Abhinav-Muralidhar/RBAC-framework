@@ -1,11 +1,17 @@
-import { useState } from 'react';
-import { auditLogsApi } from '../../../core/api/rbac.api';
-import type { AuditLog } from '../../../core/types/audit.types';
+/**
+ * Audit Logs Page
+ *
+ * View system audit trail with search and filtering.
+ */
+
+import { useState, useMemo } from 'react';
 import { Search, Filter } from 'lucide-react';
-import { format } from 'date-fns';
-import './SettingsPage.css';
-import { usePaginatedData } from '../../../core/hooks/usePaginatedData';
+import type { AuditLog } from '../../../core/types/audit.types';
+import { auditLogsApi } from '../../../core/api/rbac.api';
+import { usePaginatedData, useDetailsModal } from '../../../core/hooks';
 import { FormModal } from '../../../core/components/FormModal';
+import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
+import './SettingsPage.css';
 
 export function AuditLogsPage() {
     // Function to get the color based on the status
@@ -33,6 +39,26 @@ export function AuditLogsPage() {
     } = usePaginatedData<AuditLog>(auditLogsApi.list, { initialLimit: 20 });
 
     const [showFilterModal, setShowFilterModal] = useState(false);
+    const detailsModal = useDetailsModal();
+
+    const auditFields = useMemo<FieldConfig<AuditLog>[]>(() => [
+        { label: 'Timestamp', key: 'created_at', render: (v: any) => v ? new Date(v).toLocaleString() : '—' },
+        { label: 'User ID', key: 'user_id' },
+        { label: 'Username', key: 'user_name' },
+        { label: 'Action', key: 'action' },
+        { label: 'Entity', key: 'entity_type' },
+        { label: 'Entity ID', key: 'entity_id' },
+        { label: 'Module', key: 'module_name' },
+        {
+            label: 'Status', key: 'status', render: (v: string) => (
+                <span className={`status-badge status-${v?.toLowerCase()}`}>{v}</span>
+            )
+        },
+        { label: 'IP Address', key: 'ip_address' },
+        { label: 'User Agent', key: 'user_agent' },
+        { label: 'Old Values', key: 'old_values' },
+        { label: 'New Values', key: 'new_values' },
+    ], []);
 
     return (
         <div className="settings-page">
@@ -82,9 +108,9 @@ export function AuditLogsPage() {
                             </thead>
                             <tbody>
                                 {logs.map(log => (
-                                    <tr key={log.id}>
+                                    <tr key={log.id} className="clickable-row" onClick={() => detailsModal.open(log.id)} style={{ cursor: 'pointer' }}>
                                         <td className="text-muted">
-                                            {log.created_at ? format(new Date(log.created_at), 'MMM d, yyyy HH:mm:ss') : '-'}
+                                            {log.created_at ? new Date(log.created_at).toLocaleString() : '-'}
                                         </td>
                                         <td>{log.user_name || log.user_email || '-'}</td>
                                         <td>
@@ -203,6 +229,17 @@ export function AuditLogsPage() {
                 </div>
 
             </FormModal>
+
+            {/* Details Modal */}
+            <DetailsModal<AuditLog>
+                isOpen={detailsModal.isOpen}
+                title="Audit Log Details"
+                entityId={detailsModal.selectedId}
+                fetchFn={auditLogsApi.getById}
+                fields={auditFields}
+                onClose={detailsModal.close}
+                size="lg"
+            />
         </div>
     );
 }

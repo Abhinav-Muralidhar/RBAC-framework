@@ -4,13 +4,14 @@
  * Manage permission profiles using centralized hooks for pagination and CRUD.
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import { profilesApi } from '../../../core/api/rbac.api';
 import type { Profile } from '../../../core/types/profile.types';
-import { usePaginatedData, useCrud } from '../../../core/hooks';
+import { usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
 import { FormModal } from '../../../core/components/FormModal';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
+import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
 import { ProfileForm, submitProfileForm } from '../components/ProfileForm';
 import './SettingsPage.css';
 
@@ -52,6 +53,28 @@ export function ProfilesPage() {
     });
 
     const [showFilterModal, setShowFilterModal] = useState(false);
+    const detailsModal = useDetailsModal();
+
+    const profileFields = useMemo<FieldConfig<Profile>[]>(() => [
+        { label: 'Name', key: 'name' },
+        { label: 'Code', key: 'code' },
+        { label: 'Description', key: 'description' },
+        {
+            label: 'Status', key: 'is_active', render: (v: boolean) => (
+                <span className={`status-badge status-${v ? 'active' : 'inactive'}`}>{v ? 'Active' : 'Inactive'}</span>
+            )
+        },
+        { label: 'Role Count', key: 'role_count' },
+        {
+            label: 'Permissions', key: 'permissions', render: (v: any) => {
+                if (!v || !Array.isArray(v) || v.length === 0) return '—';
+                return v.map((p: any) => `${p.module_name}: ${p.action} (${p.effect})`).join(', ');
+            }
+        },
+        { label: 'Created At', key: 'created_at', render: (v: any) => v ? new Date(v).toLocaleString() : '—' },
+        { label: 'Created By', key: 'created_by_name' },
+    ], []);
+
     const error = listError || crudError;
 
     return (
@@ -105,10 +128,10 @@ export function ProfilesPage() {
                             <tbody>
                                 {profiles.length > 0 ? profiles.map(profile => (
                                     <tr key={profile.id}>
-                                        <td className="font-medium">{profile.name}</td>
-                                        <td><code>{profile.code}</code></td>
-                                        <td className="hide-mobile">{profile.description || '-'}</td>
-                                        <td>
+                                        <td className="clickable-cell" onClick={() => detailsModal.open(profile.id)}>{profile.name}</td>
+                                        <td className="clickable-cell" onClick={() => detailsModal.open(profile.id)}><code>{profile.code}</code></td>
+                                        <td className="hide-mobile clickable-cell" onClick={() => detailsModal.open(profile.id)}>{profile.description || '-'}</td>
+                                        <td className="clickable-cell" onClick={() => detailsModal.open(profile.id)}>
                                             <span className={`status-badge status-${profile.is_active ? 'active' : 'inactive'}`}>
                                                 {profile.is_active ? 'Active' : 'Inactive'}
                                             </span>
@@ -209,6 +232,17 @@ export function ProfilesPage() {
                     )}
                 </div>
             </FormModal>
+
+            {/* Details Modal */}
+            <DetailsModal<Profile>
+                isOpen={detailsModal.isOpen}
+                title="Profile Details"
+                entityId={detailsModal.selectedId}
+                fetchFn={profilesApi.getById}
+                fields={profileFields}
+                onClose={detailsModal.close}
+                size="md"
+            />
         </div>
     );
 }

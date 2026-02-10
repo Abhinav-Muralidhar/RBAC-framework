@@ -142,6 +142,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
                     name: formData.name.trim(),
                     description: formData.description || undefined,
                     role_ids: selectedRoles,
+                    user_ids: selectedUsers,
                     is_active: formData.is_active,
                 };
 
@@ -152,6 +153,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
                     code: formData.code.trim(),
                     description: formData.description || undefined,
                     role_ids: selectedRoles,
+                    user_ids: selectedUsers,
                     is_active: formData.is_active,
                 };
 

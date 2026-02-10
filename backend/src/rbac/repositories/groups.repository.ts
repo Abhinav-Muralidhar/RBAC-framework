@@ -98,7 +98,7 @@ export class GroupRepository implements IGroupRepository {
       `SELECT u.id, u.username AS name
        FROM users u
        INNER JOIN user_groups ug ON u.id = ug.user_id
-       WHERE ug.group_id = $1 AND u.is_active = true`,
+       WHERE ug.group_id = $1 AND u.status = 'active'`,
       [id],
       t
     );

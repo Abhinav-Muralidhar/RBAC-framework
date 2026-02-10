@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Plus, Edit2, Trash2, Search, Filter,
     ChevronRight, ChevronDown, Folder, CornerDownRight,
@@ -6,9 +6,10 @@ import {
 } from 'lucide-react';
 import { rolesApi } from '../../../core/api/rbac.api';
 import type { Role, RoleNode } from '../../../core/types/role.types';
-import { usePaginatedData, useCrud } from '../../../core/hooks';
+import { usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { FormModal } from '../../../core/components/FormModal';
+import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
 import { RoleForm, submitRoleForm } from '../components';
 import './SettingsPage.css';
 import './RoleTree.css';
@@ -186,6 +187,30 @@ export function RolesPage() {
     });
 
     const [showFilterModal, setShowFilterModal] = useState(false);
+    const detailsModal = useDetailsModal();
+
+    const roleFields = useMemo<FieldConfig<Role>[]>(() => [
+        { label: 'Name', key: 'name' },
+        { label: 'Code', key: 'code' },
+        { label: 'Description', key: 'description' },
+        { label: 'Parent Role', key: 'parent_role_id' },
+        {
+            label: 'Status', key: 'is_active', render: (v: boolean) => (
+                <span className={`status-badge status-${v ? 'active' : 'inactive'}`}>{v ? 'Active' : 'Inactive'}</span>
+            )
+        },
+        {
+            label: 'Profiles', key: 'profiles', render: (v: any) => {
+                if (!v || !Array.isArray(v) || v.length === 0) return '—';
+                return v.map((p: any) => p.name).join(', ');
+            }
+        },
+        { label: 'User Count', key: 'user_count' },
+        { label: 'Child Roles', key: 'child_role_count' },
+        { label: 'Created At', key: 'created_at', render: (v: any) => v ? new Date(v).toLocaleString() : '—' },
+        { label: 'Created By', key: 'created_by_name' },
+    ], []);
+
     const error = listError || crudError;
 
     // Trigger tree load when view mode changes
@@ -304,10 +329,10 @@ export function RolesPage() {
                                 <tbody>
                                     {roles.length > 0 ? roles.map(role => (
                                         <tr key={role.id}>
-                                            <td className="font-medium">{role.name}</td>
-                                            <td><code>{role.code}</code></td>
-                                            <td className="hide-mobile">{role.description || '-'}</td>
-                                            <td>
+                                            <td className="clickable-cell" onClick={() => detailsModal.open(role.id)}>{role.name}</td>
+                                            <td className="clickable-cell" onClick={() => detailsModal.open(role.id)}><code>{role.code}</code></td>
+                                            <td className="hide-mobile clickable-cell" onClick={() => detailsModal.open(role.id)}>{role.description || '-'}</td>
+                                            <td className="clickable-cell" onClick={() => detailsModal.open(role.id)}>
                                                 <span className={`status-badge status-${role.is_active ? 'active' : 'inactive'}`}>
                                                     {role.is_active ? 'Active' : 'Inactive'}
                                                 </span>
@@ -434,6 +459,17 @@ export function RolesPage() {
                     )}
                 </div>
             </FormModal>
+
+            {/* Details Modal */}
+            <DetailsModal<Role>
+                isOpen={detailsModal.isOpen}
+                title="Role Details"
+                entityId={detailsModal.selectedId}
+                fetchFn={rolesApi.getById}
+                fields={roleFields}
+                onClose={detailsModal.close}
+                size="md"
+            />
         </div>
     );
 }

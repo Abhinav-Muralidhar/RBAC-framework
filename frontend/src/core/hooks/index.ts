@@ -21,3 +21,6 @@ export type { UseCrudOptions, UseCrudReturn } from './useCrud';
 
 export { usePaginatedData } from './usePaginatedData';
 export type { UsePaginatedDataResult, PaginationParams } from './usePaginatedData';
+
+export { useDetailsModal } from './useDetailsModal';
+export type { UseDetailsModalReturn } from './useDetailsModal';
