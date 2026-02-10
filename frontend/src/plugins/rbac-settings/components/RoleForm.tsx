@@ -15,7 +15,8 @@ interface RoleFormProps {
 
 export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading }: RoleFormProps) {
     const isEditing = !!role;
-
+    // Add this inside RoleForm
+    const [roleSearchTimer, setRoleSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
     const [formData, setFormData] = useState({
         name: role?.name || '',
         code: role?.code || '',
@@ -153,6 +154,24 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
             setRoleSearch('');
         }, 200);
     };
+
+    useEffect(() => {
+        // Clear any existing timer
+        if (roleSearchTimer) clearTimeout(roleSearchTimer);
+
+        // Only search if the user is actively searching (typing)
+        if (isSearching) {
+            const timer = setTimeout(() => {
+                loadRoles(roleSearch);
+            }, 300); // 300ms delay to wait for user to stop typing
+
+            setRoleSearchTimer(timer);
+
+            return () => {
+                if (timer) clearTimeout(timer);
+            };
+        }
+    }, [roleSearch, isSearching]);
 
     // ---------------- VALIDATION ----------------
 
