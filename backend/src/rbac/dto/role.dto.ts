@@ -80,3 +80,9 @@ export interface RoleSummaryDto {
     is_active: boolean;
 }
 
+export type RoleNode = {
+    id: string;
+    name: string;
+    children: RoleNode[];
+    hasChildren: boolean;
+};

@@ -6,7 +6,7 @@
 
 import { apiClient, type PaginatedResponse, type ApiResponse } from './client';
 import type { User, CreateUserDto, UpdateUserDto } from '../types/user.types';
-import type { Role, CreateRoleDto, UpdateRoleDto } from '../types/role.types';
+import type { Role, CreateRoleDto, UpdateRoleDto, RoleNode } from '../types/role.types';
 import type { Profile, CreateProfileDto, UpdateProfileDto, Permission } from '../types/profile.types';
 import type { Group, CreateGroupDto, UpdateGroupDto } from '../types/group.types';
 import type { AuditLog } from '../types/audit.types';
@@ -76,6 +76,11 @@ export const rolesApi = {
 
     getById: async (id: string): Promise<Role> => {
         const response = await get<ApiResponse<Role>>(`/rbac/roles/${id}`);
+        return response.data;
+    },
+
+    getTree: async (): Promise<RoleNode[]> => {
+        const response = await get<ApiResponse<RoleNode[]>>(`/rbac/roles/tree`);
         return response.data;
     },
 

@@ -1,20 +1,149 @@
-/**
- * Roles Page
- *
- * Manage user roles using centralized hooks for pagination and CRUD.
- */
-
-import { useState } from 'react';
-import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import {
+    Plus, Edit2, Trash2, Search, Filter,
+    ChevronRight, ChevronDown, Folder, CornerDownRight,
+    User, Building2
+} from 'lucide-react';
 import { rolesApi } from '../../../core/api/rbac.api';
-import type { Role } from '../../../core/types/role.types';
+import type { Role, RoleNode } from '../../../core/types/role.types';
 import { usePaginatedData, useCrud } from '../../../core/hooks';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { FormModal } from '../../../core/components/FormModal';
 import { RoleForm, submitRoleForm } from '../components';
 import './SettingsPage.css';
+import './RoleTree.css';
+
+const ORG_ROOT_ID = 'ORG_ROOT_NODE';
+// --- Helper Component for the Tree Node ---
+const RoleTreeNode = ({
+    node,
+    level,
+    onEdit,
+    onDelete,
+    onCreateChild,
+    isLast
+}: {
+    node: RoleNode;
+    level: number;
+    onEdit: (id: string) => void;
+    onDelete: (id: string) => void;
+    onCreateChild: (id: string) => void;
+    isLast: boolean;
+}) => {
+    const isRoot = node.id === ORG_ROOT_ID;
+    // Always expand the root Organization node by default
+    const [isExpanded, setIsExpanded] = useState<boolean>(isRoot || true);
+    const hasChildren = node.children && node.children.length > 0;
+
+
+
+    return (
+        <div className="tree-branch">
+            <div className={`tree-node-content ${level === 0 ? 'root-node' : ''}`}>
+                {/* Connector Lines */}
+                <div className="tree-connectors">
+                    {level > 0 && <span className="connector-elbow"></span>}
+                </div>
+
+                {/* Expansion Toggle */}
+                <button
+                    className={`tree-toggle ${!hasChildren ? 'invisible' : ''}`}
+                    onClick={() => setIsExpanded(!isExpanded)}
+                >
+                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+
+                {/* Icon & Label */}
+                <div className="node-card" onClick={() => onEdit(node.id)}>
+                    <div className="node-icon">
+                        {isRoot ? (
+                            <Building2 size={16} className="text-primary" />
+                        ) : (
+                            <User size={16} className={hasChildren ? 'text-primary' : 'text-muted'} />
+                        )}
+                    </div>
+                    <div className="node-info">
+                        <span className="node-name">{node.name}</span>
+                    </div>
+                </div>
+
+                {/* Actions (Create / Edit / Delete) */}
+                <div className="node-actions">
+                    {/* New "Add Child" Button */}
+                    {!isRoot && (
+                        <button
+                            className="btn-icon-mini success"
+                            title="Add Child Role"
+                            onClick={(e) => { e.stopPropagation(); onCreateChild(node.id); }}
+                        >
+                            <Plus size={12} />
+                        </button>
+                    )}
+                    {!isRoot && (
+                        <button
+                            className="btn-icon-mini"
+                            title="Edit"
+                            onClick={(e) => { e.stopPropagation(); onEdit(node.id); }}
+                        >
+                            <Edit2 size={12} />
+                        </button>
+                    )}
+                    {!isRoot && (
+                        <button
+                            className="btn-icon-mini danger"
+                            title="Delete"
+                            onClick={(e) => { e.stopPropagation(); onDelete(node.id); }}
+                        >
+                            <Trash2 size={12} />
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Recursive Children */}
+            {hasChildren && isExpanded && (
+                <div className="tree-children">
+                    {node.children!.map((child, index) => (
+                        <RoleTreeNode
+                            key={child.id}
+                            node={child}
+                            level={level + 1}
+                            onEdit={onEdit}
+                            onDelete={onDelete}
+                            onCreateChild={onCreateChild} // Pass it down
+                            isLast={index === node.children!.length - 1}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
 
 export function RolesPage() {
+    // --------------------- Tree State ---------------------
+    const [viewMode, setViewMode] = useState<'table' | 'tree'>('tree');
+    const [roleTree, setRoleTree] = useState<RoleNode[]>([]);
+    const [loadingTree, setLoadingTree] = useState(false);
+    const [createParentId, setCreateParentId] = useState<string | null>(null); // Track parent for new role
+
+    // Load Tree Function
+    const loadTree = useCallback(async () => {
+        // Only load if we are in tree view to save bandwidth
+        if (viewMode !== 'tree') return;
+
+        setLoadingTree(true);
+        try {
+            const tree: RoleNode[] = await rolesApi.getTree();
+            setRoleTree(tree || []);
+        } catch (err) {
+            console.error('Failed to load role tree', err);
+        } finally {
+            setLoadingTree(false);
+        }
+    }, [viewMode]);
+
+    // --------------------- Table/Data State ---------------------
     const {
         data: roles,
         isLoading,
@@ -24,15 +153,16 @@ export function RolesPage() {
         page,
         totalPages,
         setPage,
-        reload,
+        reload: reloadTable, // Rename for clarity
         filters,
         setFilters
     } = usePaginatedData<Role>(rolesApi.list, { initialLimit: 100 });
 
+    // --------------------- CRUD Operations ---------------------
     const {
         showFormModal,
         editingItem,
-        openCreate,
+        openCreate, // We will wrap this
         openEdit,
         closeForm,
         handleFormSuccess,
@@ -48,12 +178,61 @@ export function RolesPage() {
         deleteFn: rolesApi.delete,
         getByIdFn: rolesApi.getById,
         entityName: 'roles',
-        onSuccess: reload,
+        // IMPORTANT: Refresh BOTH Table and Tree on any success (create/update/delete)
+        onSuccess: () => {
+            reloadTable();
+            loadTree();
+        },
     });
 
     const [showFilterModal, setShowFilterModal] = useState(false);
     const error = listError || crudError;
 
+    // Trigger tree load when view mode changes
+    useEffect(() => {
+        if (viewMode === 'tree') {
+            loadTree();
+        }
+    }, [viewMode, loadTree]);
+
+
+    // --------------------- Handlers ---------------------
+
+    // 1. Wrapper for "Add Role" (Global or Child)
+    const handleCreate = (parentId: string | null = null) => {
+        const effectiveParentId = parentId === 'ROOT' ? null : parentId;
+        setCreateParentId(effectiveParentId);
+        openCreate();
+    };
+
+    const handleNodeClick = async (nodeId: string) => {
+        if (nodeId === ORG_ROOT_ID) return; // Ignore root click
+        try {
+            const role: Role = await rolesApi.getById(nodeId);
+            openEdit(role);
+        } catch (err) {
+            console.error('Failed to fetch role', err);
+        }
+    };
+
+    const handleDeleteNode = async (nodeId: string) => {
+        if (nodeId === ORG_ROOT_ID) return; // Ignore root delete
+        try {
+            const role: Role = await rolesApi.getById(nodeId);
+            openDelete(role);
+        } catch (err) {
+            console.error('Failed to fetch role for deletion', err);
+        }
+    };
+
+    const organizationNode: RoleNode = {
+        id: ORG_ROOT_ID,
+        name: 'Organization',
+        hasChildren: true,
+        children: roleTree,
+    };
+
+    // --------------------- UI ---------------------
     return (
         <div className="settings-page">
             <header className="page-header">
@@ -61,12 +240,14 @@ export function RolesPage() {
                     <h1>Roles</h1>
                     <p>Manage user roles and hierarchies</p>
                 </div>
-                <button className="btn btn-primary" onClick={openCreate}>
+                {/* Global Create Button (Root Level) */}
+                <button className="btn btn-primary" onClick={() => handleCreate(null)}>
                     <Plus size={18} /> Add Role
                 </button>
             </header>
 
-            <div className="page-toolbar">
+            {/* Toolbar */}
+            <div className="page-toolbar" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
                 <div className="search-box">
                     <Search size={18} />
                     <input
@@ -76,6 +257,7 @@ export function RolesPage() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
+
                 <button
                     className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
                     onClick={() => setShowFilterModal(true)}
@@ -83,82 +265,125 @@ export function RolesPage() {
                     <Filter size={18} /> Filter
                     {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
                 </button>
+
+                <div className="view-toggle" style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+                    <button
+                        className={`btn ${viewMode === 'table' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setViewMode('table')}
+                    >
+                        Table View
+                    </button>
+                    <button
+                        className={`btn ${viewMode === 'tree' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setViewMode('tree')}
+                    >
+                        Tree View
+                    </button>
+                </div>
             </div>
 
             {error && <div className="error-banner">{error}</div>}
 
-            {isLoading ? (
-                <div className="loading-state">Loading roles...</div>
-            ) : (
-                <>
-                    <div className="data-table-wrapper">
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Code</th>
-                                    <th className="hide-mobile">Description</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {roles.length > 0 ? roles.map(role => (
-                                    <tr key={role.id}>
-                                        <td className="font-medium">{role.name}</td>
-                                        <td><code>{role.code}</code></td>
-                                        <td className="hide-mobile">{role.description || '-'}</td>
-                                        <td>
-                                            <span className={`status-badge status-${role.is_active ? 'active' : 'inactive'}`}>
-                                                {role.is_active ? 'Active' : 'Inactive'}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <div className="action-buttons">
-                                                <button className="btn-icon" title="Edit" onClick={() => openEdit(role)} disabled={editLoading}>
-                                                    <Edit2 size={16} />
-                                                </button>
-                                                <button className="btn-icon btn-danger" title="Delete" onClick={() => openDelete(role)}>
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )) : (
+            {viewMode === 'table' ? (
+                // ... Existing Table View (No changes needed) ...
+                isLoading ? (
+                    <div className="loading-state">Loading roles...</div>
+                ) : (
+                    <>
+                        <div className="data-table-wrapper">
+                            <table className="data-table">
+                                <thead>
                                     <tr>
-                                        <td colSpan={5} className="empty-state">No roles found</td>
+                                        <th>Name</th>
+                                        <th>Code</th>
+                                        <th className="hide-mobile">Description</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {roles.length > 0 ? roles.map(role => (
+                                        <tr key={role.id}>
+                                            <td className="font-medium">{role.name}</td>
+                                            <td><code>{role.code}</code></td>
+                                            <td className="hide-mobile">{role.description || '-'}</td>
+                                            <td>
+                                                <span className={`status-badge status-${role.is_active ? 'active' : 'inactive'}`}>
+                                                    {role.is_active ? 'Active' : 'Inactive'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div className="action-buttons">
+                                                    <button className="btn-icon" title="Edit" onClick={() => openEdit(role)} disabled={editLoading}>
+                                                        <Edit2 size={16} />
+                                                    </button>
+                                                    <button className="btn-icon btn-danger" title="Delete" onClick={() => openDelete(role)}>
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )) : (
+                                        <tr>
+                                            <td colSpan={5} className="empty-state">No roles found</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="pagination">
+                            <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
+                            <span>Page {page} of {totalPages}</span>
+                            <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
+                        </div>
+                    </>
+                )
+            ) : (
+                // --- TREE VIEW ---
+                loadingTree ? (
+                    <div className="loading-state">Loading hierarchy...</div>
+                ) : roleTree.length === 0 ? (
+                    <div className="empty-state">No role hierarchy found</div>
+                ) : (
+                    <div className="role-tree-container">
+                        <div className="tree-header">Organization Chart</div>
+                        <div className="tree-wrapper">
+                            <RoleTreeNode
+                                key={organizationNode.id}
+                                node={organizationNode}
+                                level={0}
+                                onEdit={handleNodeClick}
+                                onDelete={handleDeleteNode}
+                                onCreateChild={handleCreate}
+                                isLast={true}
+                            />
+                        </div>
                     </div>
-
-                    <div className="pagination">
-                        <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
-                        <span>Page {page} of {totalPages}</span>
-                        <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
-                    </div>
-                </>
+                )
             )}
 
             {/* Create/Edit Modal */}
             <FormModal
                 isOpen={showFormModal}
-                title={editingItem ? 'Edit Role' : 'Add New Role'}
+                title={editingItem ? 'Edit Role' : (createParentId ? 'Add Child Role' : 'Add New Role')}
                 isLoading={false}
                 onSubmit={() => submitRoleForm()}
-                onCancel={closeForm}
+                onCancel={() => {
+                    closeForm();
+                    setCreateParentId(null); // Reset parent ID on close
+                }}
                 size="md"
             >
                 <RoleForm
                     role={editingItem}
+                    // IMPORTANT: You must update RoleForm to accept 'initialParentId'
+                    initialParentId={createParentId}
                     onSuccess={handleFormSuccess}
                     onError={(err) => console.error(err)}
                     setLoading={() => { }}
                 />
             </FormModal>
 
-            {/* Delete Confirmation */}
             <ConfirmModal
                 isOpen={showDeleteModal}
                 title="Delete Role"
@@ -171,7 +396,7 @@ export function RolesPage() {
                 onCancel={closeDelete}
             />
 
-            {/* Filter Modal Placeholder */}
+            {/* ... Filter Modal (Same as before) ... */}
             <FormModal
                 isOpen={showFilterModal}
                 title="Filter Roles"
