@@ -110,7 +110,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     router.use('/organizations', createOrganizationsRouter(db, evaluationService, auditService, organizationService));
     router.use('/smtpconfig', createSmtpRouter(db, auditService, evaluationService, smtpConfigService));
     router.use('/sharing-rules', createSharingRulesRouter(db, auditService, evaluationService, sharingRuleService));
-    router.use('/email', createEmailRouter(authSessionService));
+    router.use('/email', createEmailRouter(authSessionService, smtpConfigService));
     return router;
 }
 
