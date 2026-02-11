@@ -122,7 +122,7 @@ export function SessionsPage() {
                                         <td title={session.user_agent}>{session.user_agent}</td>
                                         <td>{format(new Date(session.login_at), 'MMM d, HH:mm')}</td>
                                         <td>{session.logout_at ? "Logout at " + format(new Date(session.logout_at), 'MMM d, HH:mm') : "Expires at " + format(new Date(session.expires_at), 'MMM d, HH:mm')}</td>
-                                        <td>{session.logout_at
+                                        <td>{(session.logout_at || new Date(session.expires_at) < new Date())
                                             ? <span className="status-badge status-inactive">Inactive</span>
                                             : <span className="status-badge status-active">Active</span>
                                         }</td>

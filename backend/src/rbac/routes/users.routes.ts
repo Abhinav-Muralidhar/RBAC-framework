@@ -98,7 +98,7 @@ export function createUsersRouter(db: IDatabase<unknown>, evaluationService: Eva
         try {
             const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
-                const user = await userService.create(t, actingUserId, req.body);
+                const user = await userService.create(t, actingUserId, req.body, req.auditContext);
                 return user;
             });
             sendSuccess(res, result);
@@ -116,7 +116,7 @@ export function createUsersRouter(db: IDatabase<unknown>, evaluationService: Eva
             const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
                 const userId = parseId(req.params.id, 'userId');
-                const user = await userService.update(t, actingUserId, userId, req.body);
+                const user = await userService.update(t, actingUserId, userId, req.body, req.auditContext);
                 return user;
             });
             sendSuccess(res, result);
@@ -134,7 +134,7 @@ export function createUsersRouter(db: IDatabase<unknown>, evaluationService: Eva
             const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
                 const userId = parseId(req.params.id, 'userId');
-                await userService.delete(t, actingUserId, userId);
+                await userService.delete(t, actingUserId, userId, req.auditContext);
                 return { message: 'Deleted successfully' };
             });
             sendSuccess(res, result);

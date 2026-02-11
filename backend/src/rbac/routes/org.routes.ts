@@ -123,7 +123,7 @@ export function createOrganizationsRouter(db: IDatabase<unknown>, evaluationServ
                 const id = parseId(req.params.id, 'id');
                 const payload: UpdateOrganizationRequestDto = req.body;
 
-                const organization = await organizationService.updateOrganization(t, id, payload);
+                const organization = await organizationService.updateOrganization(t, id, payload, req.auditContext);
                 return organization;
             });
             sendSuccess(res, result);

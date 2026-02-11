@@ -27,16 +27,18 @@ export interface ISmtpConfigService {
     create(
         t: TransactionTask,
         data: SmtpConfigCreate,
-        actingUserId: string
+        actingUserId: string,
+        auditCtx?: AuditContext
     ): Promise<SmtpConfig>;
     getActive(t: TransactionTask): Promise<SmtpConfig>;
     update(
         t: TransactionTask,
         configId: string,
         data: Partial<SmtpConfig>,
-        actingUserId: string
+        actingUserId: string,
+        auditCtx?: AuditContext
     ): Promise<SmtpConfig>;
-    delete(t: TransactionTask, configId: string, actingUserId: string): Promise<void>;
+    delete(t: TransactionTask, configId: string, actingUserId: string, auditCtx?: AuditContext): Promise<void>;
 }
 export function validateSmtpConfig(config: Partial<SmtpConfig>): SmtpValidationError[] {
     const errors: SmtpValidationError[] = [];
@@ -110,7 +112,8 @@ export class SmtpConfigService implements ISmtpConfigService {
     async create(
         t: TransactionTask,
         data: SmtpConfigCreate,
-        actingUserId: string
+        actingUserId: string,
+        auditCtx?: AuditContext
     ): Promise<SmtpConfig> {
         const errors = validateSmtpConfig(data);
         if (errors.length > 0) {
@@ -126,8 +129,10 @@ export class SmtpConfigService implements ISmtpConfigService {
             module_code: MODULE_CODE,
             entity_type: 'smtp_config',
             entity_id: config.id,
-            old_values: {},  // No old values for create
-            new_values: { smtp_config_id: config.id, host: config.host, port: config.port, encryption: config.encryption, from_email: config.from_email, reply_to_email: config.reply_to_email, is_active: config.is_active } as Record<string, unknown>,
+            old_values: {},
+            new_values: { ...data } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
         return config;
@@ -137,7 +142,8 @@ export class SmtpConfigService implements ISmtpConfigService {
         t: TransactionTask,
         configId: string,
         data: SmtpConfigUpdate,
-        actingUserId: string
+        actingUserId: string,
+        auditCtx?: AuditContext
     ): Promise<SmtpConfig> {
         const existing = await this.smtpConfigRepository.findById(t, configId);
         if (!existing) {
@@ -163,14 +169,16 @@ export class SmtpConfigService implements ISmtpConfigService {
             module_code: MODULE_CODE,
             entity_type: 'smtp_config',
             entity_id: configId,
-            old_values: { smtp_config_id: existing.id, host: existing.host, port: existing.port, encryption: existing.encryption, from_email: existing.from_email, reply_to_email: existing.reply_to_email, is_active: existing.is_active } as Record<string, unknown>,
-            new_values: { smtp_config_id: updatedConfig.id, host: updatedConfig.host, port: updatedConfig.port, encryption: updatedConfig.encryption, from_email: updatedConfig.from_email, reply_to_email: updatedConfig.reply_to_email, is_active: updatedConfig.is_active } as Record<string, unknown>,
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { ...updatedConfig } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
         return updatedConfig;
     }
 
-    async delete(t: TransactionTask, configId: string, actingUserId: string): Promise<void> {
+    async delete(t: TransactionTask, configId: string, actingUserId: string, auditCtx?: AuditContext): Promise<void> {
         const existing = await this.smtpConfigRepository.findById(t, configId);
         if (!existing) {
             throw new RBACInternalError(`SMTP config not found: ${configId}`);
@@ -183,8 +191,10 @@ export class SmtpConfigService implements ISmtpConfigService {
             module_code: MODULE_CODE,
             entity_type: 'smtp_config',
             entity_id: configId,
-            old_values: { smtp_config_id: existing.id, host: existing.host, port: existing.port, encryption: existing.encryption, from_email: existing.from_email, reply_to_email: existing.reply_to_email, is_active: existing.is_active } as Record<string, unknown>,
-            new_values: { smtp_config_id: existing.id, host: existing.host, port: existing.port, encryption: existing.encryption, from_email: existing.from_email, reply_to_email: existing.reply_to_email, is_active: false } as Record<string, unknown>,
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { deleted: true, user_id: actingUserId } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
     }

@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { IDatabase } from 'pg-promise';
 import { createAuthenticateMiddleware } from '../middleware/authenticate.middleware';
+import { injectAuditContext } from '../middleware/injectAuditContext.middleware';
 import { AuthSessionService } from '../services/authSession.service';
 import { AuditService } from '../services/audit.service';
 import { EvaluationService } from '../services/evaluation.service';
@@ -96,6 +97,9 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
 
     // Apply authentication to ALL /rbac/* routes
     router.use(authenticate);
+
+    // Inject audit context (IP, user-agent, request ID, etc.) for audit logging
+    router.use(injectAuditContext());
 
     // ============================
     // Routes

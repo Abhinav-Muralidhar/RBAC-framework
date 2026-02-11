@@ -71,20 +71,20 @@ export interface IAuthSessionService {
      * Logout session (sets logout_at)
      * @throws SessionNotFoundError
      */
-    logout(t: TransactionTask, sessionId: string): Promise<void>;
+    logout(t: TransactionTask, sessionId: string, auditCtx?: AuditContext): Promise<void>;
 
     /**
      * Revoke session (immediate invalidation)
      * @throws SessionNotFoundError
      */
-    revoke(t: TransactionTask, sessionId: string, actingUserId: string): Promise<void>;
+    revoke(t: TransactionTask, sessionId: string, actingUserId: string, auditCtx?: AuditContext): Promise<void>;
 
-    revokeOneForUser(t: TransactionTask, sessionId: string, userId: string, actingUserId: string): Promise<void>;
+    revokeOneForUser(t: TransactionTask, sessionId: string, userId: string, actingUserId: string, auditCtx?: AuditContext): Promise<void>;
 
     /**
      * Revoke all sessions for a user
      */
-    revokeAllByUser(t: TransactionTask, userId: string, actingUserId: string): Promise<void>;
+    revokeAllByUser(t: TransactionTask, userId: string, actingUserId: string, auditCtx?: AuditContext): Promise<void>;
 
     /**
      * Cleanup expired sessions
@@ -128,7 +128,7 @@ export class AuthSessionService implements IAuthSessionService {
         return this.authSessionsRepository.findAll(t, filters, pagination);
     }
 
-    async revokeOneForUser(t: TransactionTask, sessionId: string, userId: string, actingUserId: string): Promise<void> {
+    async revokeOneForUser(t: TransactionTask, sessionId: string, userId: string, actingUserId: string, auditCtx?: AuditContext): Promise<void> {
         const session = await this.getById(t, sessionId);
         if (!session) {
             throw new SessionNotFoundError(sessionId);
@@ -140,16 +140,10 @@ export class AuthSessionService implements IAuthSessionService {
             module_code: MODULE_CODE,
             entity_type: 'session',
             entity_id: session.id,
-            old_values: {
-                ip_address: session.ip_address,
-                user_agent: session.user_agent,
-                login_at: session.login_at
-            },
-            new_values: {
-                logout_at: new Date().toISOString()
-            },
-            ip_address: session.ip_address,
-            user_agent: session.user_agent,
+            old_values: { ...session } as Record<string, unknown>,
+            new_values: { delete: true, actingUserId: actingUserId } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address ?? session.ip_address,
+            user_agent: auditCtx?.user_agent ?? session.user_agent,
             status: 'success'
         })
 
@@ -196,11 +190,7 @@ export class AuthSessionService implements IAuthSessionService {
             entity_type: 'session',
             entity_id: session.id,
             old_values: null,
-            new_values: {
-                ip_address: data.ip_address,
-                user_agent: data.user_agent,
-                login_at: now.toISOString()
-            },
+            new_values: { ...data, login_at: now.toISOString() } as Record<string, unknown>,
             ip_address: data.ip_address,
             user_agent: data.user_agent,
             status: 'success'
@@ -225,7 +215,7 @@ export class AuthSessionService implements IAuthSessionService {
         return this.authSessionsRepository.update(t, sessionId, updated);
     }
 
-    async logout(t: TransactionTask, sessionId: string): Promise<void> {
+    async logout(t: TransactionTask, sessionId: string, auditCtx?: AuditContext): Promise<void> {
         // Verify session exists
         const existing = await this.getById(t, sessionId);
         const updated: AuthSessions = {
@@ -247,13 +237,15 @@ export class AuthSessionService implements IAuthSessionService {
             action: 'update',
             entity_type: 'session',
             entity_id: sessionId,
-            old_values: { logout_at: null },
-            new_values: { logout_at: new Date().toISOString() },
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { delete: true } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
     }
 
-    async revoke(t: TransactionTask, sessionId: string, actingUserId: string): Promise<void> {
+    async revoke(t: TransactionTask, sessionId: string, actingUserId: string, auditCtx?: AuditContext): Promise<void> {
         const session = await this.getById(t, sessionId);
         if (!session) {
             throw new SessionNotFoundError(sessionId);
@@ -268,12 +260,14 @@ export class AuthSessionService implements IAuthSessionService {
             entity_type: 'session',
             entity_id: sessionId,
             old_values: { ...session } as Record<string, unknown>,
-            new_values: { revoked: true, revoked_by: actingUserId },
+            new_values: { revoked: true, revoked_by: actingUserId } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
     }
 
-    async revokeAllByUser(t: TransactionTask, userId: string, actingUserId: string): Promise<void> {
+    async revokeAllByUser(t: TransactionTask, userId: string, actingUserId: string, auditCtx?: AuditContext): Promise<void> {
         // Get session count for audit
         const sessions = await this.authSessionsRepository.findAllByUser(t, userId);
         const sessionCount = sessions.data.length;
@@ -287,8 +281,10 @@ export class AuthSessionService implements IAuthSessionService {
             action: 'delete',
             entity_type: 'sessions_bulk',
             entity_id: userId,
-            old_values: { session_count: sessionCount },
-            new_values: { revoked_all: true, target_user_id: userId },
+            old_values: { session_count: sessionCount } as Record<string, unknown>,
+            new_values: { revoked_all: true, target_user_id: userId } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
     }
@@ -319,7 +315,6 @@ export class AuthSessionService implements IAuthSessionService {
      */
     async resolveSession(t: TransactionTask | undefined, sessionToken: string): Promise<AuthSessions> {
         const session = await this.authSessionsRepository.findBySessionToken(t, sessionToken);
-        console.log('LOOKUP TOKEN:', sessionToken);
 
         if (!session) {
             throw new RBACInternalError(`Session not found for token`);

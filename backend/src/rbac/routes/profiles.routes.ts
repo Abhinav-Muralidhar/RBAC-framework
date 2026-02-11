@@ -96,7 +96,7 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
             const result = await withTransaction(async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
-                const profile = await profileService.create(t, actingUserId, req.body);
+                const profile = await profileService.create(t, actingUserId, req.body, req.auditContext);
                 return profile;
             });
             sendSuccess(res, result);
@@ -115,7 +115,7 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
 
                 const actingUserId = req.user!.id;
                 const profileId = parseId(req.params.id, 'profileId');
-                const profile = await profileService.update(t, actingUserId, profileId, req.body);
+                const profile = await profileService.update(t, actingUserId, profileId, req.body, req.auditContext);
                 return profile;
             });
             sendSuccess(res, result);
@@ -134,7 +134,7 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
 
                 const actingUserId = req.user!.id;
                 const profileId = parseId(req.params.id, 'profileId');
-                await profileService.delete(t, actingUserId, profileId);
+                await profileService.delete(t, actingUserId, profileId, req.auditContext);
                 return { message: 'Profile deleted successfully' };
             });
             sendSuccess(res, result);

@@ -22,13 +22,13 @@ const MODULE_CODE = 'SETTINGS';
 
 export interface IUserService {
     listPaginated(t: TransactionTask, actingUserId: string, filters?: UserListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Users>>;
-    create(t: TransactionTask, actingUserId: string, data: CreateUserRequestDto): Promise<Users>;
-    update(t: TransactionTask, actingUserId: string, id: string, data: UpdateUserRequestDto): Promise<Users>;
-    delete(t: TransactionTask, actingUserId: string, id: string): Promise<void>;
+    create(t: TransactionTask, actingUserId: string, data: CreateUserRequestDto, auditCtx?: AuditContext): Promise<Users>;
+    update(t: TransactionTask, actingUserId: string, id: string, data: UpdateUserRequestDto, auditCtx?: AuditContext): Promise<Users>;
+    delete(t: TransactionTask, actingUserId: string, id: string, auditCtx?: AuditContext): Promise<void>;
     getById(t: TransactionTask, actingUserId: string, id: string): Promise<UserDetail | null>;
     findByUsername(t: TransactionTask, username: string): Promise<Users | null>;
     findByEmail(t: TransactionTask, email: string): Promise<Users | null>;
-    updatePassword(t: TransactionTask, userId: string, newHashedPassword: string): Promise<void>;
+    updatePassword(t: TransactionTask, userId: string, newHashedPassword: string, auditCtx?: AuditContext): Promise<void>;
 }
 
 export class UserService implements IUserService {
@@ -61,7 +61,7 @@ export class UserService implements IUserService {
         return this.userRepository.findByIdWithDetails(t, id);
     }
 
-    async create(t: TransactionTask, actingUserId: string, data: CreateUserRequestDto): Promise<Users> {
+    async create(t: TransactionTask, actingUserId: string, data: CreateUserRequestDto, auditCtx?: AuditContext): Promise<Users> {
         if (data.password) {
             validatePassword(data.password);
             data.password = await hashPassword(data.password);
@@ -86,7 +86,9 @@ export class UserService implements IUserService {
             entity_type: 'user',
             entity_id: user.id,
             old_values: null,
-            new_values: { user_id: user.id, username: user.username, primary_email: user.primary_email, last_name: user.last_name, password: '[REDACTED]' },
+            new_values: { ...data, password: '[PASSWORD]' } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
 
@@ -97,7 +99,8 @@ export class UserService implements IUserService {
         t: TransactionTask,
         actingUserId: string,
         id: string,
-        data: UpdateUserRequestDto
+        data: UpdateUserRequestDto,
+        auditCtx?: AuditContext
     ): Promise<Users> {
         const oldUser = await this.userRepository.findById(t, id);
         if (!oldUser) throw new Error('User not found');
@@ -138,8 +141,10 @@ export class UserService implements IUserService {
             module_code: MODULE_CODE,
             entity_type: 'user',
             entity_id: id,
-            old_values: { user_id: oldUser.id, username: oldUser.username, primary_email: oldUser.primary_email, last_name: oldUser.last_name, password: '[REDACTED]' },
-            new_values: { user_id: updatedUser.id, username: updatedUser.username, primary_email: updatedUser.primary_email, last_name: updatedUser.last_name, password: updatedUser.password ? '[REDACTED]' : undefined },
+            old_values: { ...oldUser, password: '[PASSWORD]' } as Record<string, unknown>,
+            new_values: { ...updatedUser, password: '[PASSWORD]' } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
 
@@ -147,7 +152,7 @@ export class UserService implements IUserService {
     }
 
 
-    async delete(t: TransactionTask, actingUserId: string, id: string): Promise<void> {
+    async delete(t: TransactionTask, actingUserId: string, id: string, auditCtx?: AuditContext): Promise<void> {
         const oldUser = await this.userRepository.findById(t, id);
 
         await this.userRepository.delete(t, id);
@@ -158,13 +163,15 @@ export class UserService implements IUserService {
             module_code: MODULE_CODE,
             entity_type: 'user',
             entity_id: id,
-            old_values: oldUser ? { user_id: oldUser.id, username: oldUser.username, primary_email: oldUser.primary_email, last_name: oldUser.last_name, password: '[REDACTED]' } : null,
-            new_values: oldUser ? { user_id: oldUser.id, username: oldUser.username, primary_email: oldUser.primary_email, last_name: oldUser.last_name, password: '[REDACTED]' } : {},
+            old_values: oldUser ? { ...oldUser, password: '[PASSWORD]' } as Record<string, unknown> : null,
+            new_values: oldUser ? { delete: true, actingUserId: actingUserId } as Record<string, unknown> : {},
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
     }
 
-    async deactivate(t: TransactionTask, actingUserId: string, id: string): Promise<void> {
+    async deactivate(t: TransactionTask, actingUserId: string, id: string, auditCtx?: AuditContext): Promise<void> {
         const oldUser = await this.userRepository.findById(t, id);
 
         await this.userRepository.deactivate(t, id);
@@ -175,8 +182,10 @@ export class UserService implements IUserService {
             module_code: MODULE_CODE,
             entity_type: 'user',
             entity_id: id,
-            old_values: oldUser ? { user_id: oldUser.id, username: oldUser.username, primary_email: oldUser.primary_email, last_name: oldUser.last_name, password: '[REDACTED]' } : null,
-            new_values: oldUser ? { user_id: oldUser.id, username: oldUser.username, primary_email: oldUser.primary_email, last_name: oldUser.last_name, password: '[REDACTED]' } : {},
+            old_values: oldUser ? { ...oldUser, password: '[PASSWORD]' } as Record<string, unknown> : null,
+            new_values: oldUser ? { delete: true, actingUserId: actingUserId } as Record<string, unknown> : {},
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
     }
@@ -184,7 +193,8 @@ export class UserService implements IUserService {
     async updatePassword(
         t: TransactionTask,
         userId: string,
-        newHashedPassword: string
+        newHashedPassword: string,
+        auditCtx?: AuditContext
     ): Promise<void> {
 
         const oldUser = await this.userRepository.findById(t, userId);
@@ -207,6 +217,8 @@ export class UserService implements IUserService {
             entity_id: userId,
             old_values: { password: '[REDACTED]' },
             new_values: { password: '[REDACTED]' },
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         });
     }

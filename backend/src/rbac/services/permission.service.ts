@@ -47,8 +47,8 @@ export interface IPermissionService {
     getProfilePermissions(t: TransactionTask, actingUserId: string, profileId: string): Promise<Array<{ permission: Permissions; effect: PermissionEffect }>>;
 
     // Role-Profile assignments (links between roles and profiles)
-    assignProfilesToRole(t: TransactionTask, actingUserId: string, profileIds: string[], roleId: string): Promise<void>;
-    revokeProfileFromRole(t: TransactionTask, actingUserId: string, profileId: string, roleId: string): Promise<void>;
+    assignProfilesToRole(t: TransactionTask, actingUserId: string, profileIds: string[], roleId: string, auditCtx?: AuditContext): Promise<void>;
+    revokeProfileFromRole(t: TransactionTask, actingUserId: string, profileId: string, roleId: string, auditCtx?: AuditContext): Promise<void>;
     getRoleProfiles(t: TransactionTask, actingUserId: string, roleId: string): Promise<Profiles[]>;
 }
 
@@ -192,7 +192,8 @@ export class PermissionService implements IPermissionService {
         t: TransactionTask,
         actingUserId: string,
         profileIds: string[],
-        roleId: string
+        roleId: string,
+        auditCtx?: AuditContext
     ): Promise<void> {
 
         //throw error if role doesnt exist
@@ -217,6 +218,8 @@ export class PermissionService implements IPermissionService {
             entity_id: `${roleId}:${profileIds.join(',')}`,
             old_values: null,
             new_values: { role_id: roleId, profile_ids: profileIds, effect: 'allow' },
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
     }
@@ -225,7 +228,8 @@ export class PermissionService implements IPermissionService {
         t: TransactionTask,
         actingUserId: string,
         profileId: string,
-        roleId: string
+        roleId: string,
+        auditCtx?: AuditContext
     ): Promise<void> {
 
         const profile = await this.profilesRepository.findById(t, profileId);
@@ -248,6 +252,8 @@ export class PermissionService implements IPermissionService {
             entity_id: `${roleId}:${profileId}`,
             old_values: { role_id: roleId, profile_id: profileId },
             new_values: {},
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         });
     }

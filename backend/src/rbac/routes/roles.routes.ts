@@ -109,7 +109,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
             const result = await withTransaction(async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
-                const role = await roleService.createRoleProfiles(t, actingUserId, req.body);
+                const role = await roleService.createRoleProfiles(t, actingUserId, req.body, req.auditContext);
                 return role;
             });
             sendSuccess(res, result);
@@ -128,7 +128,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
 
                 const actingUserId = req.user!.id;
                 const roleId = parseId(req.params.id, 'roleId');
-                const role = await roleService.updateRoleProfiles(t, actingUserId, roleId, req.body);
+                const role = await roleService.updateRoleProfiles(t, actingUserId, roleId, req.body, req.auditContext);
                 return role;
             });
             sendSuccess(res, result);
@@ -145,7 +145,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
         try {
             await withTransaction(async (t: TransactionTask) => {
                 const roleId = parseId(req.params.id, 'roleId');
-                await roleService.delete(t, req.user!.id, roleId);
+                await roleService.delete(t, req.user!.id, roleId, req.auditContext);
             });
             sendSuccess(res, { message: 'Role deleted successfully' });
         } catch (err: any) {
@@ -167,7 +167,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
                 const actingUserId = req.user!.id;
                 const roleId = parseId(req.params.id, 'roleId');
                 const { profile_ids } = req.body;
-                await roleService.updateRoleProfiles(t, actingUserId, roleId, profile_ids ?? []);
+                await roleService.updateRoleProfiles(t, actingUserId, roleId, profile_ids ?? [], req.auditContext);
                 return { message: 'Role profiles updated successfully' };
             });
             sendSuccess(res, result);
