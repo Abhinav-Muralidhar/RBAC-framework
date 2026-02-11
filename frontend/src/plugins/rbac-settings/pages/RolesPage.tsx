@@ -7,6 +7,7 @@ import {
 import { rolesApi } from '../../../core/api/rbac.api';
 import type { Role, RoleNode } from '../../../core/types/role.types';
 import { usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
+import { useToast } from '../../../core/contexts/ToastContext';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { FormModal } from '../../../core/components/FormModal';
 import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
@@ -125,6 +126,7 @@ const RoleTreeNode = ({
 };
 
 export function RolesPage() {
+    const toast = useToast();
     // --------------------- Tree State ---------------------
     const [viewMode, setViewMode] = useState<'table' | 'tree'>('tree');
     const [roleTree, setRoleTree] = useState<RoleNode[]>([]);
@@ -187,6 +189,7 @@ export function RolesPage() {
             reloadTable();
             loadTree();
         },
+        toast,
     });
 
     const [showFilterModal, setShowFilterModal] = useState(false);
@@ -407,7 +410,7 @@ export function RolesPage() {
                     // IMPORTANT: You must update RoleForm to accept 'initialParentId'
                     initialParentId={createParentId}
                     onSuccess={handleFormSuccess}
-                    onError={(err) => console.error(err)}
+                    onError={(err) => toast.error(err)}
                     setLoading={() => { }}
                 />
             </FormModal>

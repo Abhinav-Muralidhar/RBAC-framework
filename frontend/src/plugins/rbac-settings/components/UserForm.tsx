@@ -14,7 +14,9 @@ import {
     validateEmail,
     validatePassword,
     validateRequired,
-    validateUsername
+    validateUsername,
+    scrollToFirstError,
+    parseApiError
 } from '../../../core/utils';
 
 interface UserFormProps {
@@ -194,7 +196,10 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
     // ---------------- SUBMIT ----------------
 
     const handleSubmit = async () => {
-        if (!validate()) return;
+        if (!validate()) {
+            scrollToFirstError();
+            return;
+        }
 
         setLoading(true);
 
@@ -232,7 +237,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
 
             onSuccess();
         } catch (err) {
-            onError(err instanceof Error ? err.message : 'Failed to save user');
+            onError(parseApiError(err instanceof Error ? err.message : 'Failed to save user'));
         } finally {
             setLoading(false);
         }

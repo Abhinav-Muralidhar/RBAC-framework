@@ -61,3 +61,39 @@
     color: #94a3b8;
     font-size: 0.875rem;
 }
+
+/* Searchable checkbox list wrapper */
+.searchable-list-input {
+    position: relative;
+    margin-bottom: 0.5rem;
+}
+
+.searchable-list-icon {
+    position: absolute;
+    left: 0.625rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    pointer-events: none;
+}
+
+.searchable-list-search {
+    width: 100%;
+    padding: 0.5rem 0.75rem 0.5rem 2rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+    background: #fff;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    box-sizing: border-box;
+}
+
+.searchable-list-search:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.searchable-list-search::placeholder {
+    color: #94a3b8;
+}

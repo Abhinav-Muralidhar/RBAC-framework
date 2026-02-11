@@ -9,6 +9,7 @@ import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import { groupsApi } from '../../../core/api/rbac.api';
 import type { Group } from '../../../core/types/group.types';
 import { usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
+import { useToast } from '../../../core/contexts/ToastContext';
 import { FormModal } from '../../../core/components/FormModal';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
@@ -16,6 +17,7 @@ import { GroupForm, submitGroupForm } from '../components';
 import './SettingsPage.css';
 
 export function GroupsPage() {
+    const toast = useToast();
     const {
         data: groups,
         isLoading,
@@ -50,6 +52,7 @@ export function GroupsPage() {
         getByIdFn: groupsApi.getById,
         entityName: 'groups',
         onSuccess: reload,
+        toast,
     });
 
     const [showFilterModal, setShowFilterModal] = useState(false);
@@ -183,7 +186,7 @@ export function GroupsPage() {
                 <GroupForm
                     group={editingItem}
                     onSuccess={handleFormSuccess}
-                    onError={(err) => console.error(err)}
+                    onError={(err) => toast.error(err)}
                     setLoading={() => { }}
                 />
             </FormModal>

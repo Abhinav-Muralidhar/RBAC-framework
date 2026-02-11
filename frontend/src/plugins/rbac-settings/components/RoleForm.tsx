@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Search } from 'lucide-react';
 import { FormInput, FormSwitch } from '../../../core/components/FormElements';
 import type { Role, CreateRoleDto, UpdateRoleDto } from '../../../core/types/role.types';
 import type { Profile } from '../../../core/types/profile.types';
 import { rolesApi, profilesApi } from '../../../core/api/rbac.api';
-import { validateRequired, validateCode } from '../../../core/utils';
+import { validateRequired, validateCode, scrollToFirstError, parseApiError } from '../../../core/utils';
 
 interface RoleFormProps {
     role?: Role | null;
@@ -42,8 +43,13 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
     const [isSearching, setIsSearching] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
 
+    // Profile search state
+    const [profileSearch, setProfileSearch] = useState('');
+    const [profileSearchLoading, setProfileSearchLoading] = useState(false);
+    const profileSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     useEffect(() => {
-        loadProfiles();
+        loadProfiles('');
         loadRoles(''); // Load roles immediately so we can resolve the initialParentId name
     }, []);
 
@@ -72,12 +78,27 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
     }, [role, initialParentId]);
 
 
-    const loadProfiles = async () => {
+    // Debounced profile search
+    useEffect(() => {
+        if (profileSearchTimer.current) clearTimeout(profileSearchTimer.current);
+        profileSearchTimer.current = setTimeout(() => {
+            loadProfiles(profileSearch);
+        }, 300);
+        return () => {
+            if (profileSearchTimer.current) clearTimeout(profileSearchTimer.current);
+        };
+    }, [profileSearch]);
+
+
+    const loadProfiles = async (searchQuery: string) => {
+        setProfileSearchLoading(true);
         try {
-            const response = await profilesApi.list({ limit: 100 });
+            const response = await profilesApi.list({ limit: 100, search: searchQuery || undefined });
             setAvailableProfiles(response.data);
         } catch (err) {
             console.error('Failed to load profiles', err);
+        } finally {
+            setProfileSearchLoading(false);
         }
     };
 
@@ -193,7 +214,10 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
     // ---------------- SUBMIT ----------------
 
     const handleSubmit = async () => {
-        if (!validate()) return;
+        if (!validate()) {
+            scrollToFirstError();
+            return;
+        }
 
         setLoading(true);
 
@@ -223,7 +247,7 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
 
             onSuccess();
         } catch (err) {
-            onError(err instanceof Error ? err.message : 'Failed to save role');
+            onError(parseApiError(err instanceof Error ? err.message : 'Failed to save role'));
         } finally {
             setLoading(false);
         }
@@ -339,24 +363,41 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
             </div>
 
 
-            {/* Profiles selection */}
+            {/* Profiles selection with search */}
             <div className="form-field">
                 <label className="form-label">Assign Profiles</label>
-
+                <div className="searchable-list-input">
+                    <Search size={14} className="searchable-list-icon" />
+                    <input
+                        type="text"
+                        placeholder="Search profiles…"
+                        value={profileSearch}
+                        onChange={e => setProfileSearch(e.target.value)}
+                        className="searchable-list-search"
+                    />
+                </div>
                 <div className="checkbox-group">
-                    {availableProfiles.map(profile => (
-                        <label key={profile.id} className="checkbox-item">
-                            <input
-                                type="checkbox"
-                                checked={selectedProfiles.includes(profile.id)}
-                                onChange={() => toggleProfile(profile.id)}
-                            />
-                            <span>{profile.name}</span>
-                        </label>
-                    ))}
+                    {profileSearchLoading ? (
+                        <span className="text-muted">Searching…</span>
+                    ) : (
+                        <>
+                            {availableProfiles.map(profile => (
+                                <label key={profile.id} className="checkbox-item">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedProfiles.includes(profile.id)}
+                                        onChange={() => toggleProfile(profile.id)}
+                                    />
+                                    <span>{profile.name}</span>
+                                </label>
+                            ))}
 
-                    {availableProfiles.length === 0 && (
-                        <span className="text-muted">No profiles available</span>
+                            {availableProfiles.length === 0 && (
+                                <span className="text-muted">
+                                    {profileSearch ? 'No profiles match your search' : 'No profiles available'}
+                                </span>
+                            )}
+                        </>
                     )}
                 </div>
             </div>

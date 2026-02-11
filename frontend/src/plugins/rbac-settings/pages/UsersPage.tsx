@@ -9,6 +9,7 @@ import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import { usersApi } from '../../../core/api/rbac.api';
 import type { User } from '../../../core/types/user.types';
 import { usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
+import { useToast } from '../../../core/contexts/ToastContext';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { FormModal } from '../../../core/components/FormModal';
 import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
@@ -16,6 +17,7 @@ import { UserForm, submitUserForm } from '../components';
 import './SettingsPage.css';
 
 export function UsersPage() {
+    const toast = useToast();
     const {
         data: users,
         isLoading,
@@ -50,6 +52,7 @@ export function UsersPage() {
         getByIdFn: usersApi.getById,
         entityName: 'users',
         onSuccess: reload,
+        toast,
     });
 
     const [showFilterModal, setShowFilterModal] = useState(false);
@@ -211,7 +214,7 @@ export function UsersPage() {
                 <UserForm
                     user={editingItem}
                     onSuccess={handleFormSuccess}
-                    onError={console.error}
+                    onError={(err) => toast.error(err)}
                     setLoading={() => { }}
                 />
             </FormModal>

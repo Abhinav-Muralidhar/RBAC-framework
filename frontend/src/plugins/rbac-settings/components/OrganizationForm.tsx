@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 import { FormInput, FormSelect } from '../../../core/components/FormElements';
 import type { OrganizationResponseDto } from '../../../core/types/organization.types';
 import { organizationApi } from '../../../core/api/rbac.api';
-import { validateRequired } from '../../../core/utils';
+import { validateRequired, scrollToFirstError, parseApiError } from '../../../core/utils';
 
 interface OrganizationFormProps {
     organization?: OrganizationResponseDto | null;
@@ -91,7 +91,10 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
     // ---------------- SUBMIT ----------------
 
     const handleSubmit = async () => {
-        if (!validate()) return;
+        if (!validate()) {
+            scrollToFirstError();
+            return;
+        }
 
         setLoading(true);
 
@@ -117,13 +120,15 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
                 is_active: formData.is_active,
             };
 
+            let result;
+
             if (isEditing && organization) {
-                await organizationApi.update(organization.id, payload);
+                result = await organizationApi.update(organization.id, payload);
             }
 
-            onSuccess(organization);
+            onSuccess(result);
         } catch (err) {
-            onError(err instanceof Error ? err.message : 'Failed to save organization');
+            onError(parseApiError(err instanceof Error ? err.message : 'Failed to save organization'));
         } finally {
             setLoading(false);
         }

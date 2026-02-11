@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { Shield, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../core/contexts/AuthContext';
 import { authApi } from '../core/api/rbac.api';
+import { parseApiError } from '../core/utils';
 import { ROUTES } from '../routes/routes';
 import './LoginPage.css';
 
@@ -19,6 +20,7 @@ export function LoginPage() {
     const [view, setView] = useState<AuthView>('login');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [loginShake, setLoginShake] = useState(false);
 
     // Login
     const [username, setUsername] = useState('');
@@ -41,12 +43,16 @@ export function LoginPage() {
     const handleLogin = async (e: FormEvent) => {
         e.preventDefault();
         setError('');
+        setLoginShake(false);
         setIsLoading(true);
         try {
             await login(username, password);
             navigate(ROUTES.DASHBOARD, { replace: true });
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Login failed');
+            const msg = parseApiError(err instanceof Error ? err.message : 'Login failed');
+            setError(msg);
+            setLoginShake(true);
+            setTimeout(() => setLoginShake(false), 600);
         } finally {
             setIsLoading(false);
         }
@@ -102,7 +108,7 @@ export function LoginPage() {
 
     return (
         <div className="login-page">
-            <div className="login-card">
+            <div className={`login-card${loginShake ? ' login-shake' : ''}`}>
                 <div className="login-header">
                     <Shield size={48} className="login-logo" />
                     <h1>RBAC Framework</h1>
@@ -126,12 +132,23 @@ export function LoginPage() {
                     <form onSubmit={handleLogin} className="login-form">
                         <div className="form-group">
                             <label>Username</label>
-                            <input value={username} onChange={e => setUsername(e.target.value)} required />
+                            <input
+                                className={error && view === 'login' ? 'input-error' : ''}
+                                value={username}
+                                onChange={e => { setUsername(e.target.value); setError(''); }}
+                                required
+                            />
                         </div>
 
                         <div className="form-group">
                             <label>Password</label>
-                            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+                            <input
+                                type="password"
+                                className={error && view === 'login' ? 'input-error' : ''}
+                                value={password}
+                                onChange={e => { setPassword(e.target.value); setError(''); }}
+                                required
+                            />
                         </div>
 
                         <button
