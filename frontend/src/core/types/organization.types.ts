@@ -108,3 +108,25 @@ export interface OrganizationListFilterDto {
     state?: string;
     city?: string;
 }
+
+/**
+ * Public branding DTO (no auth required)
+ * Used by login page, sidebar, etc.
+ */
+export interface OrganizationBrandingDto {
+    company_name: string;
+    company_logo: string | null;
+    address: string;
+    city: string;
+    state: string;
+    postal_code: string;
+    country: string;
+    country_code: string;
+    phone: string | null;
+    fax: string | null;
+    website: string | null;
+    facebook: string | null;
+    twitter: string | null;
+    linkedin: string | null;
+    gstin: string;
+}

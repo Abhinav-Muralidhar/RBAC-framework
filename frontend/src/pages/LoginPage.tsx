@@ -6,10 +6,13 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../core/contexts/AuthContext';
-import { authApi } from '../core/api/rbac.api';
+import { authApi, organizationApi } from '../core/api/rbac.api';
+import type { OrganizationBrandingDto } from '../core/types/organization.types';
 import { parseApiError } from '../core/utils';
 import { ROUTES } from '../routes/routes';
 import './LoginPage.css';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 type AuthView = 'login' | 'forgot-email' | 'forgot-otp' | 'forgot-reset';
 
@@ -21,6 +24,7 @@ export function LoginPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [loginShake, setLoginShake] = useState(false);
+    const [branding, setBranding] = useState<OrganizationBrandingDto | null>(null);
 
     // Login
     const [username, setUsername] = useState('');
@@ -37,6 +41,14 @@ export function LoginPage() {
             navigate(ROUTES.DASHBOARD, { replace: true });
         }
     }, [authLoading, isAuthenticated, navigate]);
+
+    useEffect(() => {
+        organizationApi.getBranding().then(setBranding).catch(() => { });
+    }, []);
+
+    const logoUrl = branding?.company_logo
+        ? `${API_BASE_URL}/${branding.company_logo}`
+        : null;
 
     if (authLoading || isAuthenticated) return null;
 
@@ -110,8 +122,12 @@ export function LoginPage() {
         <div className="login-page">
             <div className={`login-card${loginShake ? ' login-shake' : ''}`}>
                 <div className="login-header">
-                    <Shield size={48} className="login-logo" />
-                    <h1>RBAC Framework</h1>
+                    {logoUrl ? (
+                        <img src={logoUrl} alt="Logo" className="login-logo" style={{ width: 48, height: 48, objectFit: 'contain' }} />
+                    ) : (
+                        <Shield size={48} className="login-logo" />
+                    )}
+                    <h1>{branding?.company_name || 'RBAC Framework'}</h1>
                     <p>
                         {view === 'login' && 'Sign in to your account'}
                         {view === 'forgot-email' && 'Reset your password'}

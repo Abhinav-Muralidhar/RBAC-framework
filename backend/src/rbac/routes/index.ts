@@ -129,6 +129,8 @@ import { OtpTokenRepository } from '../repositories/otp_token.repository';
 import { createSharingRulesRouter } from './sharingrules.routes';
 import { SharingRuleService } from '../services/sharingRule.service';
 import { SharingRulesRepository } from '../repositories/sharing_rules.repository';
+import { withTransaction } from '../utils/transaction.utils';
+import type { TransactionTask } from '../utils/transaction.utils';
 
 export function createPublicAuthRouter(db: IDatabase<unknown>): Router {
     const router = Router();
@@ -154,6 +156,8 @@ export function createPublicAuthRouter(db: IDatabase<unknown>): Router {
 
     const otpService = new OtpService(otpTokenRepository);
     const smtpConfigService = new SmtpConfigService(smtpConfigRepository, auditService);
+    const organizationRepository = new OrganizationRepository(db);
+    const organizationService = new OrganizationService(organizationRepository, auditService);
 
     // mount otp
     router.use(
@@ -167,6 +171,41 @@ export function createPublicAuthRouter(db: IDatabase<unknown>): Router {
             smtpConfigService
         )
     );
+
+    /**
+     * GET /public/organization/branding
+     * Public endpoint — no auth required.
+     * Returns non-sensitive organization details for UI rendering.
+     */
+    router.get('/organization/branding', async (req, res, next) => {
+        try {
+            const result = await withTransaction(async (t: TransactionTask) => {
+                const orgs = await organizationService.getOrganizations(t, { is_active: true }, { page: 1, limit: 1 });
+                if (!orgs.data.length) return null;
+                const org = orgs.data[0]!;
+                return {
+                    company_name: org.company_name,
+                    company_logo: org.company_logo || null,
+                    address: org.address,
+                    city: org.city,
+                    state: org.state,
+                    postal_code: org.postal_code,
+                    country: org.country,
+                    country_code: org.country_code,
+                    phone: org.phone || null,
+                    fax: org.fax || null,
+                    website: org.website || null,
+                    facebook: org.facebook || null,
+                    twitter: org.twitter || null,
+                    linkedin: org.linkedin || null,
+                    gstin: org.gstin,
+                };
+            });
+            res.json({ data: result, error: null, meta: {} });
+        } catch (error) {
+            next(error);
+        }
+    });
 
     return router;
 }

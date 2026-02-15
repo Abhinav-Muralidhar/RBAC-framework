@@ -11,7 +11,7 @@ import type { Profile, CreateProfileDto, UpdateProfileDto, Permission } from '..
 import type { Group, CreateGroupDto, UpdateGroupDto } from '../types/group.types';
 import type { AuditLog } from '../types/audit.types';
 import type { Session } from '../types/session.types';
-import type { Organization, UpdateOrganizationDto } from '../types/organization.types';
+import type { Organization, UpdateOrganizationDto, OrganizationBrandingDto } from '../types/organization.types';
 import type { SharingRule, CreateSharingRuleDto, UpdateSharingRuleDto } from '../types/sharingrule.types';
 
 export interface PaginationParams {
@@ -287,7 +287,7 @@ export const authApi = {
 
 export const organizationApi = {
     /**
-     * Get organization details 
+     * Get organization details (requires auth)
      */
     get: async (): Promise<Organization> => {
         const response = await get<ApiResponse<Organization>>('/rbac/organizations');
@@ -295,13 +295,41 @@ export const organizationApi = {
     },
 
     /**
-     * Update organization details
-     * (read/update only – no create/delete)
+     * Get public branding info (no auth required)
+     * Used by login page, sidebar, and anywhere org name/logo is needed.
+     */
+    getBranding: async (): Promise<OrganizationBrandingDto | null> => {
+        const response = await get<ApiResponse<OrganizationBrandingDto | null>>('/public/organization/branding');
+        return response.data;
+    },
+
+    /**
+     * Update organization details.
+     * Supports optional logo file upload via multipart/form-data.
      */
     update: async (
         id: string,
-        data: Partial<Organization>
+        data: Partial<Organization>,
+        logoFile?: File
     ): Promise<Organization> => {
+        if (logoFile) {
+            // Send as multipart/form-data when a logo file is included
+            const formData = new FormData();
+            formData.append('logo', logoFile);
+            // Append all other fields as form fields
+            Object.entries(data).forEach(([key, value]) => {
+                if (value !== undefined && value !== null) {
+                    formData.append(key, String(value));
+                }
+            });
+            const response = await apiClient.patch<ApiResponse<Organization>>(
+                `/rbac/organizations/${id}`,
+                formData,
+                { headers: { 'Content-Type': 'multipart/form-data' } }
+            ) as unknown as ApiResponse<Organization>;
+            return response.data;
+        }
+        // Normal JSON update (no file)
         const response = await patch<ApiResponse<Organization>>(
             `/rbac/organizations/${id}`,
             data

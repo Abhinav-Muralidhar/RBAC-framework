@@ -7,6 +7,7 @@
  */
 
 import { NavLink } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAdminSettings } from '../../contexts/AdminSettingsContext';
 import { useSidebar } from '../../hooks';
@@ -18,7 +19,11 @@ import {
     User,
     Shield,
 } from 'lucide-react';
+import { organizationApi } from '../../api/rbac.api';
+import type { OrganizationBrandingDto } from '../../types/organization.types';
 import './Sidebar.css';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 interface NavItem {
     id: string;
@@ -40,6 +45,15 @@ export function Sidebar() {
     const { user, hasPermission, logout } = useAuth();
     const { openSettings } = useAdminSettings();
     const { isCollapsed, toggle } = useSidebar();
+    const [branding, setBranding] = useState<OrganizationBrandingDto | null>(null);
+
+    useEffect(() => {
+        organizationApi.getBranding().then(setBranding).catch(() => { });
+    }, []);
+
+    const logoUrl = branding?.company_logo
+        ? `${API_BASE_URL}/${branding.company_logo}`
+        : null;
 
     const handleLogout = async () => {
         await logout();
@@ -65,8 +79,12 @@ export function Sidebar() {
                     aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                     title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 >
-                    <Shield size={28} />
-                    {!isCollapsed && <span>RBAC</span>}
+                    {logoUrl ? (
+                        <img src={logoUrl} alt="Logo" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 4 }} />
+                    ) : (
+                        <Shield size={28} />
+                    )}
+                    {!isCollapsed && <span>{branding?.company_name || 'RBAC'}</span>}
                 </div>
             </div>
 
