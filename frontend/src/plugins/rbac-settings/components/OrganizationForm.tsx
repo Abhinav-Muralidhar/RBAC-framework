@@ -5,7 +5,7 @@
  * Handles validation and submission for create/update operations.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FormInput, FormSelect } from '../../../core/components/FormElements';
 import type { OrganizationResponseDto } from '../../../core/types/organization.types';
 import { organizationApi } from '../../../core/api/rbac.api';
@@ -41,6 +41,14 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [logoFile, setLogoFile] = useState<File | null>(null);
+    const [logoPreview, setLogoPreview] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const currentLogoUrl = organization?.company_logo
+        ? `${API_BASE_URL}/${organization.company_logo}`
+        : null;
 
     // Keep state in sync with props
     useEffect(() => {
@@ -70,6 +78,18 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
         setFormData(prev => ({ ...prev, [field]: value }));
         if (errors[field]) {
             setErrors(prev => ({ ...prev, [field]: '' }));
+        }
+    };
+
+    const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] || null;
+        setLogoFile(file);
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = () => setLogoPreview(reader.result as string);
+            reader.readAsDataURL(file);
+        } else {
+            setLogoPreview(null);
         }
     };
 
@@ -123,7 +143,7 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
             let result;
 
             if (isEditing && organization) {
-                result = await organizationApi.update(organization.id, payload);
+                result = await organizationApi.update(organization.id, payload, logoFile || undefined);
             }
 
             onSuccess(result);
@@ -153,6 +173,54 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
                     error={errors.gstin}
                     required
                 />
+            </div>
+
+            {/* Company Logo Upload */}
+            <div className="form-row">
+                <div className="form-group" style={{ flex: '1' }}>
+                    <label className="form-label">Company Logo</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        {(logoPreview || currentLogoUrl) && (
+                            <img
+                                src={logoPreview || currentLogoUrl!}
+                                alt="Logo preview"
+                                style={{
+                                    width: 64,
+                                    height: 64,
+                                    objectFit: 'contain',
+                                    borderRadius: 8,
+                                    border: '1px solid var(--border-primary, #e2e8f0)',
+                                    background: 'var(--bg-secondary, #f8fafc)',
+                                }}
+                            />
+                        )}
+                        <div>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                                onChange={handleLogoChange}
+                                style={{ display: 'none' }}
+                            />
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => fileInputRef.current?.click()}
+                                style={{ fontSize: '0.85rem', padding: '6px 14px' }}
+                            >
+                                {currentLogoUrl || logoPreview ? 'Change Logo' : 'Upload Logo'}
+                            </button>
+                            {logoFile && (
+                                <span style={{ marginLeft: 8, fontSize: '0.8rem', color: 'var(--text-secondary, #64748b)' }}>
+                                    {logoFile.name}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #64748b)', marginTop: 4 }}>
+                        PNG, JPG, WebP or SVG. Max 2MB.
+                    </p>
+                </div>
             </div>
 
             <div className="form-row">
