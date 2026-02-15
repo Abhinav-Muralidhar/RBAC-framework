@@ -77,7 +77,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     // ============================
     const evaluationService = new EvaluationService(new PermissionsRepository(db));
 
-    const auditService = new AuditService(auditLogsRepository, evaluationService, moduleRepository);
+    const auditService = new AuditService(auditLogsRepository, evaluationService, moduleRepository, usersRepo, roleRepository);
     const groupService = new UnifiedGroupService(groupRepository, groupRoleRepository, auditService, userGroupsRepository);
     const authSessionService = new AuthSessionService(authSessionsRepository, auditService, evaluationService);
     const userService = new UserService(usersRepo, userRolesRepository, evaluationService, auditService);
@@ -145,7 +145,8 @@ export function createPublicAuthRouter(db: IDatabase<unknown>): Router {
 
     // services
     const evaluationService = new EvaluationService(new PermissionsRepository(db));
-    const auditService = new AuditService(auditLogsRepository, evaluationService, moduleRepository);
+    const roleRepository = new RoleRepository(db);
+    const auditService = new AuditService(auditLogsRepository, evaluationService, moduleRepository, usersRepo, roleRepository);
 
     const userService = new UserService(
         usersRepo,

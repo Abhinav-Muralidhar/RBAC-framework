@@ -1,15 +1,14 @@
 /**
  * Audit Logs Page
  *
- * View system audit trail with search and filtering.
+ * View system audit trail (all data decrypted server-side).
+ * Filtering removed — all fields are encrypted at rest.
  */
 
-import { useState, useMemo } from 'react';
-import { Search, Filter } from 'lucide-react';
+import { useMemo } from 'react';
 import type { AuditLog } from '../../../core/types/audit.types';
 import { auditLogsApi } from '../../../core/api/rbac.api';
 import { usePaginatedData, useDetailsModal } from '../../../core/hooks';
-import { FormModal } from '../../../core/components/FormModal';
 import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
 import './SettingsPage.css';
 
@@ -32,13 +31,8 @@ export function AuditLogsPage() {
         page,
         totalPages,
         setPage,
-        searchQuery,
-        setSearchQuery,
-        filters,
-        setFilters
     } = usePaginatedData<AuditLog>(auditLogsApi.list, { initialLimit: 20 });
 
-    const [showFilterModal, setShowFilterModal] = useState(false);
     const detailsModal = useDetailsModal();
 
     const auditFields = useMemo<FieldConfig<AuditLog>[]>(() => [
@@ -68,25 +62,6 @@ export function AuditLogsPage() {
                     <p>View system activity and changes</p>
                 </div>
             </header>
-
-            <div className="page-toolbar">
-                <div className="search-box">
-                    <Search size={18} />
-                    <input
-                        type="text"
-                        placeholder="Search logs..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
-                <button
-                    className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setShowFilterModal(true)}
-                >
-                    <Filter size={18} /> Filter
-                    {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
-                </button>
-            </div>
 
             {error && <div className="error-message">{error}</div>}
 
@@ -161,74 +136,6 @@ export function AuditLogsPage() {
                     </div>
                 </>
             )}
-
-            {/* Filter Modal Placeholder */}
-            <FormModal
-                isOpen={showFilterModal}
-                title="Filter Audit Logs"
-                onSubmit={() => setShowFilterModal(false)}
-                onCancel={() => setShowFilterModal(false)}
-                size="sm"
-            >
-                <div className="filter-form">
-                    <div className="form-field">
-                        <label className="form-label">Status</label>
-                        <select
-                            className="form-control"
-                            value={filters.status || ''}
-                            onChange={(e) => setFilters({ ...filters, status: e.target.value || undefined })}
-                        >
-                            <option value="">All Statuses</option>
-                            <option value="success">Success</option>
-                            <option value="failure">Failure</option>
-                            <option value="denied">Denied</option>
-                        </select>
-                    </div>
-                    <div className="form-field">
-                        <label className="form-label">Action</label>
-                        <select
-                            className="form-control"
-                            value={filters.action || ''}
-                            onChange={(e) => setFilters({ ...filters, action: e.target.value || undefined })}
-                        >
-                            <option value="">All Actions</option>
-                            <option value="create">Create</option>
-                            <option value="update">Update</option>
-                            <option value="delete">Delete</option>
-                            <option value="login">Login</option>
-                            <option value="logout">Logout</option>
-                        </select>
-                    </div>
-                    <div className="form-field">
-                        <label className="form-label">Entity Type</label>
-                        <select
-                            className="form-control"
-                            value={filters.entity_type || ''}
-                            onChange={(e) => setFilters({ ...filters, entity_type: e.target.value || undefined })}
-                        >
-                            <option value="">All Entities</option>
-                            <option value="user">User</option>
-                            <option value="role">Role</option>
-                            <option value="profile">Profile</option>
-                            <option value="group">Group</option>
-                            <option value="session">Session</option>
-                        </select>
-                    </div>
-                    {Object.keys(filters).filter(k => filters[k] !== undefined).length > 0 && (
-                        <button
-                            className="btn btn-text"
-                            onClick={() => {
-                                setFilters({});
-                                setShowFilterModal(false);
-                            }}
-                            style={{ marginTop: '1rem' }}
-                        >
-                            Clear All Filters
-                        </button>
-                    )}
-                </div>
-
-            </FormModal>
 
             {/* Details Modal */}
             <DetailsModal<AuditLog>

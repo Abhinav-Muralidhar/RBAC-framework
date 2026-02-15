@@ -73,7 +73,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
     const userRolesRepository = new UserRoleRepository(db);
 
     // Services
-    const auditService = new AuditService(auditLogsRepo, evaluationService, moduleRepository);
+    const auditService = new AuditService(auditLogsRepo, evaluationService, moduleRepository, usersRepo, roleRepository);
     const authSessionService = new AuthSessionService(sessionsRepo, auditService, evaluationService);
     const requireAuth = createAuthenticateMiddleware(authSessionService);
     const usersService = new UserService(usersRepo, userRolesRepository, evaluationService, auditService);

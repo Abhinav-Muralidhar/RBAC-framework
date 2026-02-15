@@ -171,3 +171,123 @@ export async function verifyPassword(plainText: string, hash: string): Promise<b
         throw new RBACInternalError('Password verification failed', error as Error);
     }
 }
+
+
+// =============================================================================
+// AUDIT LOG ENCRYPTION HELPERS
+// =============================================================================
+
+import type { CreateAuditLogInput } from '../types/repository.types';
+
+/**
+ * Shape of an encrypted audit log row as stored in the database.
+ * Every field except `id` is encrypted ciphertext (string) or null.
+ */
+export interface EncryptedAuditLogRow {
+    id: string;                  // plaintext PK
+    user_id: string | null;      // encrypted
+    role_id: string | null;      // encrypted
+    action: string;              // encrypted
+    module_id: string | null;    // encrypted
+    entity_type: string;         // encrypted
+    entity_id: string | null;    // encrypted
+    old_values: string | null;   // encrypted JSON string
+    new_values: string | null;   // encrypted JSON string
+    ip_address: string;          // encrypted
+    user_agent: string;          // encrypted
+    status: string;              // encrypted
+    created_at: string;          // encrypted ISO date string
+}
+
+/**
+ * Decrypted audit log row shape returned to the service layer.
+ * This is the canonical typed representation after decryption + name resolution.
+ */
+export interface DecryptedAuditLogRow {
+    id: string;
+    user_id: string | null;
+    user_name: string | null;
+    user_email: string | null;
+    role_id: string | null;
+    role_name: string | null;
+    action: string;
+    module_id: string | null;
+    module_name: string | null;
+    module_code: string | null;
+    entity_type: string;
+    entity_id: string | null;
+    old_values: Record<string, unknown> | null;
+    new_values: Record<string, unknown> | null;
+    ip_address: string;
+    user_agent: string;
+    status: string;
+    created_at: Date;
+}
+
+/** Encrypt a non-null string; return null for null/undefined */
+function encryptField(value: string | null | undefined): string | null {
+    if (value === null || value === undefined) return null;
+    return encryptAES(value);
+}
+
+/** Decrypt a non-null ciphertext; return null for null/undefined */
+function decryptField(value: string | null | undefined): string | null {
+    if (value === null || value === undefined) return null;
+    return decryptAES(value);
+}
+
+/**
+ * Encrypt all audit log fields before database persistence.
+ * Returns an object with all-string encrypted values ready for INSERT.
+ */
+export function encryptAuditLogForStorage(input: CreateAuditLogInput): Omit<EncryptedAuditLogRow, 'id'> {
+    return {
+        user_id: encryptField(input.user_id),
+        role_id: encryptField(input.role_id),
+        action: encryptAES(input.action),
+        module_id: encryptField(input.module_id),
+        entity_type: encryptAES(input.entity_type),
+        entity_id: encryptField(input.entity_id),
+        old_values: input.old_values
+            ? encryptAES(JSON.stringify(input.old_values))
+            : null,
+        new_values: input.new_values
+            ? encryptAES(JSON.stringify(input.new_values))
+            : null,
+        ip_address: encryptAES(input.ip_address),
+        user_agent: encryptAES(input.user_agent),
+        status: encryptAES(input.status),
+        created_at: encryptAES(new Date().toISOString()),
+    };
+}
+
+/**
+ * Decrypt a raw encrypted row from the database.
+ * Returns a partially-resolved object (user_name, role_name, module_name/code
+ * are set to null here — the service layer resolves them via lookups).
+ */
+export function decryptAuditLogRow(row: EncryptedAuditLogRow): DecryptedAuditLogRow {
+    const oldValuesStr = decryptField(row.old_values);
+    const newValuesStr = decryptField(row.new_values);
+
+    return {
+        id: row.id,
+        user_id: decryptField(row.user_id),
+        user_name: null,   // resolved by service
+        user_email: null,   // resolved by service
+        role_id: decryptField(row.role_id),
+        role_name: null,    // resolved by service
+        action: decryptAES(row.action),
+        module_id: decryptField(row.module_id),
+        module_name: null,  // resolved by service
+        module_code: null,  // resolved by service
+        entity_type: decryptAES(row.entity_type),
+        entity_id: decryptField(row.entity_id),
+        old_values: oldValuesStr ? JSON.parse(oldValuesStr) : null,
+        new_values: newValuesStr ? JSON.parse(newValuesStr) : null,
+        ip_address: decryptAES(row.ip_address),
+        user_agent: decryptAES(row.user_agent),
+        status: decryptAES(row.status),
+        created_at: new Date(decryptAES(row.created_at)),
+    };
+}
