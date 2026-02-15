@@ -29,6 +29,7 @@ export interface IUserService {
     findByUsername(t: TransactionTask, username: string): Promise<Users | null>;
     findByEmail(t: TransactionTask, email: string): Promise<Users | null>;
     updatePassword(t: TransactionTask, userId: string, newHashedPassword: string, auditCtx?: AuditContext): Promise<void>;
+    recordLogin(t: TransactionTask, userId: string): Promise<void>;
 }
 
 export class UserService implements IUserService {
@@ -122,7 +123,7 @@ export class UserService implements IUserService {
             id,
             created_at: oldUser.created_at,
             status: data.status ?? oldUser.status,
-            last_login_at: oldUser.last_login_at ?? cleanData.last_login_at as Date,
+            last_login_at: cleanData.last_login_at !== undefined ? (cleanData.last_login_at as Date | null) : (oldUser.last_login_at ?? null),
             password_changed_at: oldUser.password_changed_at ?? null,
         };
 
@@ -223,5 +224,7 @@ export class UserService implements IUserService {
         });
     }
 
-
+    async recordLogin(t: TransactionTask, userId: string): Promise<void> {
+        await this.userRepository.updateLastLoginAt(t, userId, new Date());
+    }
 }

@@ -109,8 +109,8 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
                 console.log('LOGIN TOKEN:', session.session_token);
 
 
-                // Update last login
-                await usersService.update(t, user.id, user.id, { last_login_at: new Date() });
+                // Update last login timestamp
+                await usersService.recordLogin(t, user.id);
 
                 const userResponse = await usersService.getById(t, user.id, user.id);
 
