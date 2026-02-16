@@ -2,15 +2,13 @@
  * Group Form Component
  *
  * Create/Edit group form used in FormModal.
- * Features: searchable roles/users checkbox lists, scroll-to-error, friendly error messages.
+ * Uses FormMultiSelect for searchable roles/users selection.
  */
 
-import { useState, useEffect, useRef } from 'react';
-import { Search } from 'lucide-react';
-import { FormInput, FormSwitch } from '../../../core/components/FormElements';
+import { useState, useEffect } from 'react';
+import { FormInput, FormSwitch, FormMultiSelect } from '../../../core/components/FormElements';
+import type { MultiSelectOption } from '../../../core/components/FormElements';
 import type { Group, CreateGroupDto, UpdateGroupDto } from '../../../core/types/group.types';
-import type { Role } from '../../../core/types/role.types';
-import type { User } from '../../../core/types/user.types';
 import { usersApi, groupsApi, rolesApi } from '../../../core/api/rbac.api';
 import { validateRequired, validateCode, scrollToFirstError, parseApiError } from '../../../core/utils';
 
@@ -35,24 +33,17 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
         group?.roles?.map(r => r.id) || []
     );
 
-    const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
-    const [errors, setErrors] = useState<Record<string, string>>({});
-
     const [selectedUsers, setSelectedUsers] = useState<string[]>(
         group?.users?.map(u => u.id) || []
     );
 
-    const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+    const [roleOptions, setRoleOptions] = useState<MultiSelectOption[]>([]);
+    const [roleLoading, setRoleLoading] = useState(false);
 
-    // Search state for roles
-    const [roleSearch, setRoleSearch] = useState('');
-    const [roleSearchLoading, setRoleSearchLoading] = useState(false);
-    const roleSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [userOptions, setUserOptions] = useState<MultiSelectOption[]>([]);
+    const [userLoading, setUserLoading] = useState(false);
 
-    // Search state for users
-    const [userSearch, setUserSearch] = useState('');
-    const [userSearchLoading, setUserSearchLoading] = useState(false);
-    const userSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     // ---------------- LOAD DATA ----------------
 
@@ -76,49 +67,31 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
         }
     }, [group]);
 
-    // Debounced role search
-    useEffect(() => {
-        if (roleSearchTimer.current) clearTimeout(roleSearchTimer.current);
-        roleSearchTimer.current = setTimeout(() => {
-            loadRoles(roleSearch);
-        }, 300);
-        return () => {
-            if (roleSearchTimer.current) clearTimeout(roleSearchTimer.current);
-        };
-    }, [roleSearch]);
-
-    // Debounced user search
-    useEffect(() => {
-        if (userSearchTimer.current) clearTimeout(userSearchTimer.current);
-        userSearchTimer.current = setTimeout(() => {
-            loadUsers(userSearch);
-        }, 300);
-        return () => {
-            if (userSearchTimer.current) clearTimeout(userSearchTimer.current);
-        };
-    }, [userSearch]);
-
     const loadRoles = async (searchQuery: string) => {
-        setRoleSearchLoading(true);
+        setRoleLoading(true);
         try {
             const response = await rolesApi.list({ limit: 100, search: searchQuery || undefined });
-            setAvailableRoles(response.data || []);
+            setRoleOptions(
+                (response.data || []).map(r => ({ value: r.id, label: r.name }))
+            );
         } catch (err) {
             console.error('Failed to load roles', err);
         } finally {
-            setRoleSearchLoading(false);
+            setRoleLoading(false);
         }
     };
 
     const loadUsers = async (searchQuery: string) => {
-        setUserSearchLoading(true);
+        setUserLoading(true);
         try {
             const response = await usersApi.list({ limit: 100, search: searchQuery || undefined });
-            setAvailableUsers(response.data || []);
+            setUserOptions(
+                (response.data || []).map(u => ({ value: u.id, label: u.username }))
+            );
         } catch (err) {
             console.error('Failed to load users', err);
         } finally {
-            setUserSearchLoading(false);
+            setUserLoading(false);
         }
     };
 
@@ -129,22 +102,6 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
         if (errors[field]) {
             setErrors(prev => ({ ...prev, [field]: '' }));
         }
-    };
-
-    const toggleRole = (roleId: string) => {
-        setSelectedRoles(prev =>
-            prev.includes(roleId)
-                ? prev.filter(id => id !== roleId)
-                : [...prev, roleId]
-        );
-    };
-
-    const toggleUser = (userId: string) => {
-        setSelectedUsers(prev =>
-            prev.includes(userId)
-                ? prev.filter(id => id !== userId)
-                : [...prev, userId]
-        );
     };
 
     // ---------------- VALIDATION ----------------
@@ -244,83 +201,29 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
                 onChange={checked => handleChange('is_active', checked)}
             />
 
-            {/* Roles selection with search */}
-            <div className="form-field">
-                <label className="form-label">Assign Roles to Group Members</label>
-                <div className="searchable-list-input">
-                    <Search size={14} className="searchable-list-icon" />
-                    <input
-                        type="text"
-                        placeholder="Search roles…"
-                        value={roleSearch}
-                        onChange={e => setRoleSearch(e.target.value)}
-                        className="searchable-list-search"
-                    />
-                </div>
-                <div className="checkbox-group">
-                    {roleSearchLoading ? (
-                        <span className="text-muted">Searching…</span>
-                    ) : (
-                        <>
-                            {availableRoles.map(role => (
-                                <label key={role.id} className="checkbox-item">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedRoles.includes(role.id)}
-                                        onChange={() => toggleRole(role.id)}
-                                    />
-                                    <span>{role.name}</span>
-                                </label>
-                            ))}
+            {/* Roles selection */}
+            <FormMultiSelect
+                label="Assign Roles to Group Members"
+                placeholder="Search roles…"
+                options={roleOptions}
+                value={selectedRoles}
+                onChange={setSelectedRoles}
+                onSearch={loadRoles}
+                loading={roleLoading}
+                emptyMessage="No roles available"
+            />
 
-                            {availableRoles.length === 0 && (
-                                <span className="text-muted">
-                                    {roleSearch ? 'No roles match your search' : 'No roles available'}
-                                </span>
-                            )}
-                        </>
-                    )}
-                </div>
-            </div>
-
-            {/* Users selection with search */}
-            <div className="form-field">
-                <label className="form-label">Assign Users to Group Members</label>
-                <div className="searchable-list-input">
-                    <Search size={14} className="searchable-list-icon" />
-                    <input
-                        type="text"
-                        placeholder="Search users…"
-                        value={userSearch}
-                        onChange={e => setUserSearch(e.target.value)}
-                        className="searchable-list-search"
-                    />
-                </div>
-                <div className="checkbox-group">
-                    {userSearchLoading ? (
-                        <span className="text-muted">Searching…</span>
-                    ) : (
-                        <>
-                            {availableUsers.map(user => (
-                                <label key={user.id} className="checkbox-item">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedUsers.includes(user.id)}
-                                        onChange={() => toggleUser(user.id)}
-                                    />
-                                    <span>{user.username}</span>
-                                </label>
-                            ))}
-
-                            {availableUsers.length === 0 && (
-                                <span className="text-muted">
-                                    {userSearch ? 'No users match your search' : 'No users available'}
-                                </span>
-                            )}
-                        </>
-                    )}
-                </div>
-            </div>
+            {/* Users selection */}
+            <FormMultiSelect
+                label="Assign Users to Group Members"
+                placeholder="Search users…"
+                options={userOptions}
+                value={selectedUsers}
+                onChange={setSelectedUsers}
+                onSearch={loadUsers}
+                loading={userLoading}
+                emptyMessage="No users available"
+            />
 
             <button
                 type="button"

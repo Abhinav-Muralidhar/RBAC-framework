@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search } from 'lucide-react';
-import { FormInput, FormSwitch } from '../../../core/components/FormElements';
+import { FormInput, FormSwitch, FormMultiSelect } from '../../../core/components/FormElements';
+import type { MultiSelectOption } from '../../../core/components/FormElements';
 import type { Role, CreateRoleDto, UpdateRoleDto } from '../../../core/types/role.types';
-import type { Profile } from '../../../core/types/profile.types';
 import { rolesApi, profilesApi } from '../../../core/api/rbac.api';
 import { validateRequired, validateCode, scrollToFirstError, parseApiError } from '../../../core/utils';
 
@@ -29,7 +28,8 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
         role?.profiles?.map(p => p.id) || []
     );
 
-    const [availableProfiles, setAvailableProfiles] = useState<Profile[]>([]);
+    const [profileOptions, setProfileOptions] = useState<MultiSelectOption[]>([]);
+    const [profileLoading, setProfileLoading] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     // 1. Initialize with initialParentId if available and not editing
@@ -42,11 +42,6 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
     const [roleSearchLoading, setRoleSearchLoading] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
-
-    // Profile search state
-    const [profileSearch, setProfileSearch] = useState('');
-    const [profileSearchLoading, setProfileSearchLoading] = useState(false);
-    const profileSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         loadProfiles('');
@@ -78,27 +73,17 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
     }, [role, initialParentId]);
 
 
-    // Debounced profile search
-    useEffect(() => {
-        if (profileSearchTimer.current) clearTimeout(profileSearchTimer.current);
-        profileSearchTimer.current = setTimeout(() => {
-            loadProfiles(profileSearch);
-        }, 300);
-        return () => {
-            if (profileSearchTimer.current) clearTimeout(profileSearchTimer.current);
-        };
-    }, [profileSearch]);
-
-
     const loadProfiles = async (searchQuery: string) => {
-        setProfileSearchLoading(true);
+        setProfileLoading(true);
         try {
             const response = await profilesApi.list({ limit: 100, search: searchQuery || undefined });
-            setAvailableProfiles(response.data);
+            setProfileOptions(
+                (response.data || []).map(p => ({ value: p.id, label: p.name }))
+            );
         } catch (err) {
             console.error('Failed to load profiles', err);
         } finally {
-            setProfileSearchLoading(false);
+            setProfileLoading(false);
         }
     };
 
@@ -128,13 +113,7 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
         }
     };
 
-    const toggleProfile = (profileId: string) => {
-        setSelectedProfiles(prev =>
-            prev.includes(profileId)
-                ? prev.filter(id => id !== profileId)
-                : [...prev, profileId]
-        );
-    };
+
 
     const getParentRoleDisplayValue = () => {
         if (isSearching) return roleSearch;
@@ -363,44 +342,17 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
             </div>
 
 
-            {/* Profiles selection with search */}
-            <div className="form-field">
-                <label className="form-label">Assign Profiles</label>
-                <div className="searchable-list-input">
-                    <Search size={14} className="searchable-list-icon" />
-                    <input
-                        type="text"
-                        placeholder="Search profiles…"
-                        value={profileSearch}
-                        onChange={e => setProfileSearch(e.target.value)}
-                        className="searchable-list-search"
-                    />
-                </div>
-                <div className="checkbox-group">
-                    {profileSearchLoading ? (
-                        <span className="text-muted">Searching…</span>
-                    ) : (
-                        <>
-                            {availableProfiles.map(profile => (
-                                <label key={profile.id} className="checkbox-item">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedProfiles.includes(profile.id)}
-                                        onChange={() => toggleProfile(profile.id)}
-                                    />
-                                    <span>{profile.name}</span>
-                                </label>
-                            ))}
-
-                            {availableProfiles.length === 0 && (
-                                <span className="text-muted">
-                                    {profileSearch ? 'No profiles match your search' : 'No profiles available'}
-                                </span>
-                            )}
-                        </>
-                    )}
-                </div>
-            </div>
+            {/* Profiles selection */}
+            <FormMultiSelect
+                label="Assign Profiles"
+                placeholder="Search profiles…"
+                options={profileOptions}
+                value={selectedProfiles}
+                onChange={setSelectedProfiles}
+                onSearch={loadProfiles}
+                loading={profileLoading}
+                emptyMessage="No profiles available"
+            />
 
             <button
                 type="button"
