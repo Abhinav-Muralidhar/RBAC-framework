@@ -66,6 +66,22 @@ export const usersApi = {
 };
 
 // ============================================================================
+// Landing Pages (reference data)
+// ============================================================================
+
+export interface LandingPageOption {
+    key: string;
+    label: string;
+}
+
+export const landingPagesApi = {
+    list: async (): Promise<LandingPageOption[]> => {
+        const response = await get<ApiResponse<LandingPageOption[]>>('/rbac/landing-pages');
+        return response.data;
+    },
+};
+
+// ============================================================================
 // Roles
 // ============================================================================
 

@@ -29,7 +29,7 @@ import { createGroupsRouter } from './groups.routes';
 import { createAuditLogsRouter } from './audit-logs.routes';
 import { createSessionsRouter } from './sessions.routes';
 import { createOrganizationsRouter } from './org.routes';
-import { UserService } from '../services/user.service';
+import { UserService, VALID_LANDING_PAGES } from '../services/user.service';
 import { RoleService } from '../services/role.service';
 import { ProfileService } from '../services/profile.service';
 import { GroupRepository } from '../repositories/groups.repository';
@@ -115,6 +115,12 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     router.use('/smtpconfig', createSmtpRouter(db, auditService, evaluationService, smtpConfigService));
     router.use('/sharing-rules', createSharingRulesRouter(db, auditService, evaluationService, sharingRuleService));
     router.use('/email', createEmailRouter(authSessionService, smtpConfigService));
+
+    // Landing pages reference endpoint
+    router.get('/landing-pages', (_req, res) => {
+        res.json({ data: VALID_LANDING_PAGES, error: null });
+    });
+
     return router;
 }
 

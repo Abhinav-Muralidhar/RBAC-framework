@@ -55,9 +55,15 @@ export function createAuthenticateMiddleware(authSessionService: IAuthSessionSer
 
             next();
 
-        } catch (error) {
-            // Fail Closed
-            console.error('Authentication Failed:', error);
+        } catch (error: any) {
+            // Expected auth failures (logged out, expired, not found) — warn only
+            const msg = error?.message ?? '';
+            if (msg.includes('logged out') || msg.includes('expired') || msg.includes('not found')) {
+                console.warn(`Auth rejected: ${msg}`);
+            } else {
+                // Unexpected error — log full trace
+                console.error('Authentication Failed:', error);
+            }
 
             res.status(401).json({
                 error: 'Unauthorized',

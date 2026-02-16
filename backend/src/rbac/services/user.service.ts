@@ -20,6 +20,14 @@ import { IUserRoleRepository } from '../repositories/user_roles.repository';
 // Module code for RBAC operations
 const MODULE_CODE = 'SETTINGS';
 
+// Valid landing pages — backend is the source of truth
+export const VALID_LANDING_PAGES = [
+    { key: '/dashboard', label: 'Dashboard' },
+    { key: '/profile', label: 'Profile' },
+] as const;
+
+const VALID_LANDING_PAGE_KEYS = VALID_LANDING_PAGES.map(p => p.key) as readonly string[];
+
 export interface IUserService {
     listPaginated(t: TransactionTask, actingUserId: string, filters?: UserListFilterDto, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Users>>;
     create(t: TransactionTask, actingUserId: string, data: CreateUserRequestDto, auditCtx?: AuditContext): Promise<Users>;
@@ -68,6 +76,11 @@ export class UserService implements IUserService {
             data.password = await hashPassword(data.password);
         }
 
+        // Validate landing page if provided
+        if (data.default_landing_page && !VALID_LANDING_PAGE_KEYS.includes(data.default_landing_page)) {
+            throw new Error(`Invalid landing page: ${data.default_landing_page}. Valid options: ${VALID_LANDING_PAGE_KEYS.join(', ')}`);
+        }
+
         const userData: CreateUserInput = {
             ...data,
             username: data.username,
@@ -107,6 +120,11 @@ export class UserService implements IUserService {
         if (!oldUser) throw new Error('User not found');
 
         const userData: any = { ...data };
+
+        // Validate landing page if provided
+        if (userData.default_landing_page && !VALID_LANDING_PAGE_KEYS.includes(userData.default_landing_page)) {
+            throw new Error(`Invalid landing page: ${userData.default_landing_page}. Valid options: ${VALID_LANDING_PAGE_KEYS.join(', ')}`);
+        }
 
         if (userData.password) {
             validatePassword(userData.password);

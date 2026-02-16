@@ -18,7 +18,7 @@ type AuthView = 'login' | 'forgot-email' | 'forgot-otp' | 'forgot-reset';
 
 export function LoginPage() {
     const navigate = useNavigate();
-    const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+    const { login, isAuthenticated, isLoading: authLoading, user } = useAuth();
 
     const [view, setView] = useState<AuthView>('login');
     const [isLoading, setIsLoading] = useState(false);
@@ -38,9 +38,10 @@ export function LoginPage() {
 
     useEffect(() => {
         if (!authLoading && isAuthenticated) {
-            navigate(ROUTES.DASHBOARD, { replace: true });
+            const landing = user?.default_landing_page || ROUTES.DASHBOARD;
+            navigate(landing, { replace: true });
         }
-    }, [authLoading, isAuthenticated, navigate]);
+    }, [authLoading, isAuthenticated, navigate, user]);
 
     useEffect(() => {
         organizationApi.getBranding().then(setBranding).catch(() => { });
@@ -58,8 +59,9 @@ export function LoginPage() {
         setLoginShake(false);
         setIsLoading(true);
         try {
-            await login(username, password);
-            navigate(ROUTES.DASHBOARD, { replace: true });
+            const loggedInUser = await login(username, password);
+            const landing = loggedInUser?.default_landing_page || ROUTES.DASHBOARD;
+            navigate(landing, { replace: true });
         } catch (err) {
             const msg = parseApiError(err instanceof Error ? err.message : 'Login failed');
             setError(msg);

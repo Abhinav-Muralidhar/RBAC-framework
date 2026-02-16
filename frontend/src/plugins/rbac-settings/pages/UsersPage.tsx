@@ -7,6 +7,7 @@
 import { useState, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import { usersApi } from '../../../core/api/rbac.api';
+import { formatUserName } from '../../../core/constants/userPreferences';
 import type { User } from '../../../core/types/user.types';
 import { usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
 import { useToast } from '../../../core/contexts/ToastContext';
@@ -147,7 +148,7 @@ export function UsersPage() {
                                     users.map(user => (
                                         <tr key={user.id}>
                                             <td className="clickable-cell" onClick={() => detailsModal.open(user.id)}>{user.username}</td>
-                                            <td className="clickable-cell" onClick={() => detailsModal.open(user.id)}>{user.first_name} {user.last_name}</td>
+                                            <td className="clickable-cell" onClick={() => detailsModal.open(user.id)}>{formatUserName(user.first_name, user.last_name, user.name_format)}</td>
                                             <td className="hide-mobile clickable-cell" onClick={() => detailsModal.open(user.id)}>{user.primary_email}</td>
                                             <td className="clickable-cell" onClick={() => detailsModal.open(user.id)}>
                                                 <span className={`status-badge status-${user.status.toLowerCase()}`}>

@@ -20,6 +20,7 @@ import {
     Shield,
 } from 'lucide-react';
 import { organizationApi } from '../../api/rbac.api';
+import { formatUserName } from '../../constants/userPreferences';
 import type { OrganizationBrandingDto } from '../../types/organization.types';
 import './Sidebar.css';
 
@@ -119,12 +120,12 @@ export function Sidebar() {
                 <NavLink
                     to="/profile"
                     className="user-menu"
-                    title={isCollapsed ? `${user?.first_name} ${user?.last_name}` : undefined}
+                    title={isCollapsed ? formatUserName(user?.first_name, user?.last_name || '', user?.name_format) : undefined}
                 >
                     <User size={20} />
                     {!isCollapsed && (
                         <div className="user-info">
-                            <span className="user-name">{user?.first_name} {user?.last_name}</span>
+                            <span className="user-name">{formatUserName(user?.first_name, user?.last_name || '', user?.name_format)}</span>
                             <span className="user-email">{user?.primary_email}</span>
                         </div>
                     )}
