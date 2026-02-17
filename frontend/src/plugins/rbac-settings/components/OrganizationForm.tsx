@@ -177,47 +177,39 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
 
             {/* Company Logo Upload */}
             <div className="form-row">
-                <div className="form-group" style={{ flex: '1' }}>
+                <div className="form-group">
                     <label className="form-label">Company Logo</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div className="logo-upload-row">
                         {(logoPreview || currentLogoUrl) && (
                             <img
                                 src={logoPreview || currentLogoUrl!}
                                 alt="Logo preview"
-                                style={{
-                                    width: 64,
-                                    height: 64,
-                                    objectFit: 'contain',
-                                    borderRadius: 8,
-                                    border: '1px solid var(--border-primary, #e2e8f0)',
-                                    background: 'var(--bg-secondary, #f8fafc)',
-                                }}
+                                className="logo-preview"
                             />
                         )}
-                        <div>
+                        <div className="logo-upload-actions">
                             <input
                                 ref={fileInputRef}
                                 type="file"
                                 accept="image/png,image/jpeg,image/webp,image/svg+xml"
                                 onChange={handleLogoChange}
-                                style={{ display: 'none' }}
+                                className="visually-hidden"
                             />
                             <button
                                 type="button"
-                                className="btn btn-secondary"
+                                className="btn btn-secondary btn-compact"
                                 onClick={() => fileInputRef.current?.click()}
-                                style={{ fontSize: '0.85rem', padding: '6px 14px' }}
                             >
                                 {currentLogoUrl || logoPreview ? 'Change Logo' : 'Upload Logo'}
                             </button>
                             {logoFile && (
-                                <span style={{ marginLeft: 8, fontSize: '0.8rem', color: 'var(--text-secondary, #64748b)' }}>
+                                <span className="logo-file-name">
                                     {logoFile.name}
                                 </span>
                             )}
                         </div>
                     </div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #64748b)', marginTop: 4 }}>
+                    <p className="form-help-text">
                         PNG, JPG, WebP or SVG. Max 2MB.
                     </p>
                 </div>
@@ -342,7 +334,7 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
             <button
                 type="button"
                 id="organization-form-submit"
-                style={{ display: 'none' }}
+                className="visually-hidden"
                 onClick={handleSubmit}
             />
         </div>

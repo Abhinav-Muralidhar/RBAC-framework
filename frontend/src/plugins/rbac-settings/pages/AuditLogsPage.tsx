@@ -83,7 +83,7 @@ export function AuditLogsPage() {
                             </thead>
                             <tbody>
                                 {logs.map(log => (
-                                    <tr key={log.id} className="clickable-row" onClick={() => detailsModal.open(log.id)} style={{ cursor: 'pointer' }}>
+                                    <tr key={log.id} className="clickable-row" onClick={() => detailsModal.open(log.id)}>
                                         <td data-label="Timestamp" className="text-muted">
                                             {log.created_at ? new Date(log.created_at).toLocaleString() : '-'}
                                         </td>

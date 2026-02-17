@@ -25,6 +25,9 @@
 .login-logo {
     color: #3b82f6;
     margin-bottom: 1rem;
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
 }
 
 .login-header h1 {

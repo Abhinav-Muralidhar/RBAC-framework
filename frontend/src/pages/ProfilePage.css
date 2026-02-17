@@ -123,6 +123,10 @@
     gap: 1rem;
 }
 
+.account-info--spaced {
+    margin-bottom: 1rem;
+}
+
 .account-row {
     display: flex;
     align-items: center;

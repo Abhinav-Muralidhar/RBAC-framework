@@ -125,7 +125,7 @@ export function LoginPage() {
             <div className={`login-card${loginShake ? ' login-shake' : ''}`}>
                 <div className="login-header">
                     {logoUrl ? (
-                        <img src={logoUrl} alt="Logo" className="login-logo" style={{ width: 48, height: 48, objectFit: 'contain' }} />
+                        <img src={logoUrl} alt="Logo" className="login-logo" />
                     ) : (
                         <Shield size={48} className="login-logo" />
                     )}

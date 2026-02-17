@@ -272,7 +272,7 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
             />
 
             {/* Parent Role Dropdown */}
-            <div className="form-field" style={{ position: 'relative' }}>
+            <div className="form-field form-field--relative">
                 <label className="form-label">Parent Role</label>
 
                 <input
@@ -287,43 +287,27 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
                 />
 
                 {dropdownOpen && (
-                    <div
-                        style={{
-                            position: 'absolute',
-                            top: '100%',
-                            left: 0,
-                            right: 0,
-                            maxHeight: '200px',
-                            overflowY: 'auto',
-                            border: '1px solid #ccc',
-                            backgroundColor: 'white',
-                            zIndex: 1000,
-                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                        }}
-                    >
+                    <div className="dropdown-options">
                         {roleSearchLoading ? (
-                            <div style={{ padding: '0.5rem', color: '#999' }}>
+                            <div className="dropdown-empty">
                                 Loading...
                             </div>
                         ) : (
                             <>
                                 {availableRoles.map(r => {
                                     const isSelected = r.id === selectedParentRole;
+                                    const optionClass = [
+                                        'dropdown-option',
+                                        isSelected ? 'dropdown-option--selected' : '',
+                                    ].filter(Boolean).join(' ');
                                     return (
                                         <div
                                             key={r.id}
-                                            style={{
-                                                padding: '0.5rem',
-                                                cursor: 'pointer',
-                                                backgroundColor: isSelected
-                                                    ? '#e3f2fd'
-                                                    : 'transparent',
-                                            }}
+                                            className={optionClass}
                                             onMouseDown={e => {
                                                 e.preventDefault();
                                                 handleParentRoleSelect(r.id);
                                             }}
-                                            className="hover:bg-gray-50" // Optional Tailwind utility if you have it
                                         >
                                             {r.name} {isSelected && '✓'}
                                         </div>
@@ -331,9 +315,7 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
                                 })}
 
                                 {availableRoles.length === 0 && (
-                                    <div style={{ padding: '0.5rem', color: '#999' }}>
-                                        No roles found
-                                    </div>
+                                    <div className="dropdown-empty">No roles found</div>
                                 )}
                             </>
                         )}
@@ -357,7 +339,7 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
             <button
                 type="button"
                 id="role-form-submit"
-                style={{ display: 'none' }}
+                className="visually-hidden"
                 onClick={handleSubmit}
             />
         </div>

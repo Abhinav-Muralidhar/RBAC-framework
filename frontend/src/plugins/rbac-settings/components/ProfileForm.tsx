@@ -199,7 +199,7 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
             <button
                 type="button"
                 id="profile-form-submit"
-                style={{ display: 'none' }}
+                className="visually-hidden"
                 onClick={handleSubmit}
             />
         </div>

@@ -365,35 +365,13 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
         }
     };
 
-    // =================== DROPDOWN STYLES ===================
-
-    const dropdownStyle: React.CSSProperties = {
-        position: 'absolute',
-        top: '100%',
-        left: 0,
-        right: 0,
-        maxHeight: '200px',
-        overflowY: 'auto',
-        border: '1px solid var(--border-primary, #ccc)',
-        backgroundColor: 'var(--bg-primary, white)',
-        zIndex: 1000,
-        borderRadius: '0 0 6px 6px',
-    };
-
-    const dropdownItemStyle = (isSelected: boolean, isDisabled: boolean): React.CSSProperties => ({
-        padding: '0.5rem 0.75rem',
-        cursor: isDisabled ? 'not-allowed' : 'pointer',
-        color: isDisabled ? 'var(--text-muted, #999)' : 'var(--text-primary, #000)',
-        backgroundColor: isSelected ? 'var(--bg-hover, #e3f2fd)' : 'transparent',
-    });
-
     // =================== RENDER ===================
 
     return (
         <div className="entity-form">
 
             {/* === Account Basics === */}
-            <h3 style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Account</h3>
+            <h3 className="form-section-title form-section-title--first">Account</h3>
             <div className="form-row">
                 <FormInput
                     label="Username"
@@ -432,7 +410,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             </div>
 
             {/* === Personal === */}
-            <h3 style={{ margin: '1.25rem 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Personal Information</h3>
+            <h3 className="form-section-title">Personal Information</h3>
             <div className="form-row">
                 <FormInput label="First Name" value={formData.first_name} onChange={e => handleChange('first_name', e.target.value)} />
                 <FormInput label="Last Name" value={formData.last_name} onChange={e => handleChange('last_name', e.target.value)} error={errors.last_name} required />
@@ -443,7 +421,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             </div>
 
             {/* === Contact === */}
-            <h3 style={{ margin: '1.25rem 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contact Details</h3>
+            <h3 className="form-section-title">Contact Details</h3>
             <div className="form-row">
                 <FormInput label="Secondary Email" type="email" value={formData.secondary_email} onChange={e => handleChange('secondary_email', e.target.value)} />
                 <FormInput label="Other Email" type="email" value={formData.other_email} onChange={e => handleChange('other_email', e.target.value)} />
@@ -462,7 +440,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             </div>
 
             {/* === Address === */}
-            <h3 style={{ margin: '1.25rem 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Address</h3>
+            <h3 className="form-section-title">Address</h3>
             <FormInput label="Street" value={formData.street} onChange={e => handleChange('street', e.target.value)} />
             <div className="form-row">
                 <FormInput label="City" value={formData.city} onChange={e => handleChange('city', e.target.value)} />
@@ -474,7 +452,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             </div>
 
             {/* === Preferences === */}
-            <h3 style={{ margin: '1.25rem 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Preferences</h3>
+            <h3 className="form-section-title">Preferences</h3>
             <div className="form-row">
                 {/* Default Landing Page dropdown */}
                 <div className="form-field">
@@ -531,7 +509,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             </div>
 
             {/* === Currency / Number Settings === */}
-            <h3 style={{ margin: '1.25rem 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Currency & Number Settings</h3>
+            <h3 className="form-section-title">Currency & Number Settings</h3>
             <div className="form-row">
                 {/* Currency dropdown */}
                 <div className="form-field">
@@ -586,14 +564,14 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             </div>
 
             {/* === Other === */}
-            <h3 style={{ margin: '1.25rem 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Other</h3>
+            <h3 className="form-section-title">Other</h3>
             <FormInput label="Aggregation Format" value={formData.aggregation_format} onChange={e => handleChange('aggregation_format', e.target.value)} />
             <FormInput label="Signature" type="textarea" value={formData.signature} onChange={e => handleChange('signature', e.target.value)} />
 
             {/* === Role Dropdown === */}
-            <h3 style={{ margin: '1.25rem 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Assignment</h3>
+            <h3 className="form-section-title">Assignment</h3>
 
-            <div className="form-field" style={{ position: 'relative' }}>
+            <div className="form-field form-field--relative">
                 <label className="form-label">Assign Role</label>
                 <input
                     type="text"
@@ -606,18 +584,23 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     autoComplete="off"
                 />
                 {roleDropdownOpen && (
-                    <div className="dropdown-options" style={dropdownStyle}>
+                    <div className="dropdown-options">
                         {roleSearchLoading ? (
-                            <div style={{ padding: '0.5rem', color: '#999' }}>Loading...</div>
+                            <div className="dropdown-empty">Loading...</div>
                         ) : (
                             <>
                                 {availableRoles.map(role => {
                                     const isCurrent = role.id === user?.rolesid;
                                     const isSelected = role.id === selectedRole;
+                                    const optionClass = [
+                                        'dropdown-option',
+                                        isSelected ? 'dropdown-option--selected' : '',
+                                        isCurrent ? 'dropdown-option--disabled' : '',
+                                    ].filter(Boolean).join(' ');
                                     return (
                                         <div
                                             key={role.id}
-                                            style={dropdownItemStyle(isSelected, isCurrent)}
+                                            className={optionClass}
                                             onMouseDown={e => { e.preventDefault(); if (!isCurrent) handleRoleSelect(role.id); }}
                                         >
                                             {role.name} {isCurrent && '(Current)'} {isSelected && '✓'}
@@ -625,7 +608,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                                     );
                                 })}
                                 {availableRoles.length === 0 && (
-                                    <div style={{ padding: '0.5rem', color: '#999' }}>No roles found</div>
+                                    <div className="dropdown-empty">No roles found</div>
                                 )}
                             </>
                         )}
@@ -634,7 +617,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             </div>
 
             {/* === Reports To Dropdown === */}
-            <div className="form-field" style={{ position: 'relative', marginTop: '0.75rem' }}>
+            <div className="form-field form-field--relative form-field--spaced">
                 <label className="form-label">Reports To</label>
                 <input
                     type="text"
@@ -650,24 +633,28 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     <button
                         type="button"
                         onClick={() => { setReportsToUserId(''); setUserSearch(''); }}
-                        style={{ position: 'absolute', right: '8px', top: '32px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1.1rem' }}
+                        className="dropdown-clear-btn"
                         title="Clear"
                     >
                         ✕
                     </button>
                 )}
                 {userDropdownOpen && (
-                    <div className="dropdown-options" style={dropdownStyle}>
+                    <div className="dropdown-options">
                         {userSearchLoading ? (
-                            <div style={{ padding: '0.5rem', color: '#999' }}>Loading...</div>
+                            <div className="dropdown-empty">Loading...</div>
                         ) : (
                             <>
                                 {availableUsers.map(u => {
                                     const isSelected = u.id === reportsToUserId;
+                                    const optionClass = [
+                                        'dropdown-option',
+                                        isSelected ? 'dropdown-option--selected' : '',
+                                    ].filter(Boolean).join(' ');
                                     return (
                                         <div
                                             key={u.id}
-                                            style={dropdownItemStyle(isSelected, false)}
+                                            className={optionClass}
                                             onMouseDown={e => { e.preventDefault(); handleUserSelect(u.id); }}
                                         >
                                             {u.first_name || ''} {u.last_name} ({u.primary_email}) {isSelected && '✓'}
@@ -675,7 +662,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                                     );
                                 })}
                                 {availableUsers.length === 0 && (
-                                    <div style={{ padding: '0.5rem', color: '#999' }}>No users found</div>
+                                    <div className="dropdown-empty">No users found</div>
                                 )}
                             </>
                         )}
@@ -687,7 +674,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             <button
                 type="button"
                 id="user-form-submit"
-                style={{ display: 'none' }}
+                className="visually-hidden"
                 onClick={handleSubmit}
             />
         </div>

@@ -98,7 +98,7 @@ export function Sidebar({ isCollapsed, isMobile, isMobileOpen, onToggle, onClose
                     title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 >
                     {logoUrl ? (
-                        <img src={logoUrl} alt="Logo" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 4 }} />
+                        <img src={logoUrl} alt="Logo" className="sidebar-logo-img" />
                     ) : (
                         <Shield size={28} />
                     )}

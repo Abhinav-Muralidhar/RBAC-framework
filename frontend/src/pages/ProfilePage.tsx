@@ -450,7 +450,7 @@ export function ProfilePage() {
 
                         {/* Read-only admin-set fields */}
                         <h2><LayoutDashboard size={18} /> Admin-Set Preferences</h2>
-                        <div className="account-info" style={{ marginBottom: '1rem' }}>
+                        <div className="account-info account-info--spaced">
                             <div className="account-row">
                                 <div className="account-label"><LayoutDashboard size={18} /><span>Default Landing Page</span></div>
                                 <div className="account-value">

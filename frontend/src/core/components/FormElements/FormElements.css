@@ -11,6 +11,14 @@
     margin-bottom: 0;
 }
 
+.form-field--relative {
+    position: relative;
+}
+
+.form-field--spaced {
+    margin-top: 0.75rem;
+}
+
 /* Label */
 .form-label {
     display: block;

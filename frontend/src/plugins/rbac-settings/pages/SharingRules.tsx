@@ -96,8 +96,7 @@ export function SharingRules() {
                                                     console.error(err);
                                                 }
                                             }}
-                                            className={`btn ${rule.rule_type === 'public' ? 'btn-primary' : 'btn-secondary'}`}
-                                            style={{ minWidth: '80px' }}
+                                            className={`btn btn-min ${rule.rule_type === 'public' ? 'btn-primary' : 'btn-secondary'}`}
                                         >
                                             {rule.rule_type === 'public' ? 'Public' : 'Private'}
                                         </button>

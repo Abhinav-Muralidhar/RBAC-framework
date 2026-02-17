@@ -228,7 +228,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
             <button
                 type="button"
                 id="group-form-submit"
-                style={{ display: 'none' }}
+                className="visually-hidden"
                 onClick={handleSubmit}
             />
         </div>

@@ -288,13 +288,12 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
             />
 
             {/* Test Connection Button Section */}
-            <div style={{ marginTop: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <div className="form-inline-actions">
                 <button
                     type="button"
-                    className="btn btn-secondary"
+                    className="btn btn-secondary btn-inline-icon"
                     onClick={handleTestConnection}
                     disabled={isTesting}
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                 >
                     {isTesting ? (
                         <Loader2 size={16} className="animate-spin" />
@@ -304,17 +303,7 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
                 </button>
 
                 {testResult && (
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        fontSize: '0.875rem',
-                        color: testResult.success ? '#15803d' : '#dc2626',
-                        backgroundColor: testResult.success ? '#f0fdf4' : '#fef2f2',
-                        padding: '4px 12px',
-                        borderRadius: '4px',
-                        border: `1px solid ${testResult.success ? '#bbf7d0' : '#fecaca'}`
-                    }}>
+                    <div className={`smtp-test-result ${testResult.success ? 'smtp-test-result--success' : 'smtp-test-result--error'}`}>
                         {testResult.success ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
                         <span>{testResult.message}</span>
                     </div>
@@ -324,7 +313,7 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
             <button
                 type="button"
                 id="smtp-form-submit"
-                style={{ display: 'none' }}
+                className="visually-hidden"
                 onClick={handleSubmit}
             />
         </div>

@@ -453,12 +453,11 @@ export function RolesPage() {
                     </div>
                     {Object.keys(filters).length > 0 && (
                         <button
-                            className="btn btn-text"
+                            className="btn btn-text filter-clear"
                             onClick={() => {
                                 setFilters({});
                                 setShowFilterModal(false);
                             }}
-                            style={{ marginTop: '1rem' }}
                         >
                             Clear All Filters
                         </button>
