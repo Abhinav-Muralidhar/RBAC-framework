@@ -81,11 +81,11 @@ export function OrganizationPage() {
                         </thead>
                         <tbody>
                             <tr>
-                                <td>{organization.company_name}</td>
-                                <td>{organization.gstin || '-'}</td>
-                                <td>{organization.city || '-'}</td>
-                                <td>{organization.website || '-'}</td>
-                                <td>
+                                <td data-label="Company Name">{organization.company_name}</td>
+                                <td data-label="GSTIN">{organization.gstin || '-'}</td>
+                                <td data-label="City">{organization.city || '-'}</td>
+                                <td data-label="Website">{organization.website || '-'}</td>
+                                <td data-label="Actions">
                                     <button
                                         className="btn-icon btn-primary"
                                         title="Edit Organization"

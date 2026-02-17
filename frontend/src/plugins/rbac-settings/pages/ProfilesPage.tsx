@@ -131,15 +131,15 @@ export function ProfilesPage() {
                             <tbody>
                                 {profiles.length > 0 ? profiles.map(profile => (
                                     <tr key={profile.id}>
-                                        <td className="clickable-cell" onClick={() => detailsModal.open(profile.id)}>{profile.name}</td>
-                                        <td className="clickable-cell" onClick={() => detailsModal.open(profile.id)}><code>{profile.code}</code></td>
-                                        <td className="hide-mobile clickable-cell" onClick={() => detailsModal.open(profile.id)}>{profile.description || '-'}</td>
-                                        <td className="clickable-cell" onClick={() => detailsModal.open(profile.id)}>
+                                        <td data-label="Name" className="clickable-cell" onClick={() => detailsModal.open(profile.id)}>{profile.name}</td>
+                                        <td data-label="Code" className="clickable-cell" onClick={() => detailsModal.open(profile.id)}><code>{profile.code}</code></td>
+                                        <td data-label="Description" className="hide-mobile clickable-cell" onClick={() => detailsModal.open(profile.id)}>{profile.description || '-'}</td>
+                                        <td data-label="Status" className="clickable-cell" onClick={() => detailsModal.open(profile.id)}>
                                             <span className={`status-badge status-${profile.is_active ? 'active' : 'inactive'}`}>
                                                 {profile.is_active ? 'Active' : 'Inactive'}
                                             </span>
                                         </td>
-                                        <td>
+                                        <td data-label="Actions">
                                             <div className="action-buttons">
                                                 <button className="btn-icon" title="Edit" onClick={() => openEdit(profile)} disabled={editLoading}>
                                                     <Edit2 size={16} />

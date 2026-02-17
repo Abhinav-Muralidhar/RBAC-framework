@@ -138,15 +138,15 @@ export function GroupsPage() {
                             <tbody>
                                 {groups.length > 0 ? groups.map(group => (
                                     <tr key={group.id}>
-                                        <td className="clickable-cell" onClick={() => detailsModal.open(group.id)}>{group.name}</td>
-                                        <td className="clickable-cell" onClick={() => detailsModal.open(group.id)}><code>{group.code || '-'}</code></td>
-                                        <td className="hide-mobile clickable-cell" onClick={() => detailsModal.open(group.id)}>{group.description || '-'}</td>
-                                        <td className="clickable-cell" onClick={() => detailsModal.open(group.id)}>
+                                        <td data-label="Name" className="clickable-cell" onClick={() => detailsModal.open(group.id)}>{group.name}</td>
+                                        <td data-label="Code" className="clickable-cell" onClick={() => detailsModal.open(group.id)}><code>{group.code || '-'}</code></td>
+                                        <td data-label="Description" className="hide-mobile clickable-cell" onClick={() => detailsModal.open(group.id)}>{group.description || '-'}</td>
+                                        <td data-label="Status" className="clickable-cell" onClick={() => detailsModal.open(group.id)}>
                                             <span className={`status-badge status-${group.is_active ? 'active' : 'inactive'}`}>
                                                 {group.is_active ? 'Active' : 'Inactive'}
                                             </span>
                                         </td>
-                                        <td>
+                                        <td data-label="Actions">
                                             <div className="action-buttons">
                                                 <button className="btn-icon" title="Edit" onClick={() => openEdit(group)} disabled={editLoading}>
                                                     <Edit2 size={16} />

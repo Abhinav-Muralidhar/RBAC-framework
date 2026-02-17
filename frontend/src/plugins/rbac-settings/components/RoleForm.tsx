@@ -282,7 +282,7 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
                     onChange={handleParentRoleInputChange}
                     onFocus={handleParentRoleInputFocus}
                     onBlur={handleParentRoleInputBlur}
-                    style={{ width: '100%', padding: '0.5rem' }}
+                    className="form-input"
                     autoComplete="off"
                 />
 

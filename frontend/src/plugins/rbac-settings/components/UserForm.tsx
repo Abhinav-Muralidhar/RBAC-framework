@@ -482,7 +482,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     <select
                         value={formData.default_landing_page}
                         onChange={e => handleChange('default_landing_page', e.target.value)}
-                        style={{ width: '100%', padding: '0.5rem' }}
+                        className="form-select"
                     >
                         <option value="">— None (Dashboard) —</option>
                         {landingPages.map(lp => (
@@ -497,7 +497,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     <select
                         value={formData.name_format}
                         onChange={e => handleChange('name_format', e.target.value)}
-                        style={{ width: '100%', padding: '0.5rem' }}
+                        className="form-select"
                     >
                         <option value="">— Not Set —</option>
                         {NAME_FORMAT_OPTIONS.map(o => (
@@ -514,7 +514,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     <select
                         value={formData.time_zone}
                         onChange={e => handleChange('time_zone', e.target.value)}
-                        style={{ width: '100%', padding: '0.5rem' }}
+                        className="form-select"
                     >
                         <option value="">— Not Set —</option>
                         {TIME_ZONE_OPTIONS.map(o => (
@@ -539,7 +539,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     <select
                         value={formData.preferred_currency}
                         onChange={e => handleChange('preferred_currency', e.target.value)}
-                        style={{ width: '100%', padding: '0.5rem' }}
+                        className="form-select"
                     >
                         <option value="">— Not Set —</option>
                         {CURRENCY_OPTIONS.map(o => (
@@ -560,7 +560,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     <select
                         value={formData.symbol_placement}
                         onChange={e => handleChange('symbol_placement', e.target.value)}
-                        style={{ width: '100%', padding: '0.5rem' }}
+                        className="form-select"
                     >
                         <option value="">— Not Set —</option>
                         {SYMBOL_PLACEMENT_OPTIONS.map(o => (
@@ -575,7 +575,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     <select
                         value={formData.trailing_zero_handling}
                         onChange={e => handleChange('trailing_zero_handling', e.target.value)}
-                        style={{ width: '100%', padding: '0.5rem' }}
+                        className="form-select"
                     >
                         <option value="">— Not Set —</option>
                         {TRAILING_ZERO_OPTIONS.map(o => (
@@ -602,7 +602,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     onChange={handleRoleInputChange}
                     onFocus={() => setRoleDropdownOpen(true)}
                     onBlur={() => setTimeout(() => { setRoleDropdownOpen(false); setIsSearchingRoles(false); setRoleSearch(''); }, 200)}
-                    style={{ width: '100%', padding: '0.5rem' }}
+                    className="form-input"
                     autoComplete="off"
                 />
                 {roleDropdownOpen && (
@@ -643,7 +643,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     onChange={handleUserInputChange}
                     onFocus={() => setUserDropdownOpen(true)}
                     onBlur={() => setTimeout(() => { setUserDropdownOpen(false); setIsSearchingUsers(false); setUserSearch(''); }, 200)}
-                    style={{ width: '100%', padding: '0.5rem' }}
+                    className="form-input"
                     autoComplete="off"
                 />
                 {reportsToUserId && (

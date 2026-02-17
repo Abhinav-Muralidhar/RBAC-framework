@@ -147,15 +147,15 @@ export function UsersPage() {
                                 {users.length > 0 ? (
                                     users.map(user => (
                                         <tr key={user.id}>
-                                            <td className="clickable-cell" onClick={() => detailsModal.open(user.id)}>{user.username}</td>
-                                            <td className="clickable-cell" onClick={() => detailsModal.open(user.id)}>{formatUserName(user.first_name, user.last_name, user.name_format)}</td>
-                                            <td className="hide-mobile clickable-cell" onClick={() => detailsModal.open(user.id)}>{user.primary_email}</td>
-                                            <td className="clickable-cell" onClick={() => detailsModal.open(user.id)}>
+                                            <td data-label="Username" className="clickable-cell" onClick={() => detailsModal.open(user.id)}>{user.username}</td>
+                                            <td data-label="Name" className="clickable-cell" onClick={() => detailsModal.open(user.id)}>{formatUserName(user.first_name, user.last_name, user.name_format)}</td>
+                                            <td data-label="Email" className="hide-mobile clickable-cell" onClick={() => detailsModal.open(user.id)}>{user.primary_email}</td>
+                                            <td data-label="Status" className="clickable-cell" onClick={() => detailsModal.open(user.id)}>
                                                 <span className={`status-badge status-${user.status.toLowerCase()}`}>
                                                     {user.status}
                                                 </span>
                                             </td>
-                                            <td>
+                                            <td data-label="Actions">
                                                 <div className="action-buttons">
                                                     <button
                                                         className="btn-icon"

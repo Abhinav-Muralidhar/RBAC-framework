@@ -10,7 +10,6 @@ import { NavLink } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAdminSettings } from '../../contexts/AdminSettingsContext';
-import { useSidebar } from '../../hooks';
 import { ROUTES } from '../../../routes/routes';
 import {
     LayoutDashboard,
@@ -42,11 +41,19 @@ const navItems: NavItem[] = [
     },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+    isCollapsed: boolean;
+    isMobile: boolean;
+    isMobileOpen: boolean;
+    onToggle: () => void;
+    onCloseMobile: () => void;
+}
+
+export function Sidebar({ isCollapsed, isMobile, isMobileOpen, onToggle, onCloseMobile }: SidebarProps) {
     const { user, hasPermission, logout } = useAuth();
     const { openSettings } = useAdminSettings();
-    const { isCollapsed, toggle } = useSidebar();
     const [branding, setBranding] = useState<OrganizationBrandingDto | null>(null);
+    const showLabels = !isCollapsed || isMobile;
 
     useEffect(() => {
         organizationApi.getBranding().then(setBranding).catch(() => { });
@@ -63,20 +70,30 @@ export function Sidebar() {
 
     const handleOpenSettings = () => {
         openSettings();
+        if (isMobile) {
+            onCloseMobile();
+        }
     };
 
     // Check if user can access settings
     const canAccessSettings = hasPermission('SETTINGS', 'read');
 
     return (
-        <aside className={`sidebar ${isCollapsed ? 'sidebar--collapsed' : ''}`}>
+        <aside
+            className={[
+                'sidebar',
+                isCollapsed ? 'sidebar--collapsed' : '',
+                isMobile ? 'sidebar--mobile' : '',
+                isMobileOpen ? 'sidebar--mobile-open' : '',
+            ].filter(Boolean).join(' ')}
+        >
             <div className="sidebar-header">
                 <div
                     className="sidebar-logo"
-                    onClick={toggle}
+                    onClick={onToggle}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && toggle()}
+                    onKeyDown={(e) => e.key === 'Enter' && onToggle()}
                     aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                     title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 >
@@ -85,7 +102,7 @@ export function Sidebar() {
                     ) : (
                         <Shield size={28} />
                     )}
-                    {!isCollapsed && <span>{branding?.company_name || 'RBAC'}</span>}
+                    {showLabels && <span>{branding?.company_name || 'RBAC'}</span>}
                 </div>
             </div>
 
@@ -95,10 +112,11 @@ export function Sidebar() {
                         key={item.id}
                         to={item.path}
                         className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                        title={isCollapsed ? item.label : undefined}
+                        title={!showLabels ? item.label : undefined}
+                        onClick={() => isMobile && onCloseMobile()}
                     >
                         {item.icon}
-                        {!isCollapsed && <span>{item.label}</span>}
+                        {showLabels && <span>{item.label}</span>}
                     </NavLink>
                 ))}
             </nav>
@@ -110,20 +128,21 @@ export function Sidebar() {
                         className="settings-btn"
                         onClick={handleOpenSettings}
                         aria-label="Open admin settings"
-                        title={isCollapsed ? 'Admin Settings' : undefined}
+                        title={!showLabels ? 'Admin Settings' : undefined}
                     >
                         <Settings size={20} />
-                        {!isCollapsed && <span>Admin Settings</span>}
+                        {showLabels && <span>Admin Settings</span>}
                     </button>
                 )}
 
                 <NavLink
                     to="/profile"
                     className="user-menu"
-                    title={isCollapsed ? formatUserName(user?.first_name, user?.last_name || '', user?.name_format) : undefined}
+                    title={!showLabels ? formatUserName(user?.first_name, user?.last_name || '', user?.name_format) : undefined}
+                    onClick={() => isMobile && onCloseMobile()}
                 >
                     <User size={20} />
-                    {!isCollapsed && (
+                    {showLabels && (
                         <div className="user-info">
                             <span className="user-name">{formatUserName(user?.first_name, user?.last_name || '', user?.name_format)}</span>
                             <span className="user-email">{user?.primary_email}</span>
@@ -133,10 +152,10 @@ export function Sidebar() {
                 <button
                     className="logout-btn"
                     onClick={handleLogout}
-                    title={isCollapsed ? 'Logout' : undefined}
+                    title={!showLabels ? 'Logout' : undefined}
                 >
                     <LogOut size={18} />
-                    {!isCollapsed && <span>Logout</span>}
+                    {showLabels && <span>Logout</span>}
                 </button>
             </div>
         </aside>

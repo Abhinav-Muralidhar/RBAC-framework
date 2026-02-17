@@ -141,16 +141,16 @@ export function SmtpPage() {
                             <tbody>
                                 {configs.map(config => (
                                     <tr key={config.id}>
-                                        <td className="clickable-cell" onClick={() => detailsModal.open(config.id)}>
+                                        <td data-label="Name" className="clickable-cell" onClick={() => detailsModal.open(config.id)}>
                                             <div className="cell-primary">
                                                 <Mail size={16} />
                                                 {config.name}
                                             </div>
                                         </td>
-                                        <td className="clickable-cell" onClick={() => detailsModal.open(config.id)}>{config.host}</td>
-                                        <td className="hide-mobile clickable-cell" onClick={() => detailsModal.open(config.id)}>{config.port}</td>
-                                        <td className="hide-mobile clickable-cell" onClick={() => detailsModal.open(config.id)}>{config.from_email}</td>
-                                        <td className="clickable-cell" onClick={() => detailsModal.open(config.id)}>
+                                        <td data-label="Host" className="clickable-cell" onClick={() => detailsModal.open(config.id)}>{config.host}</td>
+                                        <td data-label="Port" className="hide-mobile clickable-cell" onClick={() => detailsModal.open(config.id)}>{config.port}</td>
+                                        <td data-label="From" className="hide-mobile clickable-cell" onClick={() => detailsModal.open(config.id)}>{config.from_email}</td>
+                                        <td data-label="Status" className="clickable-cell" onClick={() => detailsModal.open(config.id)}>
                                             {config.is_active ? (
                                                 <span className="status-badge status-active">
                                                     <Check size={12} /> Active
@@ -161,7 +161,7 @@ export function SmtpPage() {
                                                 </span>
                                             )}
                                         </td>
-                                        <td>
+                                        <td data-label="Actions">
                                             <div className="action-buttons">
                                                 <button
                                                     className="btn-icon"

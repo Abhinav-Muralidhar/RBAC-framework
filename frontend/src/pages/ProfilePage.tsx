@@ -396,7 +396,7 @@ export function ProfilePage() {
                                 <select
                                     value={formData.time_zone}
                                     onChange={e => handleInputChange('time_zone', e.target.value)}
-                                    style={{ width: '100%', padding: '0.5rem' }}
+                                    className="form-select"
                                 >
                                     <option value="">— Not Set —</option>
                                     {TIME_ZONE_OPTIONS.map(o => (
@@ -409,7 +409,7 @@ export function ProfilePage() {
                                 <select
                                     value={formData.preferred_currency}
                                     onChange={e => handleInputChange('preferred_currency', e.target.value)}
-                                    style={{ width: '100%', padding: '0.5rem' }}
+                                    className="form-select"
                                 >
                                     <option value="">— Not Set —</option>
                                     {CURRENCY_OPTIONS.map(o => (
@@ -425,7 +425,7 @@ export function ProfilePage() {
                                 <select
                                     value={formData.name_format}
                                     onChange={e => handleInputChange('name_format', e.target.value)}
-                                    style={{ width: '100%', padding: '0.5rem' }}
+                                    className="form-select"
                                 >
                                     <option value="">— Not Set —</option>
                                     {NAME_FORMAT_OPTIONS.map(o => (

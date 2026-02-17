@@ -127,7 +127,7 @@
 }
 
 .details-modal__field-label {
-    flex: 0 0 140px;
+    flex: 0 0 clamp(110px, 30%, 140px);
     font-size: 13px;
     font-weight: 500;
     color: #64748b;

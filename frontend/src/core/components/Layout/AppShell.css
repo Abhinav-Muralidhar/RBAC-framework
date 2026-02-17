@@ -1,22 +1,21 @@
 .app-shell {
     display: flex;
     min-height: 100vh;
+    min-height: 100dvh;
     background: #f8fafc;
 }
 
 .app-content {
     flex: 1;
-    margin-left: 260px;
-    padding: 2rem;
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    padding: calc(var(--content-padding) + 3rem) var(--content-padding) var(--content-padding);
     overflow-y: auto;
-    transition: margin-left 0.2s ease;
+    transition: padding 0.2s ease;
 }
 
-/* Account for collapsed sidebar */
-.sidebar--collapsed~.app-content,
-.app-shell:has(.sidebar--collapsed) .app-content {
-    margin-left: 72px;
-}
+/* Sidebar no longer reserves layout space */
 
 .app-loading {
     display: flex;
@@ -24,6 +23,7 @@
     align-items: center;
     justify-content: center;
     min-height: 100vh;
+    min-height: 100dvh;
     background: #f8fafc;
     color: #64748b;
 }
@@ -43,19 +43,56 @@
     }
 }
 
+.mobile-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 300;
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.625rem;
+    background: #ffffff;
+    color: #0f172a;
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+}
+
+.app-shell--sidebar-open .mobile-menu-btn {
+    display: none;
+}
+
+.app-overlay {
+    display: none;
+}
+
 /* Responsive - on mobile, sidebar overlays content */
 @media (max-width: 768px) {
+    .app-shell {
+        display: block;
+    }
+
     .app-content {
         margin-left: 0;
-        padding: 1rem;
+        min-height: 100vh;
+        padding: calc(var(--content-padding) + 3rem) var(--content-padding) var(--content-padding);
     }
 
-    .sidebar {
-        transform: translateX(-100%);
-        transition: transform 0.2s ease;
+    .app-overlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 180;
+        border: 0;
+        background: rgba(15, 23, 42, 0.45);
     }
+}
 
-    .sidebar--open {
-        transform: translateX(0);
+@media (max-width: 480px) {
+    .app-content {
+        padding: calc(var(--content-padding) + 2.25rem) var(--content-padding) var(--content-padding);
     }
 }

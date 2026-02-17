@@ -278,7 +278,7 @@ export function RolesPage() {
             </header>
 
             {/* Toolbar */}
-            <div className="page-toolbar" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className="page-toolbar">
                 <div className="search-box">
                     <Search size={18} />
                     <input
@@ -297,7 +297,7 @@ export function RolesPage() {
                     {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
                 </button>
 
-                <div className="view-toggle" style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+                <div className="view-toggle">
                     <button
                         className={`btn ${viewMode === 'table' ? 'btn-primary' : 'btn-secondary'}`}
                         onClick={() => setViewMode('table')}
@@ -335,15 +335,15 @@ export function RolesPage() {
                                 <tbody>
                                     {roles.length > 0 ? roles.map(role => (
                                         <tr key={role.id}>
-                                            <td className="clickable-cell" onClick={() => detailsModal.open(role.id)}>{role.name}</td>
-                                            <td className="clickable-cell" onClick={() => detailsModal.open(role.id)}><code>{role.code}</code></td>
-                                            <td className="hide-mobile clickable-cell" onClick={() => detailsModal.open(role.id)}>{role.description || '-'}</td>
-                                            <td className="clickable-cell" onClick={() => detailsModal.open(role.id)}>
+                                            <td data-label="Name" className="clickable-cell" onClick={() => detailsModal.open(role.id)}>{role.name}</td>
+                                            <td data-label="Code" className="clickable-cell" onClick={() => detailsModal.open(role.id)}><code>{role.code}</code></td>
+                                            <td data-label="Description" className="hide-mobile clickable-cell" onClick={() => detailsModal.open(role.id)}>{role.description || '-'}</td>
+                                            <td data-label="Status" className="clickable-cell" onClick={() => detailsModal.open(role.id)}>
                                                 <span className={`status-badge status-${role.is_active ? 'active' : 'inactive'}`}>
                                                     {role.is_active ? 'Active' : 'Inactive'}
                                                 </span>
                                             </td>
-                                            <td>
+                                            <td data-label="Actions">
                                                 <div className="action-buttons">
                                                     <button className="btn-icon" title="Edit" onClick={() => openEdit(role)} disabled={editLoading}>
                                                         <Edit2 size={16} />

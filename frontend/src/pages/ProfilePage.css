@@ -5,6 +5,7 @@
 .profile-page {
     max-width: 800px;
     margin: 0 auto;
+    width: min(100%, 800px);
 }
 
 .profile-loading {
@@ -19,7 +20,8 @@
 .profile-header {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: clamp(1rem, 2vw, 1.5rem);
+    flex-wrap: wrap;
     margin-bottom: 2rem;
     padding-bottom: 1.5rem;
     border-bottom: 1px solid #e2e8f0;
@@ -29,8 +31,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 80px;
-    height: 80px;
+    width: clamp(64px, 12vw, 80px);
+    height: clamp(64px, 12vw, 80px);
     background: linear-gradient(135deg, #3b82f6, #8b5cf6);
     color: #fff;
     border-radius: 50%;
@@ -38,7 +40,7 @@
 
 .profile-title h1 {
     margin: 0 0 0.25rem;
-    font-size: 1.5rem;
+    font-size: clamp(1.25rem, 1.05rem + 0.8vw, 1.5rem);
     color: #0f172a;
 }
 
@@ -77,7 +79,7 @@
     background: #fff;
     border: 1px solid #e2e8f0;
     border-radius: 0.75rem;
-    padding: 1.5rem;
+    padding: var(--card-padding);
 }
 
 .profile-section h2 {
@@ -85,7 +87,7 @@
     align-items: center;
     gap: 0.5rem;
     margin: 0 0 1.5rem;
-    font-size: 1.125rem;
+    font-size: clamp(1rem, 0.95rem + 0.4vw, 1.125rem);
     color: #0f172a;
 }
 
@@ -100,7 +102,7 @@
     gap: 1rem;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
     .form-row {
         grid-template-columns: 1fr;
     }
@@ -125,6 +127,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
     padding: 1rem;
     background: #f8fafc;
     border-radius: 0.5rem;
@@ -146,6 +150,8 @@
     display: flex;
     align-items: center;
     gap: 1rem;
+    min-width: 0;
+    flex-wrap: wrap;
 }
 
 .account-value span {
@@ -252,6 +258,10 @@
 
 /* Responsive */
 @media (max-width: 640px) {
+    .profile-page {
+        width: 100%;
+    }
+
     .profile-header {
         flex-direction: column;
         text-align: center;
@@ -266,5 +276,14 @@
     .account-value {
         width: 100%;
         justify-content: space-between;
+    }
+
+    .modal-actions {
+        flex-direction: column-reverse;
+    }
+
+    .modal-actions .btn {
+        width: 100%;
+        justify-content: center;
     }
 }

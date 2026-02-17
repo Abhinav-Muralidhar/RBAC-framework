@@ -114,19 +114,19 @@ export function SessionsPage() {
                             <tbody>
                                 {sessions.map(session => (
                                     <tr key={session.id}>
-                                        <td>
+                                        <td data-label="Session ID">
                                             <code>{session.id.slice(0, 8)}</code>
                                         </td>
-                                        <td>{session.user_id}</td>
-                                        <td>{session.ip_address}</td>
-                                        <td title={session.user_agent}>{session.user_agent}</td>
-                                        <td>{format(new Date(session.login_at), 'MMM d, HH:mm')}</td>
-                                        <td>{session.logout_at ? "Logout at " + format(new Date(session.logout_at), 'MMM d, HH:mm') : "Expires at " + format(new Date(session.expires_at), 'MMM d, HH:mm')}</td>
-                                        <td>{(session.logout_at || new Date(session.expires_at) < new Date())
+                                        <td data-label="User ID">{session.user_id}</td>
+                                        <td data-label="IP Address">{session.ip_address}</td>
+                                        <td data-label="User Agent" title={session.user_agent}>{session.user_agent}</td>
+                                        <td data-label="Login Time">{format(new Date(session.login_at), 'MMM d, HH:mm')}</td>
+                                        <td data-label="Logout/Expires">{session.logout_at ? "Logout at " + format(new Date(session.logout_at), 'MMM d, HH:mm') : "Expires at " + format(new Date(session.expires_at), 'MMM d, HH:mm')}</td>
+                                        <td data-label="Status">{(session.logout_at || new Date(session.expires_at) < new Date())
                                             ? <span className="status-badge status-inactive">Inactive</span>
                                             : <span className="status-badge status-active">Active</span>
                                         }</td>
-                                        <td>
+                                        <td data-label="Actions">
                                             <div className="action-buttons">
                                                 <button
                                                     className="btn-icon btn-danger"
