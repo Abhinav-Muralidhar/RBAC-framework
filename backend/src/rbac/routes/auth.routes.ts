@@ -142,17 +142,15 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
                 // Try to invalidate session if cookie exists
                 const sessionToken = req.signedCookies['sessionToken'];
                 if (sessionToken) {
-                    await withTransaction(async (t) => {
-                        const session = await authSessionService.resolveSession(t, sessionToken);
-                        await authSessionService.logout(t, session.id);
-                    });
+                    const session = await authSessionService.resolveSession(t, sessionToken);
+                    await authSessionService.logout(t, session.id);
                 }
             });
             res.clearCookie('sessionToken', COOKIE_OPTIONS);
             sendSuccess(res, { message: 'Logged out successfully' });
         } catch (error) {
-            sendError(res, 500, 'Logout failed', 'INTERNAL_ERROR');
             res.clearCookie('sessionToken', COOKIE_OPTIONS);
+            sendError(res, 500, 'Logout failed', 'INTERNAL_ERROR');
         }
     });
 

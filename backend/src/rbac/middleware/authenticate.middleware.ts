@@ -35,7 +35,6 @@ export function createAuthenticateMiddleware(authSessionService: IAuthSessionSer
                 });
                 return;
             }
-            console.log('COOKIE TOKEN:', req.signedCookies.sessionToken);
             const session = await authSessionService.resolveSession(undefined, sessionToken);
 
             if (!session) {
