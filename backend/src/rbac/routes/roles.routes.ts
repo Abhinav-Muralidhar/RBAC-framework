@@ -65,6 +65,18 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
         }
     });
 
+
+    router.get('/tree', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req, res, next) => {
+        try {
+            const tree = await withTransaction(async (t: TransactionTask) => {
+                return roleService.getRoleTree(t, req.user!.id);
+            });
+            sendSuccess(res, tree);
+        } catch (err) {
+            next(err);
+        }
+    });
+
     /**
      * GET /rbac/roles/:id
      * Get role by ID with full details (JOINed data)
@@ -97,7 +109,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
             const result = await withTransaction(async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
-                const role = await roleService.createRoleProfiles(t, actingUserId, req.body);
+                const role = await roleService.createRoleProfiles(t, actingUserId, req.body, req.auditContext);
                 return role;
             });
             sendSuccess(res, result);
@@ -116,7 +128,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
 
                 const actingUserId = req.user!.id;
                 const roleId = parseId(req.params.id, 'roleId');
-                const role = await roleService.updateRoleProfiles(t, actingUserId, roleId, req.body);
+                const role = await roleService.updateRoleProfiles(t, actingUserId, roleId, req.body, req.auditContext);
                 return role;
             });
             sendSuccess(res, result);
@@ -129,21 +141,21 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      * DELETE /rbac/roles/:id
      * Delete role (soft delete)
      */
-    router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
+    router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req, res, next) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
-
-                const actingUserId = req.user!.id;
+            await withTransaction(async (t: TransactionTask) => {
                 const roleId = parseId(req.params.id, 'roleId');
-                await roleService.delete(t, actingUserId, roleId);
-                return { message: 'Role deleted successfully' };
+                await roleService.delete(t, req.user!.id, roleId, req.auditContext);
             });
-            sendSuccess(res, result);
-        } catch (error) {
-            next(error);
+            sendSuccess(res, { message: 'Role deleted successfully' });
+        } catch (err: any) {
+            if (err.message === 'ROLE_HAS_ACTIVE_CHILDREN') {
+                sendError(res, 409, 'Role cannot be deleted: active children exist', 'ROLE_HAS_CHILDREN');
+            } else {
+                next(err);
+            }
         }
     });
-
     /**
      * PUT /rbac/roles/:id/profiles
      * Update role profiles
@@ -155,7 +167,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
                 const actingUserId = req.user!.id;
                 const roleId = parseId(req.params.id, 'roleId');
                 const { profile_ids } = req.body;
-                await roleService.updateRoleProfiles(t, actingUserId, roleId, profile_ids ?? []);
+                await roleService.updateRoleProfiles(t, actingUserId, roleId, profile_ids ?? [], req.auditContext);
                 return { message: 'Role profiles updated successfully' };
             });
             sendSuccess(res, result);
@@ -182,6 +194,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
             next(error);
         }
     });
+
 
     return router;
 }

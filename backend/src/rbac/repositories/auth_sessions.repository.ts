@@ -1,5 +1,5 @@
 import { IDatabase, ITask } from 'pg-promise';
-import { AuthSessions } from '../models/auth_sessions.model';
+import { AuthSessions, AuthSessionWithUsername } from '../models/auth_sessions.model';
 import { CreateAuthSessionInput } from '../types/repository.types';
 import {
   PaginationParams,
@@ -20,7 +20,7 @@ export interface IAuthSessionsRepository {
   findAllByUser(t: TransactionTask | undefined, userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
   findActiveByUser(t: TransactionTask | undefined, userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
   deleteAllByUser(t: TransactionTask | undefined, userId: string): Promise<void>;
-  findAll(t: TransactionTask | undefined, filters?: { userId?: string; isActive?: boolean; search?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
+  findAll(t: TransactionTask | undefined, filters?: { userId?: string; isActive?: boolean; search?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessionWithUsername>>;
   deleteExpired(t: TransactionTask | undefined): Promise<void>;
   deleteOneForUser(t: TransactionTask | undefined, sessionId: string, userId: string, actingUserId: string): Promise<void>;
 }
@@ -181,7 +181,7 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     t: TransactionTask | undefined,
     filters?: { userId?: string; isActive?: boolean; search?: string },
     pagination?: Partial<PaginationParams>
-  ): Promise<PaginatedResult<AuthSessions>> {
+  ): Promise<PaginatedResult<AuthSessionWithUsername>> {
     const p = normalizePaginationParams(pagination);
     const offset = getPaginationOffset(p.page, p.limit);
 
@@ -221,7 +221,7 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     params.push(p.limit, offset);
 
     // Fetch with filters and pagination
-    const rows = await task.any<AuthSessions & { username?: string }>(
+    const rows = await task.any<AuthSessionWithUsername>(
       `SELECT s.*, u.username FROM ${this.tableName} s
        LEFT JOIN users u ON s.user_id = u.id
        ${whereClause}

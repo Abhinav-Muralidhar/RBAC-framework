@@ -2,16 +2,15 @@
  * Group Form Component
  *
  * Create/Edit group form used in FormModal.
- * Uses centralized validators.
+ * Uses FormMultiSelect for searchable roles/users selection.
  */
 
 import { useState, useEffect } from 'react';
-import { FormInput, FormSwitch } from '../../../core/components/FormElements';
+import { FormInput, FormSwitch, FormMultiSelect } from '../../../core/components/FormElements';
+import type { MultiSelectOption } from '../../../core/components/FormElements';
 import type { Group, CreateGroupDto, UpdateGroupDto } from '../../../core/types/group.types';
-import type { Role } from '../../../core/types/role.types';
-import type { User } from '../../../core/types/user.types';
 import { usersApi, groupsApi, rolesApi } from '../../../core/api/rbac.api';
-import { validateRequired, validateCode } from '../../../core/utils';
+import { validateRequired, validateCode, scrollToFirstError, parseApiError } from '../../../core/utils';
 
 interface GroupFormProps {
     group?: Group | null;
@@ -34,19 +33,24 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
         group?.roles?.map(r => r.id) || []
     );
 
-    const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
-    const [errors, setErrors] = useState<Record<string, string>>({});
-
     const [selectedUsers, setSelectedUsers] = useState<string[]>(
         group?.users?.map(u => u.id) || []
     );
 
-    const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+    const [roleOptions, setRoleOptions] = useState<MultiSelectOption[]>([]);
+    const [roleLoading, setRoleLoading] = useState(false);
 
-    // ---------------- LOAD ROLES ----------------
+    const [userOptions, setUserOptions] = useState<MultiSelectOption[]>([]);
+    const [userLoading, setUserLoading] = useState(false);
 
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // ---------------- LOAD DATA ----------------
+
+    // Initial load
     useEffect(() => {
-        loadRoles();
+        loadRoles('');
+        loadUsers('');
     }, []);
 
     // Keep state in sync with props
@@ -63,27 +67,31 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
         }
     }, [group]);
 
-    const loadRoles = async () => {
+    const loadRoles = async (searchQuery: string) => {
+        setRoleLoading(true);
         try {
-            const response = await rolesApi.list({ limit: 100 });
-            setAvailableRoles(response.data);
+            const response = await rolesApi.list({ limit: 100, search: searchQuery || undefined });
+            setRoleOptions(
+                (response.data || []).map(r => ({ value: r.id, label: r.name }))
+            );
         } catch (err) {
             console.error('Failed to load roles', err);
+        } finally {
+            setRoleLoading(false);
         }
     };
 
-    // ---------------- LOAD USERS ----------------
-
-    useEffect(() => {
-        loadUsers();
-    }, []);
-
-    const loadUsers = async () => {
+    const loadUsers = async (searchQuery: string) => {
+        setUserLoading(true);
         try {
-            const response = await usersApi.list({ limit: 100 });
-            setAvailableUsers(response.data);
+            const response = await usersApi.list({ limit: 100, search: searchQuery || undefined });
+            setUserOptions(
+                (response.data || []).map(u => ({ value: u.id, label: u.username }))
+            );
         } catch (err) {
             console.error('Failed to load users', err);
+        } finally {
+            setUserLoading(false);
         }
     };
 
@@ -94,22 +102,6 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
         if (errors[field]) {
             setErrors(prev => ({ ...prev, [field]: '' }));
         }
-    };
-
-    const toggleRole = (roleId: string) => {
-        setSelectedRoles(prev =>
-            prev.includes(roleId)
-                ? prev.filter(id => id !== roleId)
-                : [...prev, roleId]
-        );
-    };
-
-    const toggleUser = (userId: string) => {
-        setSelectedUsers(prev =>
-            prev.includes(userId)
-                ? prev.filter(id => id !== userId)
-                : [...prev, userId]
-        );
     };
 
     // ---------------- VALIDATION ----------------
@@ -132,7 +124,10 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
     // ---------------- SUBMIT ----------------
 
     const handleSubmit = async () => {
-        if (!validate()) return;
+        if (!validate()) {
+            scrollToFirstError();
+            return;
+        }
 
         setLoading(true);
 
@@ -142,6 +137,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
                     name: formData.name.trim(),
                     description: formData.description || undefined,
                     role_ids: selectedRoles,
+                    user_ids: selectedUsers,
                     is_active: formData.is_active,
                 };
 
@@ -152,6 +148,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
                     code: formData.code.trim(),
                     description: formData.description || undefined,
                     role_ids: selectedRoles,
+                    user_ids: selectedUsers,
                     is_active: formData.is_active,
                 };
 
@@ -160,7 +157,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
 
             onSuccess();
         } catch (err) {
-            onError(err instanceof Error ? err.message : 'Failed to save group');
+            onError(parseApiError(err instanceof Error ? err.message : 'Failed to save group'));
         } finally {
             setLoading(false);
         }
@@ -205,52 +202,33 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
             />
 
             {/* Roles selection */}
-            <div className="form-field">
-                <label className="form-label">Assign Roles to Group Members</label>
+            <FormMultiSelect
+                label="Assign Roles to Group Members"
+                placeholder="Search roles…"
+                options={roleOptions}
+                value={selectedRoles}
+                onChange={setSelectedRoles}
+                onSearch={loadRoles}
+                loading={roleLoading}
+                emptyMessage="No roles available"
+            />
 
-                <div className="checkbox-group">
-                    {availableRoles.map(role => (
-                        <label key={role.id} className="checkbox-item">
-                            <input
-                                type="checkbox"
-                                checked={selectedRoles.includes(role.id)}
-                                onChange={() => toggleRole(role.id)}
-                            />
-                            <span>{role.name}</span>
-                        </label>
-                    ))}
-
-                    {availableRoles.length === 0 && (
-                        <span className="text-muted">No roles available</span>
-                    )}
-                </div>
-            </div>
-
-            <div className="form-field">
-                <label className="form-label">Assign Users to Group Members</label>
-
-                <div className="checkbox-group">
-                    {availableUsers.map(user => (
-                        <label key={user.id} className="checkbox-item">
-                            <input
-                                type="checkbox"
-                                checked={selectedUsers.includes(user.id)}
-                                onChange={() => toggleUser(user.id)}
-                            />
-                            <span>{user.username}</span>
-                        </label>
-                    ))}
-
-                    {availableUsers.length === 0 && (
-                        <span className="text-muted">No users available</span>
-                    )}
-                </div>
-            </div>
+            {/* Users selection */}
+            <FormMultiSelect
+                label="Assign Users to Group Members"
+                placeholder="Search users…"
+                options={userOptions}
+                value={selectedUsers}
+                onChange={setSelectedUsers}
+                onSearch={loadUsers}
+                loading={userLoading}
+                emptyMessage="No users available"
+            />
 
             <button
                 type="button"
                 id="group-form-submit"
-                style={{ display: 'none' }}
+                className="visually-hidden"
                 onClick={handleSubmit}
             />
         </div>

@@ -5,6 +5,7 @@
  * All routes require authentication (applied at router level).
  * 
  * Note: Audit logs are read-only via API. They are created internally by services.
+ * Filtering is not supported (all fields are encrypted at rest).
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
@@ -12,7 +13,6 @@ import { parseId, parsePagination } from './_paramUtils';
 import { AuditService } from '../services/audit.service';
 import { IDatabase } from 'pg-promise';
 import { EvaluationService } from '../services/evaluation.service';
-import { AuditLogListFilterDto } from '../dto/audit_log.dto';
 import { requirePermission } from '../middleware/requirePermission.middleware';
 import { withTransaction, TransactionTask } from '../utils/transaction.utils';
 
@@ -31,25 +31,12 @@ function sendError(res: Response, status: number, message: string, code?: string
     });
 }
 
-export function parseAuditLogFilters(query: any): AuditLogListFilterDto {
-    return {
-        user_id: query.user_id,
-        action: query.action,
-        entity_type: query.entity_type,
-        entity_id: query.entity_id,
-        status: query.status,
-        start_date: query.start_date,
-        end_date: query.end_date
-    };
-}
-
-
 export function createAuditLogsRouter(db: IDatabase<unknown>, auditLogService: AuditService, evaluationService: EvaluationService): Router {
     const router = Router();
 
     /**
      * GET /rbac/audit-logs
-     * List all audit logs with JOINed data (paginated)
+     * List all audit logs (paginated, decrypted)
      */
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditLogService), async (req: Request, res: Response, next: NextFunction) => {
         try {
@@ -59,7 +46,6 @@ export function createAuditLogsRouter(db: IDatabase<unknown>, auditLogService: A
                 const logs = await auditLogService.getAll(
                     t,
                     req.user!.id,
-                    parseAuditLogFilters(req.query),
                     pagination
                 );
 
@@ -74,7 +60,7 @@ export function createAuditLogsRouter(db: IDatabase<unknown>, auditLogService: A
 
     /**
      * GET /rbac/audit-logs/:id
-     * Get audit log by ID with JOINed data
+     * Get audit log by ID (decrypted)
      */
     router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditLogService), async (req: Request, res: Response, next: NextFunction) => {
         try {

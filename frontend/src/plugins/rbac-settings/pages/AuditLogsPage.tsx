@@ -1,11 +1,16 @@
-import { useState } from 'react';
-import { auditLogsApi } from '../../../core/api/rbac.api';
+/**
+ * Audit Logs Page
+ *
+ * View system audit trail (all data decrypted server-side).
+ * Filtering removed — all fields are encrypted at rest.
+ */
+
+import { useMemo } from 'react';
 import type { AuditLog } from '../../../core/types/audit.types';
-import { Search, Filter } from 'lucide-react';
-import { format } from 'date-fns';
+import { auditLogsApi } from '../../../core/api/rbac.api';
+import { usePaginatedData, useDetailsModal } from '../../../core/hooks';
+import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
 import './SettingsPage.css';
-import { usePaginatedData } from '../../../core/hooks/usePaginatedData';
-import { FormModal } from '../../../core/components/FormModal';
 
 export function AuditLogsPage() {
     // Function to get the color based on the status
@@ -26,13 +31,28 @@ export function AuditLogsPage() {
         page,
         totalPages,
         setPage,
-        searchQuery,
-        setSearchQuery,
-        filters,
-        setFilters
     } = usePaginatedData<AuditLog>(auditLogsApi.list, { initialLimit: 20 });
 
-    const [showFilterModal, setShowFilterModal] = useState(false);
+    const detailsModal = useDetailsModal();
+
+    const auditFields = useMemo<FieldConfig<AuditLog>[]>(() => [
+        { label: 'Timestamp', key: 'created_at', render: (v: any) => v ? new Date(v).toLocaleString() : '—' },
+        { label: 'User ID', key: 'user_id' },
+        { label: 'Username', key: 'user_name' },
+        { label: 'Action', key: 'action' },
+        { label: 'Entity', key: 'entity_type' },
+        { label: 'Entity ID', key: 'entity_id' },
+        { label: 'Module', key: 'module_name' },
+        {
+            label: 'Status', key: 'status', render: (v: string) => (
+                <span className={`status-badge status-${v?.toLowerCase()}`}>{v}</span>
+            )
+        },
+        { label: 'IP Address', key: 'ip_address' },
+        { label: 'User Agent', key: 'user_agent' },
+        { label: 'Old Values', key: 'old_values' },
+        { label: 'New Values', key: 'new_values' },
+    ], []);
 
     return (
         <div className="settings-page">
@@ -42,25 +62,6 @@ export function AuditLogsPage() {
                     <p>View system activity and changes</p>
                 </div>
             </header>
-
-            <div className="page-toolbar">
-                <div className="search-box">
-                    <Search size={18} />
-                    <input
-                        type="text"
-                        placeholder="Search logs..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
-                <button
-                    className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setShowFilterModal(true)}
-                >
-                    <Filter size={18} /> Filter
-                    {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
-                </button>
-            </div>
 
             {error && <div className="error-message">{error}</div>}
 
@@ -82,26 +83,26 @@ export function AuditLogsPage() {
                             </thead>
                             <tbody>
                                 {logs.map(log => (
-                                    <tr key={log.id}>
-                                        <td className="text-muted">
-                                            {log.created_at ? format(new Date(log.created_at), 'MMM d, yyyy HH:mm:ss') : '-'}
+                                    <tr key={log.id} className="clickable-row" onClick={() => detailsModal.open(log.id)}>
+                                        <td data-label="Timestamp" className="text-muted">
+                                            {log.created_at ? new Date(log.created_at).toLocaleString() : '-'}
                                         </td>
-                                        <td>{log.user_name || log.user_email || '-'}</td>
-                                        <td>
+                                        <td data-label="User">{log.user_name || log.user_email || '-'}</td>
+                                        <td data-label="Action">
                                             <span className="action-badge">{log.action || '-'}</span>
                                         </td>
-                                        <td>
+                                        <td data-label="Entity">
                                             <code>{log.entity_type || '-'}</code>
                                             <span className="text-muted">
                                                 #{log.entity_id ? log.entity_id.toString().slice(0, 8) : '-'}
                                             </span>
                                         </td>
-                                        <td>
+                                        <td data-label="Status">
                                             <span className={`status-badge ${getStatusColor(log.status || '')}`}>
                                                 {log.status || '-'}
                                             </span>
                                         </td>
-                                        <td className="text-muted">{log.ip_address || '-'}</td>
+                                        <td data-label="IP Address" className="text-muted">{log.ip_address || '-'}</td>
                                     </tr>
                                 ))}
                                 {logs.length === 0 && (
@@ -136,73 +137,16 @@ export function AuditLogsPage() {
                 </>
             )}
 
-            {/* Filter Modal Placeholder */}
-            <FormModal
-                isOpen={showFilterModal}
-                title="Filter Audit Logs"
-                onSubmit={() => setShowFilterModal(false)}
-                onCancel={() => setShowFilterModal(false)}
-                size="sm"
-            >
-                <div className="filter-form">
-                    <div className="form-field">
-                        <label className="form-label">Status</label>
-                        <select
-                            className="form-control"
-                            value={filters.status || ''}
-                            onChange={(e) => setFilters({ ...filters, status: e.target.value || undefined })}
-                        >
-                            <option value="">All Statuses</option>
-                            <option value="success">Success</option>
-                            <option value="failure">Failure</option>
-                            <option value="denied">Denied</option>
-                        </select>
-                    </div>
-                    <div className="form-field">
-                        <label className="form-label">Action</label>
-                        <select
-                            className="form-control"
-                            value={filters.action || ''}
-                            onChange={(e) => setFilters({ ...filters, action: e.target.value || undefined })}
-                        >
-                            <option value="">All Actions</option>
-                            <option value="create">Create</option>
-                            <option value="update">Update</option>
-                            <option value="delete">Delete</option>
-                            <option value="login">Login</option>
-                            <option value="logout">Logout</option>
-                        </select>
-                    </div>
-                    <div className="form-field">
-                        <label className="form-label">Entity Type</label>
-                        <select
-                            className="form-control"
-                            value={filters.entity_type || ''}
-                            onChange={(e) => setFilters({ ...filters, entity_type: e.target.value || undefined })}
-                        >
-                            <option value="">All Entities</option>
-                            <option value="user">User</option>
-                            <option value="role">Role</option>
-                            <option value="profile">Profile</option>
-                            <option value="group">Group</option>
-                            <option value="session">Session</option>
-                        </select>
-                    </div>
-                    {Object.keys(filters).filter(k => filters[k] !== undefined).length > 0 && (
-                        <button
-                            className="btn btn-text"
-                            onClick={() => {
-                                setFilters({});
-                                setShowFilterModal(false);
-                            }}
-                            style={{ marginTop: '1rem' }}
-                        >
-                            Clear All Filters
-                        </button>
-                    )}
-                </div>
-
-            </FormModal>
+            {/* Details Modal */}
+            <DetailsModal<AuditLog>
+                isOpen={detailsModal.isOpen}
+                title="Audit Log Details"
+                entityId={detailsModal.selectedId}
+                fetchFn={auditLogsApi.getById}
+                fields={auditFields}
+                onClose={detailsModal.close}
+                size="lg"
+            />
         </div>
     );
 }

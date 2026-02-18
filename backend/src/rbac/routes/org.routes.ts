@@ -17,6 +17,15 @@ import {
     UpdateOrganizationRequestDto
 } from '../dto';
 import { withTransaction, TransactionTask } from '../utils/transaction.utils';
+import { createUpload } from '../middleware/upload.middleware';
+
+// Configure logo upload: images only, 2MB max
+const logoUpload = createUpload({
+    dest: 'logos',
+    allowedTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'],
+    maxSizeMB: 2,
+    fieldName: 'logo'
+});
 
 /**
  * Standard response envelope
@@ -117,13 +126,18 @@ export function createOrganizationsRouter(db: IDatabase<unknown>, evaluationServ
      * PUT /rbac/organizations/:id
      * Update organization
      */
-    router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
+    router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), logoUpload, async (req: Request, res: Response, next: NextFunction) => {
         try {
             const result = await withTransaction(async (t: TransactionTask) => {
                 const id = parseId(req.params.id, 'id');
                 const payload: UpdateOrganizationRequestDto = req.body;
 
-                const organization = await organizationService.updateOrganization(t, id, payload);
+                // If a logo file was uploaded, compute relative path for DB storage
+                const logoPath = req.file
+                    ? `uploads/logos/${req.file.filename}`
+                    : undefined;
+
+                const organization = await organizationService.updateOrganization(t, id, payload, req.auditContext, logoPath);
                 return organization;
             });
             sendSuccess(res, result);

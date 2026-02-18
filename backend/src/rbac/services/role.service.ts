@@ -18,7 +18,7 @@ import {
     DuplicateAssignmentError,
     ProfileNotFoundError
 } from '../errors/rbac.errors';
-import { RoleListFilterDto, CreateRoleRequestDto, UpdateRoleRequestDto, RoleResponseDto } from '../dto/role.dto';
+import { RoleListFilterDto, CreateRoleRequestDto, UpdateRoleRequestDto, RoleResponseDto, RoleNode } from '../dto/role.dto';
 import { PaginationParams, PaginatedResult, normalizePaginationParams, buildPaginatedResult } from '../utils/pagination.utils';
 
 // Module code for RBAC operations
@@ -29,11 +29,11 @@ export interface IRoleService {
     listPaginated(t: TransactionTask, actingUserId: string, filters?: { parent_role_id?: string; is_active?: boolean; search?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Roles>>;
     getAncestors(t: TransactionTask, actingUserId: string, roleId: string): Promise<Roles[]>;
     getChildren(t: TransactionTask, actingUserId: string, roleId: string): Promise<Roles[]>;
-    createRoleProfiles(t: TransactionTask, actingUserId: string, data: CreateRoleRequestDto): Promise<Roles>;
-    updateRoleProfiles(t: TransactionTask, actingUserId: string, roleId: string, data: UpdateRoleRequestDto): Promise<Roles>;
-    delete(t: TransactionTask, actingUserId: string, roleId: string): Promise<void>;
+    createRoleProfiles(t: TransactionTask, actingUserId: string, data: CreateRoleRequestDto, auditCtx?: AuditContext): Promise<Roles>;
+    updateRoleProfiles(t: TransactionTask, actingUserId: string, roleId: string, data: UpdateRoleRequestDto, auditCtx?: AuditContext): Promise<Roles>;
+    delete(t: TransactionTask, actingUserId: string, roleId: string, auditCtx?: AuditContext): Promise<void>;
     getUsersWithRole(t: TransactionTask, actingUserId: string, roleId: string): Promise<string[]>;
-
+    getRoleTree(t: TransactionTask, actingUserId: string): Promise<RoleNode[]>
     assignRoleToUser(t: TransactionTask, actingUserId: string, roleId: string, userId: string): Promise<void>;
     unassignRoleFromUser(t: TransactionTask, actingUserId: string, roleId: string, userId: string): Promise<void>;
 }
@@ -82,7 +82,7 @@ export class RoleService implements IRoleService {
         return this.roleRepository.findChildRoles(t, roleId);
     }
 
-    async createRoleProfiles(t: TransactionTask, actingUserId: string, data: CreateRoleRequestDto): Promise<Roles> {
+    async createRoleProfiles(t: TransactionTask, actingUserId: string, data: CreateRoleRequestDto, auditCtx?: AuditContext): Promise<Roles> {
         const existing = await this.roleRepository.findByCode(t, data.code);
         if (existing) throw new DuplicateAssignmentError(`role code '${data.code}'`);
 
@@ -113,14 +113,16 @@ export class RoleService implements IRoleService {
             entity_type: 'role',
             entity_id: role.id,
             old_values: null,
-            new_values: { role_id: role.id, role_name: role.name, is_active: role.is_active, role_description: role.description },
+            new_values: { ...data } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
 
         return role;
     }
 
-    async updateRoleProfiles(t: TransactionTask, actingUserId: string, roleId: string, data: UpdateRoleRequestDto): Promise<Roles> {
+    async updateRoleProfiles(t: TransactionTask, actingUserId: string, roleId: string, data: UpdateRoleRequestDto, auditCtx?: AuditContext): Promise<Roles> {
         const existing = await this.roleRepository.findById(t, roleId);
         if (!existing) throw new RoleNotFoundError(roleId);
 
@@ -153,8 +155,10 @@ export class RoleService implements IRoleService {
             module_code: MODULE_CODE,
             entity_type: 'role',
             entity_id: roleId,
-            old_values: { role_id: existing.id, role_name: existing.name, is_active: existing.is_active, role_description: existing.description },
-            new_values: { role_id: updatedRole.id, role_name: updatedRole.name, is_active: updatedRole.is_active, role_description: updatedRole.description },
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { ...updatedRole } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
 
@@ -162,10 +166,14 @@ export class RoleService implements IRoleService {
     }
 
 
-    async delete(t: TransactionTask, actingUserId: string, roleId: string): Promise<void> {
+    async delete(t: TransactionTask, actingUserId: string, roleId: string, auditCtx?: AuditContext): Promise<void> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'delete');
+
         const existing = await this.roleRepository.findById(t, roleId);
         if (!existing) throw new RoleNotFoundError(roleId);
+
+        const hasChildren = await this.roleRepository.hasActiveChildren(t, roleId);
+        if (hasChildren) throw new Error('ROLE_HAS_ACTIVE_CHILDREN');
 
         await this.roleRepository.delete(t, roleId);
 
@@ -175,15 +183,42 @@ export class RoleService implements IRoleService {
             module_code: MODULE_CODE,
             entity_type: 'role',
             entity_id: roleId,
-            old_values: { role_id: existing.id, role_name: existing.name, is_active: existing.is_active, role_description: existing.description },
-            new_values: { role_id: existing.id, role_name: existing.name, is_active: false, role_description: existing.description },
+            old_values: { ...existing } as Record<string, unknown>,
+            new_values: { deleted: true, user_id: actingUserId } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
-        })
+        });
     }
 
     async getUsersWithRole(t: TransactionTask, actingUserId: string, roleId: string): Promise<string[]> {
         await this.evaluationService.enforcePermission(actingUserId, MODULE_CODE, 'read');
         const userRoles = await this.userRoleRepository.findUsersByRole(t, roleId);
         return userRoles.map(ur => ur.user_id);
+    }
+
+    async getRoleTree(t: TransactionTask, actingUserId: string): Promise<RoleNode[]> {
+        const rows = await this.roleRepository.findRoleTree(t);
+        const map = new Map<string, RoleNode>();
+        const roots: RoleNode[] = [];
+
+        for (const row of rows) {
+            map.set(row.id, { id: row.id, name: row.name, children: [], hasChildren: false });
+        }
+
+        for (const row of rows) {
+            const node = map.get(row.id)!;
+            if (!row.parent_role_id) {
+                roots.push(node);
+            } else {
+                const parent = map.get(row.parent_role_id);
+                if (parent) {
+                    parent.children.push(node);
+                    parent.hasChildren = true;
+                }
+            }
+        }
+
+        return roots;
     }
 }

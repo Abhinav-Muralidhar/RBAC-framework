@@ -116,7 +116,8 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
                     const updated = await sharingRuleService.update(t,
                         actingUserId,
                         ruleId,
-                        req.body
+                        req.body,
+                        req.auditContext
                     );
                     return updated;
                 });
@@ -138,7 +139,7 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
                 const result = await withTransaction(async (t: TransactionTask) => {
                     const actingUserId = req.user!.id;
                     const ruleId = parseId(req.params.id, 'sharingRuleId');
-                    await sharingRuleService.delete(t, actingUserId, ruleId);
+                    await sharingRuleService.delete(t, actingUserId, ruleId, req.auditContext);
                     return { message: 'Sharing rule deleted successfully' };
                 });
                 sendSuccess(res, result);

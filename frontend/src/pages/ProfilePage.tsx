@@ -6,11 +6,17 @@
 
 import { useState, useEffect, type FormEvent } from 'react';
 import { useAuth } from '../core/contexts/AuthContext';
-import { usersApi, authApi } from '../core/api/rbac.api';
+import { usersApi, authApi, landingPagesApi, type LandingPageOption } from '../core/api/rbac.api';
 import { FormInput, FormSwitch } from '../core/components/FormElements';
 import {
+    NAME_FORMAT_OPTIONS,
+    TIME_ZONE_OPTIONS,
+    CURRENCY_OPTIONS,
+    formatUserName,
+} from '../core/constants/userPreferences';
+import {
     User, Mail, Lock, Save, Key, Phone,
-    MapPin, Settings, ShieldCheck
+    MapPin, Settings, ShieldCheck, UserCheck, LayoutDashboard
 } from 'lucide-react';
 import './ProfilePage.css';
 
@@ -23,6 +29,9 @@ interface ProfileFormData {
     other_email: string;
     mobile_phone: string;
     office_phone: string;
+    home_phone: string;
+    secondary_phone: string;
+    fax: string;
     street: string;
     city: string;
     state: string;
@@ -31,6 +40,7 @@ interface ProfileFormData {
     time_zone: string;
     preferred_currency: string;
     full_screen_preview: boolean;
+    name_format: string;
     signature: string;
 }
 
@@ -49,6 +59,9 @@ export function ProfilePage() {
         other_email: '',
         mobile_phone: '',
         office_phone: '',
+        home_phone: '',
+        secondary_phone: '',
+        fax: '',
         street: '',
         city: '',
         state: '',
@@ -57,6 +70,7 @@ export function ProfilePage() {
         time_zone: '',
         preferred_currency: '',
         full_screen_preview: false,
+        name_format: '',
         signature: '',
     });
 
@@ -72,6 +86,22 @@ export function ProfilePage() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [newEmail, setNewEmail] = useState('');
 
+    // Read-only admin fields
+    const [reportsToName, setReportsToName] = useState<string>('');
+    const [landingPages, setLandingPages] = useState<LandingPageOption[]>([]);
+
+    useEffect(() => {
+        landingPagesApi.list().then(setLandingPages).catch(() => { });
+    }, []);
+
+    useEffect(() => {
+        if (user?.reports_to_user_id) {
+            usersApi.getById(user.reports_to_user_id)
+                .then(mgr => setReportsToName(`${mgr.first_name || ''} ${mgr.last_name}`.trim()))
+                .catch(() => setReportsToName('Unknown'));
+        }
+    }, [user?.reports_to_user_id]);
+
     /* ---------------- Load User ---------------- */
 
     useEffect(() => {
@@ -86,6 +116,9 @@ export function ProfilePage() {
             other_email: user.other_email || '',
             mobile_phone: user.mobile_phone || '',
             office_phone: user.office_phone || '',
+            home_phone: user.home_phone || '',
+            secondary_phone: user.secondary_phone || '',
+            fax: user.fax || '',
             street: user.street || '',
             city: user.city || '',
             state: user.state || '',
@@ -94,6 +127,7 @@ export function ProfilePage() {
             time_zone: user.time_zone || '',
             preferred_currency: user.preferred_currency || '',
             full_screen_preview: !!user.full_screen_preview,
+            name_format: user.name_format || '',
             signature: user.signature || '',
         });
     }, [user]);
@@ -137,6 +171,9 @@ export function ProfilePage() {
                 other_email: formData.other_email || undefined,
                 mobile_phone: formData.mobile_phone || undefined,
                 office_phone: formData.office_phone || undefined,
+                home_phone: formData.home_phone || undefined,
+                secondary_phone: formData.secondary_phone || undefined,
+                fax: formData.fax || undefined,
                 street: formData.street || undefined,
                 city: formData.city || undefined,
                 state: formData.state || undefined,
@@ -144,6 +181,8 @@ export function ProfilePage() {
                 postal_code: formData.postal_code || undefined,
                 time_zone: formData.time_zone || undefined,
                 preferred_currency: formData.preferred_currency || undefined,
+                full_screen_preview: formData.full_screen_preview,
+                name_format: formData.name_format || undefined,
                 signature: formData.signature || undefined,
             });
 
@@ -247,7 +286,7 @@ export function ProfilePage() {
                     <User size={48} />
                 </div>
                 <div className="profile-title">
-                    <h1>{user.first_name} {user.last_name}</h1>
+                    <h1>{formatUserName(user.first_name, user.last_name, user.name_format)}</h1>
                     <p>{user.primary_email}</p>
                 </div>
             </header>
@@ -291,6 +330,20 @@ export function ProfilePage() {
                         <h2><Phone size={18} /> Contact Details</h2>
                         <div className="form-row">
                             <FormInput
+                                label="Secondary Email"
+                                type="email"
+                                value={formData.secondary_email}
+                                onChange={e => handleInputChange('secondary_email', e.target.value)}
+                            />
+                            <FormInput
+                                label="Other Email"
+                                type="email"
+                                value={formData.other_email}
+                                onChange={e => handleInputChange('other_email', e.target.value)}
+                            />
+                        </div>
+                        <div className="form-row">
+                            <FormInput
                                 label="Mobile Phone"
                                 value={formData.mobile_phone}
                                 onChange={e => handleInputChange('mobile_phone', e.target.value)}
@@ -299,6 +352,25 @@ export function ProfilePage() {
                                 label="Office Phone"
                                 value={formData.office_phone}
                                 onChange={e => handleInputChange('office_phone', e.target.value)}
+                            />
+                        </div>
+                        <div className="form-row">
+                            <FormInput
+                                label="Home Phone"
+                                value={formData.home_phone}
+                                onChange={e => handleInputChange('home_phone', e.target.value)}
+                            />
+                            <FormInput
+                                label="Secondary Phone"
+                                value={formData.secondary_phone}
+                                onChange={e => handleInputChange('secondary_phone', e.target.value)}
+                            />
+                        </div>
+                        <div className="form-row">
+                            <FormInput
+                                label="Fax"
+                                value={formData.fax}
+                                onChange={e => handleInputChange('fax', e.target.value)}
                             />
                         </div>
 
@@ -319,23 +391,55 @@ export function ProfilePage() {
 
                         <h2><Settings size={18} /> Preferences</h2>
                         <div className="form-row">
-                            <FormInput
-                                label="Time Zone"
-                                value={formData.time_zone}
-                                onChange={e => handleInputChange('time_zone', e.target.value)}
-                            />
-                            <FormInput
-                                label="Currency"
-                                value={formData.preferred_currency}
-                                onChange={e => handleInputChange('preferred_currency', e.target.value)}
-                            />
+                            <div className="form-field">
+                                <label className="form-label">Time Zone</label>
+                                <select
+                                    value={formData.time_zone}
+                                    onChange={e => handleInputChange('time_zone', e.target.value)}
+                                    className="form-select"
+                                >
+                                    <option value="">— Not Set —</option>
+                                    {TIME_ZONE_OPTIONS.map(o => (
+                                        <option key={o.key} value={o.key}>{o.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="form-field">
+                                <label className="form-label">Currency</label>
+                                <select
+                                    value={formData.preferred_currency}
+                                    onChange={e => handleInputChange('preferred_currency', e.target.value)}
+                                    className="form-select"
+                                >
+                                    <option value="">— Not Set —</option>
+                                    {CURRENCY_OPTIONS.map(o => (
+                                        <option key={o.key} value={o.key}>{o.label}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
 
-                        <FormSwitch
-                            label="Full Screen Preview"
-                            checked={formData.full_screen_preview}
-                            onChange={checked => handleInputChange('full_screen_preview', checked)}
-                        />
+                        <div className="form-row">
+                            <div className="form-field">
+                                <label className="form-label">Name Format</label>
+                                <select
+                                    value={formData.name_format}
+                                    onChange={e => handleInputChange('name_format', e.target.value)}
+                                    className="form-select"
+                                >
+                                    <option value="">— Not Set —</option>
+                                    {NAME_FORMAT_OPTIONS.map(o => (
+                                        <option key={o.key} value={o.key}>{o.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <FormSwitch
+                                label="Full Screen Preview"
+                                checked={formData.full_screen_preview}
+                                onChange={checked => handleInputChange('full_screen_preview', checked)}
+                                hint="Opens app in browser fullscreen (like F11)"
+                            />
+                        </div>
 
                         <FormInput
                             label="Signature"
@@ -343,6 +447,25 @@ export function ProfilePage() {
                             value={formData.signature}
                             onChange={e => handleInputChange('signature', e.target.value)}
                         />
+
+                        {/* Read-only admin-set fields */}
+                        <h2><LayoutDashboard size={18} /> Admin-Set Preferences</h2>
+                        <div className="account-info account-info--spaced">
+                            <div className="account-row">
+                                <div className="account-label"><LayoutDashboard size={18} /><span>Default Landing Page</span></div>
+                                <div className="account-value">
+                                    <span>{landingPages.find(lp => lp.key === user.default_landing_page)?.label || 'Dashboard (default)'}</span>
+                                    <span className="badge">Admin-set</span>
+                                </div>
+                            </div>
+                            <div className="account-row">
+                                <div className="account-label"><UserCheck size={18} /><span>Reports To</span></div>
+                                <div className="account-value">
+                                    <span>{reportsToName || 'Not assigned'}</span>
+                                    <span className="badge">Admin-set</span>
+                                </div>
+                            </div>
+                        </div>
 
                         <div className="profile-actions">
                             <button type="submit" className="btn btn-primary" disabled={isSaving}>

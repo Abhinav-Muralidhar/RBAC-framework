@@ -102,7 +102,7 @@ export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: Ev
         try {
             const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
-                const group = await groupService.create(t, actingUserId, req.body);
+                const group = await groupService.create(t, actingUserId, req.body, req.auditContext);
                 return group;
             });
             sendSuccess(res, result);
@@ -120,7 +120,7 @@ export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: Ev
             const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
                 const groupId = parseId(req.params.id, 'groupId');
-                const group = await groupService.update(t, actingUserId, groupId, req.body);
+                const group = await groupService.update(t, actingUserId, groupId, req.body, req.auditContext);
                 return group;
             });
             sendSuccess(res, result);
@@ -138,7 +138,7 @@ export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: Ev
             const result = await withTransaction(async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
                 const groupId = parseId(req.params.id, 'groupId');
-                await groupService.delete(t, actingUserId, groupId);
+                await groupService.delete(t, actingUserId, groupId, req.auditContext);
                 return { message: 'Group deleted successfully' };
             });
             sendSuccess(res, result);

@@ -5,15 +5,23 @@
  * - Create/Edit modal management
  * - Delete confirmation modal management
  * - mutation handling
+ * - Toast notifications for success/failure
  */
 
 import { useState, useCallback } from 'react';
+import { parseApiError } from '../utils';
+
+export interface ToastHandle {
+    success: (msg: string) => void;
+    error: (msg: string) => void;
+}
 
 export interface UseCrudOptions<T> {
     deleteFn: (id: string) => Promise<void>;
     getByIdFn?: (id: string) => Promise<T>;
     entityName: string;
     onSuccess?: () => void;
+    toast?: ToastHandle;
 }
 
 export interface UseCrudReturn<T> {
@@ -47,6 +55,7 @@ export function useCrud<T extends { id: string }>({
     getByIdFn,
     entityName,
     onSuccess,
+    toast,
 }: UseCrudOptions<T>): UseCrudReturn<T> {
     const [error, setError] = useState<string | null>(null);
 
@@ -67,9 +76,11 @@ export function useCrud<T extends { id: string }>({
     const openCreate = useCallback(() => {
         setEditingItem(null);
         setShowFormModal(true);
-    }, []);
+        clearError();
+    }, [clearError]);
 
     const openEdit = useCallback(async (item: T) => {
+        clearError();
         if (getByIdFn) {
             setEditLoading(true);
             try {
@@ -85,23 +96,27 @@ export function useCrud<T extends { id: string }>({
             setEditingItem(item);
         }
         setShowFormModal(true);
-    }, [getByIdFn, entityName]);
+    }, [getByIdFn, entityName, clearError]);
 
     const closeForm = useCallback(() => {
         setShowFormModal(false);
         setEditingItem(null);
-    }, []);
+        clearError();
+    }, [clearError]);
 
     const handleFormSuccess = useCallback(() => {
+        const label = entityName.charAt(0).toUpperCase() + entityName.slice(1);
+        toast?.success(`${label} saved successfully`);
         closeForm();
         if (onSuccess) onSuccess();
-    }, [closeForm, onSuccess]);
+    }, [closeForm, onSuccess, entityName, toast]);
 
     // Delete modal handlers
     const openDelete = useCallback((item: T) => {
         setDeletingItem(item);
         setShowDeleteModal(true);
-    }, []);
+        clearError();
+    }, [clearError]);
 
     const closeDelete = useCallback(() => {
         setShowDeleteModal(false);
@@ -115,14 +130,19 @@ export function useCrud<T extends { id: string }>({
         clearError();
         try {
             await deleteFn(deletingItem.id);
+            const label = entityName.charAt(0).toUpperCase() + entityName.slice(1);
+            toast?.success(`${label} deleted successfully`);
             closeDelete();
             if (onSuccess) onSuccess();
         } catch (err: any) {
-            setError(err instanceof Error ? err.message : `Failed to delete ${entityName}`);
+            const raw = err instanceof Error ? err.message : `Failed to delete ${entityName}`;
+            const friendly = parseApiError(raw);
+            setError(friendly);
+            toast?.error(friendly);
         } finally {
             setDeleteLoading(false);
         }
-    }, [deletingItem, deleteFn, closeDelete, onSuccess, entityName, clearError]);
+    }, [deletingItem, deleteFn, closeDelete, onSuccess, entityName, clearError, toast]);
 
     return {
         error,

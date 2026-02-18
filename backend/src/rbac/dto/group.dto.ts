@@ -57,7 +57,7 @@ export interface GroupResponseDto {
     }>;
     users: Array<{
         id: string;
-        name: string;
+        username: string;
     }>;
 
     // User count in this group

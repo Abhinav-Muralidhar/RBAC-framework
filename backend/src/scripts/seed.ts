@@ -157,6 +157,13 @@ async function seed() {
     `, ['admin', adminPassword, 'System', 'Admin', 'admin@example.com']);
     const adminUserId = adminUserRes.rows[0].id;
 
+    const noUserRes = await client.query(`
+      INSERT INTO users (
+        username, password, first_name, last_name, primary_email, status, created_by
+      ) VALUES ($1, $2, $3, $4, $5, 'active', NULL)
+      RETURNING id;
+    `, ['adminno', adminPassword, 'System', 'Admin', 'admi343n@example.com']);
+
     // Standard User
     const standardUserRes = await client.query(`
       INSERT INTO users (

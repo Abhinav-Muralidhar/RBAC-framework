@@ -5,11 +5,11 @@
  * Handles validation and submission for create/update operations.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FormInput, FormSelect } from '../../../core/components/FormElements';
 import type { OrganizationResponseDto } from '../../../core/types/organization.types';
 import { organizationApi } from '../../../core/api/rbac.api';
-import { validateRequired } from '../../../core/utils';
+import { validateRequired, scrollToFirstError, parseApiError } from '../../../core/utils';
 
 interface OrganizationFormProps {
     organization?: OrganizationResponseDto | null;
@@ -41,6 +41,14 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [logoFile, setLogoFile] = useState<File | null>(null);
+    const [logoPreview, setLogoPreview] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const currentLogoUrl = organization?.company_logo
+        ? `${API_BASE_URL}/${organization.company_logo}`
+        : null;
 
     // Keep state in sync with props
     useEffect(() => {
@@ -73,6 +81,18 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
         }
     };
 
+    const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] || null;
+        setLogoFile(file);
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = () => setLogoPreview(reader.result as string);
+            reader.readAsDataURL(file);
+        } else {
+            setLogoPreview(null);
+        }
+    };
+
     // ---------------- VALIDATION ----------------
 
     const validate = (): boolean => {
@@ -91,7 +111,10 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
     // ---------------- SUBMIT ----------------
 
     const handleSubmit = async () => {
-        if (!validate()) return;
+        if (!validate()) {
+            scrollToFirstError();
+            return;
+        }
 
         setLoading(true);
 
@@ -117,13 +140,15 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
                 is_active: formData.is_active,
             };
 
+            let result;
+
             if (isEditing && organization) {
-                await organizationApi.update(organization.id, payload);
+                result = await organizationApi.update(organization.id, payload, logoFile || undefined);
             }
 
-            onSuccess(organization);
+            onSuccess(result);
         } catch (err) {
-            onError(err instanceof Error ? err.message : 'Failed to save organization');
+            onError(parseApiError(err instanceof Error ? err.message : 'Failed to save organization'));
         } finally {
             setLoading(false);
         }
@@ -148,6 +173,46 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
                     error={errors.gstin}
                     required
                 />
+            </div>
+
+            {/* Company Logo Upload */}
+            <div className="form-row">
+                <div className="form-group">
+                    <label className="form-label">Company Logo</label>
+                    <div className="logo-upload-row">
+                        {(logoPreview || currentLogoUrl) && (
+                            <img
+                                src={logoPreview || currentLogoUrl!}
+                                alt="Logo preview"
+                                className="logo-preview"
+                            />
+                        )}
+                        <div className="logo-upload-actions">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                                onChange={handleLogoChange}
+                                className="visually-hidden"
+                            />
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-compact"
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                {currentLogoUrl || logoPreview ? 'Change Logo' : 'Upload Logo'}
+                            </button>
+                            {logoFile && (
+                                <span className="logo-file-name">
+                                    {logoFile.name}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <p className="form-help-text">
+                        PNG, JPG, WebP or SVG. Max 2MB.
+                    </p>
+                </div>
             </div>
 
             <div className="form-row">
@@ -269,7 +334,7 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
             <button
                 type="button"
                 id="organization-form-submit"
-                style={{ display: 'none' }}
+                className="visually-hidden"
                 onClick={handleSubmit}
             />
         </div>

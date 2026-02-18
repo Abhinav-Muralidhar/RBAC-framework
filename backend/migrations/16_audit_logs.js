@@ -1,30 +1,32 @@
 /**
+ * Audit Logs Migration (Encrypted at Rest)
+ * 
+ * All data columns are TEXT to store AES-256-GCM ciphertext.
+ * No foreign keys — encrypted values cannot maintain referential integrity.
+ * No indexes on encrypted columns — ciphertext is not searchable.
+ * Only `id` remains as a plaintext auto-increment primary key.
+ * 
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
  */
 exports.up = async function (knex) {
     await knex.schema.createTable('audit_logs', (table) => {
         table.bigIncrements('id').primary();
-        table.bigInteger('user_id').nullable().references('id').inTable('users').onDelete('SET NULL');
-        table.bigInteger('role_id').nullable().references('id').inTable('roles').onDelete('SET NULL');
-        table.string('action').notNullable().checkIn(['create', 'update', 'delete', 'export']);
-        table.bigInteger('module_id').notNullable().references('id').inTable('modules');
-        table.string('entity_type').notNullable();
-        table.bigInteger('entity_id').notNullable();
-        table.json('old_values').nullable();
-        table.json('new_values').nullable();
-        table.string('ip_address').notNullable();
-        table.string('user_agent').notNullable();
-        table.string('status').notNullable().checkIn(['success', 'failure']);
-        table.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
-        table.index(['created_at']);
-        table.index(['user_id']);
-        table.index(['role_id']);
-        table.index(['action']);
-        table.index(['module_id']);
-        table.index(['status']);
-    })
-}
+        table.text('user_id').nullable();
+        table.text('role_id').nullable();
+        table.text('action').notNullable();
+        table.text('module_id').nullable();
+        table.text('entity_type').notNullable();
+        table.text('entity_id').nullable();
+        table.text('old_values').nullable();
+        table.text('new_values').nullable();
+        table.text('ip_address').notNullable();
+        table.text('user_agent').notNullable();
+        table.text('status').notNullable();
+        table.text('created_at').notNullable();
+    });
+};
+
 exports.down = async function (knex) {
     await knex.schema.dropTableIfExists('audit_logs');
-}
+};

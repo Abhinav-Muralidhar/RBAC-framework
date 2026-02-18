@@ -86,6 +86,7 @@ export interface IUsersRepository {
   delete(t: TransactionTask | null, userId: string): Promise<void>;
   deactivate(t: TransactionTask | null, userId: string): Promise<void>;
   findByEmail(t: TransactionTask | null, email: string): Promise<Users | null>;
+  updateLastLoginAt(t: TransactionTask | null, userId: string, loginAt: Date): Promise<void>;
 }
 
 export class UsersRepository implements IUsersRepository {
@@ -406,6 +407,15 @@ export class UsersRepository implements IUsersRepository {
        SET status = 'inactive', updated_at = NOW()
        WHERE id = $1`,
       [userId]
+    );
+  }
+
+  async updateLastLoginAt(t: TransactionTask | null, userId: string, loginAt: Date): Promise<void> {
+    await this.task(t).none(
+      `UPDATE ${this.tableName}
+       SET last_login_at = $1, updated_at = NOW()
+       WHERE id = $2`,
+      [loginAt, userId]
     );
   }
 }

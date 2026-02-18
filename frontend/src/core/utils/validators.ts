@@ -119,3 +119,42 @@ export function validatePort(port: number | string): string | null {
     }
     return null;
 }
+
+/**
+ * Map raw backend error strings to user-friendly messages
+ */
+const ERROR_PATTERNS: Array<{ pattern: RegExp; message: string }> = [
+    { pattern: /duplicate key|already exists|violates unique constraint/i, message: 'A record with this value already exists. Please use a different one.' },
+    { pattern: /invalid credentials|request failed 401|authentication failed|incorrect password/i, message: 'Invalid username or password.' },
+    { pattern: /not found/i, message: 'The requested item could not be found.' },
+    { pattern: /permission denied|forbidden| Request failed with code 403 |not authorized/i, message: 'You do not have permission to perform this action.' },
+    { pattern: /network error|econnrefused|fetch failed/i, message: 'Unable to connect to the server. Please check your connection.' },
+    { pattern: /timeout|timed out/i, message: 'The request timed out. Please try again.' },
+    { pattern: /validation error|invalid input/i, message: 'Please check your input and try again.' },
+];
+
+export function parseApiError(raw: string): string {
+    if (!raw) return 'An unexpected error occurred.';
+    for (const { pattern, message } of ERROR_PATTERNS) {
+        if (pattern.test(raw)) return message;
+    }
+    // Return the original message if no pattern matches (it may already be friendly)
+    return raw;
+}
+
+/**
+ * Scroll to the first form error element within a container.
+ * Looks for .form-error, .form-field--error, or [data-error] elements.
+ */
+export function scrollToFirstError(containerSelector = '.form-modal__body, .entity-form'): void {
+    requestAnimationFrame(() => {
+        const container = document.querySelector(containerSelector);
+        const target = container
+            ? container.querySelector('.form-error, .form-field--error, [data-error="true"]')
+            : document.querySelector('.form-error, .form-field--error, [data-error="true"]');
+
+        if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    });
+}

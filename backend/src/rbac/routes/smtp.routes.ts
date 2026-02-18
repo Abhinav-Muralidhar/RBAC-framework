@@ -85,7 +85,7 @@ export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditServ
             const result = await withTransaction(async (t: TransactionTask) => {
                 const data = req.body as SmtpConfigCreate;
                 const actingUserId = req.user!.id;
-                const config = await smtpService.create(t, data, actingUserId);
+                const config = await smtpService.create(t, data, actingUserId, req.auditContext);
                 return config;
             });
             sendSuccess(res, result);
@@ -101,7 +101,7 @@ export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditServ
                 const id = getRequiredParam(req.params, 'id');
                 const data = req.body;
                 const actingUserId = req.user!.id;
-                const updated = await smtpService.update(t, id, data, actingUserId);
+                const updated = await smtpService.update(t, id, data, actingUserId, req.auditContext);
                 return updated;
             });
             sendSuccess(res, result);
@@ -116,7 +116,7 @@ export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditServ
             const result = await withTransaction(async (t: TransactionTask) => {
                 const id = getRequiredParam(req.params, 'id');
                 const actingUserId = req.user!.id;
-                await smtpService.delete(t, id, actingUserId);
+                await smtpService.delete(t, id, actingUserId, req.auditContext);
                 return { message: 'Deleted successfully' };
             });
             sendSuccess(res, result);

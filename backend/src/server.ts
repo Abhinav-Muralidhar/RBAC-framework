@@ -2,6 +2,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import path from 'node:path';
 import dotenv from 'dotenv';
 import { db } from './db';
 import { createRBACRouter, createPublicAuthRouter } from './rbac/routes';
@@ -36,6 +37,9 @@ app.use(cookieParser(process.env.COOKIE_SECRET));
 
 // Global rate limiting (100 req/min) for all routes
 app.use(standardLimiter);
+
+// Static file serving for uploads (logos, documents, etc.)
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 // Basic Health Check Route (no auth required)
 app.get('/health', (req: Request, res: Response) => {

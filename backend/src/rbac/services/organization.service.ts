@@ -6,12 +6,14 @@ import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
 import { CreateOrganizationRequestDto, UpdateOrganizationRequestDto } from '../dto';
 import { CreateOrganizationInput } from '../types/repository.types';
 import { IAuditService } from '../services/audit.service';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export interface IOrganizationService {
-    createOrganization(t: TransactionTask, data: CreateOrganizationRequestDto, acting_user_id: string): Promise<Organizations>;
+    createOrganization(t: TransactionTask, data: CreateOrganizationRequestDto, acting_user_id: string, auditCtx?: AuditContext): Promise<Organizations>;
     getOrganization(t: TransactionTask, id: string): Promise<Organizations>;
     getOrganizations(t: TransactionTask, filters?: { is_active?: boolean; name?: string; code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Organizations>>;
-    updateOrganization(t: TransactionTask, id: string, data: UpdateOrganizationRequestDto): Promise<Organizations>;
+    updateOrganization(t: TransactionTask, id: string, data: UpdateOrganizationRequestDto, auditCtx?: AuditContext, logoPath?: string): Promise<Organizations>;
 }
 const MODULE_CODE = 'SETTINGS';
 
@@ -24,7 +26,8 @@ export class OrganizationService implements IOrganizationService {
     async createOrganization(
         t: TransactionTask,
         data: CreateOrganizationRequestDto,
-        acting_user_id: string
+        acting_user_id: string,
+        auditCtx?: AuditContext
     ): Promise<Organizations> {
         const existing = await this.organizationRepository.getAll(
             t,
@@ -69,6 +72,8 @@ export class OrganizationService implements IOrganizationService {
             entity_id: organization.id,
             old_values: null,
             new_values: { ...org } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         });
 
@@ -92,7 +97,9 @@ export class OrganizationService implements IOrganizationService {
     async updateOrganization(
         t: TransactionTask,
         id: string,
-        data: UpdateOrganizationRequestDto
+        data: UpdateOrganizationRequestDto,
+        auditCtx?: AuditContext,
+        logoPath?: string
     ): Promise<Organizations> {
         const organization = await this.organizationRepository.getById(t, id);
         if (!organization) {
@@ -126,14 +133,33 @@ export class OrganizationService implements IOrganizationService {
         };
 
         const updatedOrganization = await this.organizationRepository.update(t, updated);
+
+        // Handle logo file upload if provided
+        if (logoPath) {
+            // Delete old logo file if it exists and is different
+            if (organization.company_logo && organization.company_logo !== logoPath) {
+                const oldFilePath = path.join(__dirname, '..', '..', '..', organization.company_logo);
+                try {
+                    if (fs.existsSync(oldFilePath)) {
+                        fs.unlinkSync(oldFilePath);
+                    }
+                } catch {
+                    // Non-critical: old file cleanup failed, continue
+                }
+            }
+            await this.organizationRepository.updateLogo(t, id, logoPath);
+            updatedOrganization.company_logo = logoPath;
+        }
         await this.auditService.log(t, {
             user_id: id,
             action: 'update',
             module_code: MODULE_CODE,
             entity_type: 'organization',
             entity_id: id,
-            old_values: JSON.parse(JSON.stringify(organization)),
-            new_values: JSON.parse(JSON.stringify(updated)),
+            old_values: { ...organization } as Record<string, unknown>,
+            new_values: { ...updated } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         });
         return updatedOrganization;

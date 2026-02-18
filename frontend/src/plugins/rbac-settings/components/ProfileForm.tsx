@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { FormInput, FormSwitch } from '../../../core/components/FormElements';
 import type { Profile, CreateProfileDto, UpdateProfileDto, Permission } from '../../../core/types/profile.types';
 import { profilesApi, permissionsApi } from '../../../core/api/rbac.api';
-import { validateRequired, validateCode } from '../../../core/utils';
+import { validateRequired, validateCode, scrollToFirstError, parseApiError } from '../../../core/utils';
 
 interface ProfileFormProps {
     profile?: Profile | null;
@@ -101,7 +101,10 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
 
     // ---------------- SUBMIT ----------------
     const handleSubmit = async () => {
-        if (!validate()) return;
+        if (!validate()) {
+            scrollToFirstError();
+            return;
+        }
 
         setLoading(true);
 
@@ -126,7 +129,7 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
 
             onSuccess();
         } catch (err) {
-            onError(err instanceof Error ? err.message : 'Failed to save profile');
+            onError(parseApiError(err instanceof Error ? err.message : 'Failed to save profile'));
         } finally {
             setLoading(false);
         }
@@ -196,7 +199,7 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
             <button
                 type="button"
                 id="profile-form-submit"
-                style={{ display: 'none' }}
+                className="visually-hidden"
                 onClick={handleSubmit}
             />
         </div>

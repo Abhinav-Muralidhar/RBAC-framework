@@ -73,7 +73,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
     const userRolesRepository = new UserRoleRepository(db);
 
     // Services
-    const auditService = new AuditService(auditLogsRepo, evaluationService, moduleRepository);
+    const auditService = new AuditService(auditLogsRepo, evaluationService, moduleRepository, usersRepo, roleRepository);
     const authSessionService = new AuthSessionService(sessionsRepo, auditService, evaluationService);
     const requireAuth = createAuthenticateMiddleware(authSessionService);
     const usersService = new UserService(usersRepo, userRolesRepository, evaluationService, auditService);
@@ -109,8 +109,8 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
                 console.log('LOGIN TOKEN:', session.session_token);
 
 
-                // Update last login
-                await usersService.update(t, user.id, user.id, { last_login_at: new Date() });
+                // Update last login timestamp
+                await usersService.recordLogin(t, user.id);
 
                 const userResponse = await usersService.getById(t, user.id, user.id);
 
@@ -142,17 +142,15 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
                 // Try to invalidate session if cookie exists
                 const sessionToken = req.signedCookies['sessionToken'];
                 if (sessionToken) {
-                    await withTransaction(async (t) => {
-                        const session = await authSessionService.resolveSession(t, sessionToken);
-                        await authSessionService.logout(t, session.id);
-                    });
+                    const session = await authSessionService.resolveSession(t, sessionToken);
+                    await authSessionService.logout(t, session.id);
                 }
             });
             res.clearCookie('sessionToken', COOKIE_OPTIONS);
             sendSuccess(res, { message: 'Logged out successfully' });
         } catch (error) {
-            sendError(res, 500, 'Logout failed', 'INTERNAL_ERROR');
             res.clearCookie('sessionToken', COOKIE_OPTIONS);
+            sendError(res, 500, 'Logout failed', 'INTERNAL_ERROR');
         }
     });
 

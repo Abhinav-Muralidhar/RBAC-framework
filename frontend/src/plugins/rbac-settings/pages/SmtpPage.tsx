@@ -5,14 +5,15 @@
  * Uses usePaginatedData for list management and useCrud for modals.
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Check, Mail, Server, Search, Filter } from 'lucide-react';
 import type { SmtpConfig } from '../../../core/types/smtp.types';
 import { smtpApi } from '../../../core/api/rbac.api';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { FormModal } from '../../../core/components/FormModal';
+import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
 import { SmtpForm, submitSmtpForm } from '../components';
-import { usePaginatedData, useCrud } from '../../../core/hooks';
+import { usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
 import './SettingsPage.css';
 
 export function SmtpPage() {
@@ -53,6 +54,24 @@ export function SmtpPage() {
     });
 
     const [showFilterModal, setShowFilterModal] = useState(false);
+    const detailsModal = useDetailsModal();
+
+    const smtpFields = useMemo<FieldConfig<SmtpConfig>[]>(() => [
+        { label: 'Name', key: 'name' },
+        { label: 'Host', key: 'host' },
+        { label: 'Port', key: 'port' },
+        { label: 'Username', key: 'username' },
+        { label: 'Encryption', key: 'encryption', render: (v: string) => v?.toUpperCase() || '—' },
+        { label: 'From Email', key: 'from_email' },
+        { label: 'From Name', key: 'from_name' },
+        { label: 'Reply-To Email', key: 'reply_to_email' },
+        {
+            label: 'Status', key: 'is_active', render: (v: boolean) => (
+                <span className={`status-badge status-${v ? 'active' : 'inactive'}`}>{v ? 'Active' : 'Inactive'}</span>
+            )
+        },
+    ], []);
+
     const error = listError || crudError;
 
     return (
@@ -122,16 +141,16 @@ export function SmtpPage() {
                             <tbody>
                                 {configs.map(config => (
                                     <tr key={config.id}>
-                                        <td>
+                                        <td data-label="Name" className="clickable-cell" onClick={() => detailsModal.open(config.id)}>
                                             <div className="cell-primary">
                                                 <Mail size={16} />
                                                 {config.name}
                                             </div>
                                         </td>
-                                        <td>{config.host}</td>
-                                        <td className="hide-mobile">{config.port}</td>
-                                        <td className="hide-mobile">{config.from_email}</td>
-                                        <td>
+                                        <td data-label="Host" className="clickable-cell" onClick={() => detailsModal.open(config.id)}>{config.host}</td>
+                                        <td data-label="Port" className="hide-mobile clickable-cell" onClick={() => detailsModal.open(config.id)}>{config.port}</td>
+                                        <td data-label="From" className="hide-mobile clickable-cell" onClick={() => detailsModal.open(config.id)}>{config.from_email}</td>
+                                        <td data-label="Status" className="clickable-cell" onClick={() => detailsModal.open(config.id)}>
                                             {config.is_active ? (
                                                 <span className="status-badge status-active">
                                                     <Check size={12} /> Active
@@ -142,7 +161,7 @@ export function SmtpPage() {
                                                 </span>
                                             )}
                                         </td>
-                                        <td>
+                                        <td data-label="Actions">
                                             <div className="action-buttons">
                                                 <button
                                                     className="btn-icon"
@@ -231,18 +250,28 @@ export function SmtpPage() {
                     </div>
                     {Object.keys(filters).length > 0 && (
                         <button
-                            className="btn btn-text"
+                            className="btn btn-text filter-clear"
                             onClick={() => {
                                 setFilters({});
                                 setShowFilterModal(false);
                             }}
-                            style={{ marginTop: '1rem' }}
                         >
                             Clear All Filters
                         </button>
                     )}
                 </div>
             </FormModal>
+
+            {/* Details Modal */}
+            <DetailsModal<SmtpConfig>
+                isOpen={detailsModal.isOpen}
+                title="SMTP Configuration Details"
+                entityId={detailsModal.selectedId}
+                fetchFn={smtpApi.getById}
+                fields={smtpFields}
+                onClose={detailsModal.close}
+                size="md"
+            />
         </div>
     );
 }

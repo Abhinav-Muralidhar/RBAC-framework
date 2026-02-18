@@ -80,10 +80,10 @@ export function SharingRules() {
                         <tbody>
                             {filteredRules.map(rule => (
                                 <tr key={rule.id}>
-                                    <td className="font-medium">{rule.name}</td>
+                                    <td data-label="Module" className="font-medium">{rule.name}</td>
 
                                     {/* Rule Type Toggle */}
-                                    <td>
+                                    <td data-label="Rule Type">
                                         <button
                                             onClick={async () => {
                                                 try {
@@ -96,15 +96,14 @@ export function SharingRules() {
                                                     console.error(err);
                                                 }
                                             }}
-                                            className={`btn ${rule.rule_type === 'public' ? 'btn-primary' : 'btn-secondary'}`}
-                                            style={{ minWidth: '80px' }}
+                                            className={`btn btn-min ${rule.rule_type === 'public' ? 'btn-primary' : 'btn-secondary'}`}
                                         >
                                             {rule.rule_type === 'public' ? 'Public' : 'Private'}
                                         </button>
                                     </td>
 
                                     {/* Status Toggle */}
-                                    <td>
+                                    <td data-label="Status">
                                         <div className="form-switch-wrapper">
                                             <button
                                                 type="button"

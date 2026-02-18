@@ -17,20 +17,28 @@ export class EmailService {
         this.transporter = this.createTransporter(config);
     }
 
-    private createTransporter(
-        config: SmtpConfig | SmtpConfigCreate
-    ): Transporter {
+    private createTransporter(config: SmtpConfig | SmtpConfigCreate): Transporter {
         try {
-            return nodemailer.createTransport({
+            const transportOptions: any = {
                 host: config.host,
                 port: config.port,
-                secure: config.encryption === 'ssl',
                 auth: {
                     user: config.username,
-                    pass: config.password
-                }
-            });
-        } catch {
+                    pass: config.password,
+                },
+                // SSL if port 465 or user explicitly chose 'ssl'
+                secure: config.encryption === 'ssl',
+            };
+
+            // TLS (STARTTLS) handling for port 587 or user chose 'tls'
+            if (config.encryption === 'tls') {
+                transportOptions.requireTLS = true;
+                transportOptions.tls = { rejectUnauthorized: false }; // avoid self-signed issues
+            }
+
+            return nodemailer.createTransport(transportOptions);
+        } catch (err: any) {
+            console.error('Failed to create SMTP transporter:', err);
             throw new RBACInternalError('Failed to create SMTP transporter');
         }
     }
@@ -41,7 +49,8 @@ export class EmailService {
     async verifyConnection(): Promise<void> {
         try {
             await this.transporter.verify();
-        } catch {
+        } catch (err: any) {
+            console.error('SMTP verification failed:', err);
             throw new RBACInternalError('SMTP connection verification failed');
         }
     }
@@ -59,15 +68,21 @@ export class EmailService {
         if (!options.text && !options.html) {
             throw new RBACInternalError('Email must contain text or html');
         }
-        await this.transporter.sendMail({
-            from: configMeta
-                ? `"${configMeta.from_name}" <${configMeta.from_email}>`
-                : `"App" <no-reply@app.com>`,
-            to: options.to,
-            subject: options.subject,
-            text: options.text,
-            html: options.html,
-            replyTo: configMeta?.reply_to_email ?? "no-reply@app.com"
-        });
+
+        try {
+            await this.transporter.sendMail({
+                from: configMeta
+                    ? `"${configMeta.from_name}" <${configMeta.from_email}>`
+                    : `"App" <no-reply@app.com>`,
+                to: options.to,
+                subject: options.subject,
+                text: options.text,
+                html: options.html,
+                replyTo: configMeta?.reply_to_email ?? configMeta?.from_email ?? 'no-reply@app.com',
+            });
+        } catch (err: any) {
+            console.error('Failed to send email:', err);
+            throw new RBACInternalError('Failed to send email');
+        }
     }
 }

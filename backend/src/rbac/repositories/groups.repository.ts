@@ -28,7 +28,7 @@ export interface GroupResponse {
   description: string | null;
   is_active: boolean;
   roles: Array<{ id: string; name: string; code: string }>;
-  users: Array<{ id: string; name: string }>;
+  users: Array<{ id: string; username: string }>;
   user_count?: number;
   created_at: Date;
   created_by: string | null;
@@ -94,11 +94,11 @@ export class GroupRepository implements IGroupRepository {
       t
     );
 
-    const users = await this.query<{ id: string; name: string }>(
-      `SELECT u.id, u.username AS name
+    const users = await this.query<{ id: string; username: string }>(
+      `SELECT u.id, u.username AS username
        FROM users u
        INNER JOIN user_groups ug ON u.id = ug.user_id
-       WHERE ug.group_id = $1 AND u.is_active = true`,
+       WHERE ug.group_id = $1 AND u.status = 'active'`,
       [id],
       t
     );

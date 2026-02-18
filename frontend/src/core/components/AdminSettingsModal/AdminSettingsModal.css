@@ -99,14 +99,14 @@
 
 /* Settings navigation sidebar */
 .admin-settings-nav {
-    width: 200px;
+    width: clamp(96px, 14vw, 160px);
     flex-shrink: 0;
-    padding: 16px 12px;
+    padding: 10px 6px;
     border-right: 1px solid var(--border-color, #2d2d44);
     background: var(--bg-secondary, #16162a);
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
 }
 
 .settings-nav-item {
@@ -141,15 +141,30 @@
 /* Content area */
 .admin-settings-content {
     flex: 1;
-    padding: 24px;
+    padding: clamp(0.75rem, 2vw, 1rem);
     overflow-y: auto;
     background: var(--bg-primary, #1a1a2e);
+    min-width: 0;
+}
+
+.admin-settings-content .settings-page {
+    max-width: 100%;
+    margin: 0;
+    width: 100%;
 }
 
 /* Override page styles when inside modal */
 .admin-settings-content .page-header {
     padding: 0;
     margin-bottom: 20px;
+}
+
+.admin-settings-content .page-header h1 {
+    color: #ffffff;
+}
+
+.admin-settings-content .page-header p {
+    color: #94a3b8;
 }
 
 .admin-settings-content .page-content {
@@ -170,17 +185,27 @@
         border-radius: 0;
     }
 
+    .admin-settings-body {
+        flex-direction: column;
+    }
+
     .admin-settings-nav {
-        width: 60px;
-        padding: 12px 8px;
+        width: 100%;
+        padding: 8px;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color, #2d2d44);
+        flex-direction: row;
+        overflow-x: auto;
+        gap: 8px;
+    }
+
+    .settings-nav-item {
+        flex: 0 0 auto;
+        justify-content: center;
+        padding: 10px;
     }
 
     .settings-nav-item span {
         display: none;
-    }
-
-    .settings-nav-item {
-        justify-content: center;
-        padding: 12px;
     }
 }

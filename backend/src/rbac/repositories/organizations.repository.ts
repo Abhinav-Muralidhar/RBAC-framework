@@ -21,6 +21,7 @@ export interface IOrganizationRepository {
     ): Promise<PaginatedResult<Organizations>>;
     activate(t: TransactionTask | undefined, id: string): Promise<void>;
     create(t: TransactionTask | undefined, input: CreateOrganizationInput): Promise<Organizations>;
+    updateLogo(t: TransactionTask | undefined, id: string, logoPath: string): Promise<void>;
 }
 
 export class OrganizationRepository implements IOrganizationRepository {
@@ -206,6 +207,15 @@ export class OrganizationRepository implements IOrganizationRepository {
              SET is_active = true, updated_at = NOW()
              WHERE id = $1`,
             [id]
+        );
+    }
+
+    async updateLogo(t: TransactionTask | undefined, id: string, logoPath: string): Promise<void> {
+        await (t ?? this.db).none(
+            `UPDATE ${this.tableName}
+             SET company_logo = $1, updated_at = NOW()
+             WHERE id = $2`,
+            [logoPath, id]
         );
     }
 }

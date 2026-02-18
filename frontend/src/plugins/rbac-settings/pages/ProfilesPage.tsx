@@ -4,17 +4,20 @@
  * Manage permission profiles using centralized hooks for pagination and CRUD.
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import { profilesApi } from '../../../core/api/rbac.api';
 import type { Profile } from '../../../core/types/profile.types';
-import { usePaginatedData, useCrud } from '../../../core/hooks';
+import { usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
+import { useToast } from '../../../core/contexts/ToastContext';
 import { FormModal } from '../../../core/components/FormModal';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
+import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
 import { ProfileForm, submitProfileForm } from '../components/ProfileForm';
 import './SettingsPage.css';
 
 export function ProfilesPage() {
+    const toast = useToast();
     const {
         data: profiles,
         isLoading,
@@ -49,9 +52,32 @@ export function ProfilesPage() {
         getByIdFn: profilesApi.getById,
         entityName: 'profiles',
         onSuccess: reload,
+        toast,
     });
 
     const [showFilterModal, setShowFilterModal] = useState(false);
+    const detailsModal = useDetailsModal();
+
+    const profileFields = useMemo<FieldConfig<Profile>[]>(() => [
+        { label: 'Name', key: 'name' },
+        { label: 'Code', key: 'code' },
+        { label: 'Description', key: 'description' },
+        {
+            label: 'Status', key: 'is_active', render: (v: boolean) => (
+                <span className={`status-badge status-${v ? 'active' : 'inactive'}`}>{v ? 'Active' : 'Inactive'}</span>
+            )
+        },
+        { label: 'Role Count', key: 'role_count' },
+        {
+            label: 'Permissions', key: 'permissions', render: (v: any) => {
+                if (!v || !Array.isArray(v) || v.length === 0) return '—';
+                return v.map((p: any) => `${p.module_name}: ${p.action} (${p.effect})`).join(', ');
+            }
+        },
+        { label: 'Created At', key: 'created_at', render: (v: any) => v ? new Date(v).toLocaleString() : '—' },
+        { label: 'Created By', key: 'created_by_name' },
+    ], []);
+
     const error = listError || crudError;
 
     return (
@@ -105,15 +131,15 @@ export function ProfilesPage() {
                             <tbody>
                                 {profiles.length > 0 ? profiles.map(profile => (
                                     <tr key={profile.id}>
-                                        <td className="font-medium">{profile.name}</td>
-                                        <td><code>{profile.code}</code></td>
-                                        <td className="hide-mobile">{profile.description || '-'}</td>
-                                        <td>
+                                        <td data-label="Name" className="clickable-cell" onClick={() => detailsModal.open(profile.id)}>{profile.name}</td>
+                                        <td data-label="Code" className="clickable-cell" onClick={() => detailsModal.open(profile.id)}><code>{profile.code}</code></td>
+                                        <td data-label="Description" className="hide-mobile clickable-cell" onClick={() => detailsModal.open(profile.id)}>{profile.description || '-'}</td>
+                                        <td data-label="Status" className="clickable-cell" onClick={() => detailsModal.open(profile.id)}>
                                             <span className={`status-badge status-${profile.is_active ? 'active' : 'inactive'}`}>
                                                 {profile.is_active ? 'Active' : 'Inactive'}
                                             </span>
                                         </td>
-                                        <td>
+                                        <td data-label="Actions">
                                             <div className="action-buttons">
                                                 <button className="btn-icon" title="Edit" onClick={() => openEdit(profile)} disabled={editLoading}>
                                                     <Edit2 size={16} />
@@ -153,7 +179,7 @@ export function ProfilesPage() {
                 <ProfileForm
                     profile={editingItem}
                     onSuccess={handleFormSuccess}
-                    onError={(err) => console.error(err)}
+                    onError={(err) => toast.error(err)}
                     setLoading={() => { }}
                 />
             </FormModal>
@@ -197,18 +223,28 @@ export function ProfilesPage() {
                     </div>
                     {Object.keys(filters).length > 0 && (
                         <button
-                            className="btn btn-text"
+                            className="btn btn-text filter-clear"
                             onClick={() => {
                                 setFilters({});
                                 setShowFilterModal(false);
                             }}
-                            style={{ marginTop: '1rem' }}
                         >
                             Clear All Filters
                         </button>
                     )}
                 </div>
             </FormModal>
+
+            {/* Details Modal */}
+            <DetailsModal<Profile>
+                isOpen={detailsModal.isOpen}
+                title="Profile Details"
+                entityId={detailsModal.selectedId}
+                fetchFn={profilesApi.getById}
+                fields={profileFields}
+                onClose={detailsModal.close}
+                size="md"
+            />
         </div>
     );
 }

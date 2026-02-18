@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { IDatabase } from 'pg-promise';
 import { createAuthenticateMiddleware } from '../middleware/authenticate.middleware';
+import { injectAuditContext } from '../middleware/injectAuditContext.middleware';
 import { AuthSessionService } from '../services/authSession.service';
 import { AuditService } from '../services/audit.service';
 import { EvaluationService } from '../services/evaluation.service';
@@ -28,7 +29,7 @@ import { createGroupsRouter } from './groups.routes';
 import { createAuditLogsRouter } from './audit-logs.routes';
 import { createSessionsRouter } from './sessions.routes';
 import { createOrganizationsRouter } from './org.routes';
-import { UserService } from '../services/user.service';
+import { UserService, VALID_LANDING_PAGES } from '../services/user.service';
 import { RoleService } from '../services/role.service';
 import { ProfileService } from '../services/profile.service';
 import { GroupRepository } from '../repositories/groups.repository';
@@ -43,6 +44,7 @@ import { SmtpConfigService } from '../services/smtpConfig.service';
 import { createPermissionsRouter } from './permissions.routes';
 import { PermissionService } from '../services/permission.service';
 import { ModuleService } from '../services/module.service';
+import { createEmailRouter } from './email.routes';
 
 
 
@@ -75,7 +77,7 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     // ============================
     const evaluationService = new EvaluationService(new PermissionsRepository(db));
 
-    const auditService = new AuditService(auditLogsRepository, evaluationService, moduleRepository);
+    const auditService = new AuditService(auditLogsRepository, evaluationService, moduleRepository, usersRepo, roleRepository);
     const groupService = new UnifiedGroupService(groupRepository, groupRoleRepository, auditService, userGroupsRepository);
     const authSessionService = new AuthSessionService(authSessionsRepository, auditService, evaluationService);
     const userService = new UserService(usersRepo, userRolesRepository, evaluationService, auditService);
@@ -96,6 +98,9 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     // Apply authentication to ALL /rbac/* routes
     router.use(authenticate);
 
+    // Inject audit context (IP, user-agent, request ID, etc.) for audit logging
+    router.use(injectAuditContext());
+
     // ============================
     // Routes
     // ============================
@@ -109,6 +114,13 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     router.use('/organizations', createOrganizationsRouter(db, evaluationService, auditService, organizationService));
     router.use('/smtpconfig', createSmtpRouter(db, auditService, evaluationService, smtpConfigService));
     router.use('/sharing-rules', createSharingRulesRouter(db, auditService, evaluationService, sharingRuleService));
+    router.use('/email', createEmailRouter(authSessionService, smtpConfigService));
+
+    // Landing pages reference endpoint
+    router.get('/landing-pages', (_req, res) => {
+        res.json({ data: VALID_LANDING_PAGES, error: null });
+    });
+
     return router;
 }
 
@@ -123,6 +135,8 @@ import { OtpTokenRepository } from '../repositories/otp_token.repository';
 import { createSharingRulesRouter } from './sharingrules.routes';
 import { SharingRuleService } from '../services/sharingRule.service';
 import { SharingRulesRepository } from '../repositories/sharing_rules.repository';
+import { withTransaction } from '../utils/transaction.utils';
+import type { TransactionTask } from '../utils/transaction.utils';
 
 export function createPublicAuthRouter(db: IDatabase<unknown>): Router {
     const router = Router();
@@ -137,7 +151,8 @@ export function createPublicAuthRouter(db: IDatabase<unknown>): Router {
 
     // services
     const evaluationService = new EvaluationService(new PermissionsRepository(db));
-    const auditService = new AuditService(auditLogsRepository, evaluationService, moduleRepository);
+    const roleRepository = new RoleRepository(db);
+    const auditService = new AuditService(auditLogsRepository, evaluationService, moduleRepository, usersRepo, roleRepository);
 
     const userService = new UserService(
         usersRepo,
@@ -148,6 +163,8 @@ export function createPublicAuthRouter(db: IDatabase<unknown>): Router {
 
     const otpService = new OtpService(otpTokenRepository);
     const smtpConfigService = new SmtpConfigService(smtpConfigRepository, auditService);
+    const organizationRepository = new OrganizationRepository(db);
+    const organizationService = new OrganizationService(organizationRepository, auditService);
 
     // mount otp
     router.use(
@@ -161,6 +178,41 @@ export function createPublicAuthRouter(db: IDatabase<unknown>): Router {
             smtpConfigService
         )
     );
+
+    /**
+     * GET /public/organization/branding
+     * Public endpoint — no auth required.
+     * Returns non-sensitive organization details for UI rendering.
+     */
+    router.get('/organization/branding', async (req, res, next) => {
+        try {
+            const result = await withTransaction(async (t: TransactionTask) => {
+                const orgs = await organizationService.getOrganizations(t, { is_active: true }, { page: 1, limit: 1 });
+                if (!orgs.data.length) return null;
+                const org = orgs.data[0]!;
+                return {
+                    company_name: org.company_name,
+                    company_logo: org.company_logo || null,
+                    address: org.address,
+                    city: org.city,
+                    state: org.state,
+                    postal_code: org.postal_code,
+                    country: org.country,
+                    country_code: org.country_code,
+                    phone: org.phone || null,
+                    fax: org.fax || null,
+                    website: org.website || null,
+                    facebook: org.facebook || null,
+                    twitter: org.twitter || null,
+                    linkedin: org.linkedin || null,
+                    gstin: org.gstin,
+                };
+            });
+            res.json({ data: result, error: null, meta: {} });
+        } catch (error) {
+            next(error);
+        }
+    });
 
     return router;
 }

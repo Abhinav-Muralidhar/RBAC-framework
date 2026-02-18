@@ -4,17 +4,20 @@
  * Manage user groups using centralized hooks for pagination and CRUD.
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import { groupsApi } from '../../../core/api/rbac.api';
 import type { Group } from '../../../core/types/group.types';
-import { usePaginatedData, useCrud } from '../../../core/hooks';
+import { usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
+import { useToast } from '../../../core/contexts/ToastContext';
 import { FormModal } from '../../../core/components/FormModal';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
+import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
 import { GroupForm, submitGroupForm } from '../components';
 import './SettingsPage.css';
 
 export function GroupsPage() {
+    const toast = useToast();
     const {
         data: groups,
         isLoading,
@@ -49,9 +52,38 @@ export function GroupsPage() {
         getByIdFn: groupsApi.getById,
         entityName: 'groups',
         onSuccess: reload,
+        toast,
     });
 
     const [showFilterModal, setShowFilterModal] = useState(false);
+    const detailsModal = useDetailsModal();
+
+    const groupFields = useMemo<FieldConfig<Group>[]>(() => [
+        { label: 'Name', key: 'name' },
+        { label: 'Code', key: 'code' },
+        { label: 'Description', key: 'description' },
+        {
+            label: 'Status', key: 'is_active', render: (v: boolean) => (
+                <span className={`status-badge status-${v ? 'active' : 'inactive'}`}>{v ? 'Active' : 'Inactive'}</span>
+            )
+        },
+        { label: 'User Count', key: 'user_count' },
+        {
+            label: 'Roles', key: 'roles', render: (v: any) => {
+                if (!v || !Array.isArray(v) || v.length === 0) return '—';
+                return v.map((r: any) => r.name).join(', ');
+            }
+        },
+        {
+            label: 'Users', key: 'users', render: (v: any) => {
+                if (!v || !Array.isArray(v) || v.length === 0) return '—';
+                return v.map((u: any) => u.name).join(', ');
+            }
+        },
+        { label: 'Created At', key: 'created_at', render: (v: any) => v ? new Date(v).toLocaleString() : '—' },
+        { label: 'Created By', key: 'created_by_name' },
+    ], []);
+
     const error = listError || crudError;
 
 
@@ -106,15 +138,15 @@ export function GroupsPage() {
                             <tbody>
                                 {groups.length > 0 ? groups.map(group => (
                                     <tr key={group.id}>
-                                        <td className="font-medium">{group.name}</td>
-                                        <td><code>{group.code || '-'}</code></td>
-                                        <td className="hide-mobile">{group.description || '-'}</td>
-                                        <td>
+                                        <td data-label="Name" className="clickable-cell" onClick={() => detailsModal.open(group.id)}>{group.name}</td>
+                                        <td data-label="Code" className="clickable-cell" onClick={() => detailsModal.open(group.id)}><code>{group.code || '-'}</code></td>
+                                        <td data-label="Description" className="hide-mobile clickable-cell" onClick={() => detailsModal.open(group.id)}>{group.description || '-'}</td>
+                                        <td data-label="Status" className="clickable-cell" onClick={() => detailsModal.open(group.id)}>
                                             <span className={`status-badge status-${group.is_active ? 'active' : 'inactive'}`}>
                                                 {group.is_active ? 'Active' : 'Inactive'}
                                             </span>
                                         </td>
-                                        <td>
+                                        <td data-label="Actions">
                                             <div className="action-buttons">
                                                 <button className="btn-icon" title="Edit" onClick={() => openEdit(group)} disabled={editLoading}>
                                                     <Edit2 size={16} />
@@ -154,7 +186,7 @@ export function GroupsPage() {
                 <GroupForm
                     group={editingItem}
                     onSuccess={handleFormSuccess}
-                    onError={(err) => console.error(err)}
+                    onError={(err) => toast.error(err)}
                     setLoading={() => { }}
                 />
             </FormModal>
@@ -198,18 +230,28 @@ export function GroupsPage() {
                     </div>
                     {Object.keys(filters).length > 0 && (
                         <button
-                            className="btn btn-text"
+                            className="btn btn-text filter-clear"
                             onClick={() => {
                                 setFilters({});
                                 setShowFilterModal(false);
                             }}
-                            style={{ marginTop: '1rem' }}
                         >
                             Clear All Filters
                         </button>
                     )}
                 </div>
             </FormModal>
+
+            {/* Details Modal */}
+            <DetailsModal<Group>
+                isOpen={detailsModal.isOpen}
+                title="Group Details"
+                entityId={detailsModal.selectedId}
+                fetchFn={groupsApi.getById}
+                fields={groupFields}
+                onClose={detailsModal.close}
+                size="md"
+            />
         </div>
     );
 }

@@ -13,3 +13,7 @@ export interface AuthSessions {
   login_at: Date;
   logout_at?: Date | null;
 }
+
+export interface AuthSessionWithUsername extends AuthSessions {
+  username: string | null;
+}

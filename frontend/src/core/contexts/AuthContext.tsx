@@ -20,7 +20,7 @@ interface AuthContextValue {
     isLoading: boolean;
     isAuthenticated: boolean;
     permissions: Permission[];
-    login: (username: string, password: string) => Promise<void>;
+    login: (username: string, password: string) => Promise<User>;
     logout: () => Promise<void>;
     refreshUser: () => Promise<void>;
     // UI helper - actual enforcement is server-side
@@ -73,9 +73,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshUser();
     }, [refreshUser]);
 
-    const login = useCallback(async (username: string, password: string) => {
+    const login = useCallback(async (username: string, password: string): Promise<User> => {
         await authApi.login({ username, password });
         await refreshUser();
+        // Return the updated user so callers can read preferences (e.g. default_landing_page)
+        // We need to re-fetch since refreshUser sets state async
+        const response = await authApi.getCurrentUser();
+        return response.user;
     }, [refreshUser]);
 
     const logout = useCallback(async () => {

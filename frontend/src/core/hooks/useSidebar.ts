@@ -6,25 +6,28 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
 const MOBILE_BREAKPOINT = 768;
 
 export interface UseSidebarReturn {
     isCollapsed: boolean;
     isMobile: boolean;
+    isMobileOpen: boolean;
     toggle: () => void;
+    toggleMobile: () => void;
+    closeMobile: () => void;
     collapse: () => void;
     expand: () => void;
 }
 
 export function useSidebar(): UseSidebarReturn {
     const [isCollapsed, setIsCollapsed] = useState(() => {
-        const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-        return stored === 'true';
+        if (typeof window === 'undefined') return false;
+        return window.innerWidth < MOBILE_BREAKPOINT;
     });
     const [isMobile, setIsMobile] = useState(() =>
         typeof window !== 'undefined' && window.innerWidth < MOBILE_BREAKPOINT
     );
+    const [isMobileOpen, setIsMobileOpen] = useState(false);
 
     // Handle window resize for mobile detection
     useEffect(() => {
@@ -32,8 +35,14 @@ export function useSidebar(): UseSidebarReturn {
             const mobile = window.innerWidth < MOBILE_BREAKPOINT;
             setIsMobile(mobile);
             // Auto-collapse on mobile
-            if (mobile && !isCollapsed) {
+            if (mobile) {
                 setIsCollapsed(true);
+            }
+            if (!mobile) {
+                setIsCollapsed(false);
+            }
+            if (!mobile) {
+                setIsMobileOpen(false);
             }
         };
 
@@ -42,17 +51,22 @@ export function useSidebar(): UseSidebarReturn {
         handleResize();
 
         return () => window.removeEventListener('resize', handleResize);
-    }, [isCollapsed]);
-
-    // Persist collapsed state (only for non-mobile)
-    useEffect(() => {
-        if (!isMobile) {
-            localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isCollapsed));
-        }
-    }, [isCollapsed, isMobile]);
+    }, []);
 
     const toggle = useCallback(() => {
+        if (isMobile) {
+            setIsMobileOpen(prev => !prev);
+            return;
+        }
         setIsCollapsed(prev => !prev);
+    }, [isMobile]);
+
+    const toggleMobile = useCallback(() => {
+        setIsMobileOpen(prev => !prev);
+    }, []);
+
+    const closeMobile = useCallback(() => {
+        setIsMobileOpen(false);
     }, []);
 
     const collapse = useCallback(() => {
@@ -63,5 +77,14 @@ export function useSidebar(): UseSidebarReturn {
         setIsCollapsed(false);
     }, []);
 
-    return { isCollapsed, isMobile, toggle, collapse, expand };
+    return {
+        isCollapsed,
+        isMobile,
+        isMobileOpen,
+        toggle,
+        toggleMobile,
+        closeMobile,
+        collapse,
+        expand,
+    };
 }

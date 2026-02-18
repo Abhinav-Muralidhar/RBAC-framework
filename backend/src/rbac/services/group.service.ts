@@ -23,9 +23,9 @@ const MODULE_CODE = 'SETTINGS';
 
 export interface IUnifiedGroupService {
     getById(t: TransactionTask, actingUserId: string, groupId: string): Promise<GroupResponseDto>;
-    create(t: TransactionTask, actingUserId: string, data: CreateGroupRequestDto): Promise<Groups>;
-    delete(t: TransactionTask, actingUserId: string, groupId: string): Promise<void>;
-    update(t: TransactionTask, actingUserId: string, groupId: string, data: CreateGroupRequestDto): Promise<Groups>;
+    create(t: TransactionTask, actingUserId: string, data: CreateGroupRequestDto, auditCtx?: AuditContext): Promise<Groups>;
+    delete(t: TransactionTask, actingUserId: string, groupId: string, auditCtx?: AuditContext): Promise<void>;
+    update(t: TransactionTask, actingUserId: string, groupId: string, data: CreateGroupRequestDto, auditCtx?: AuditContext): Promise<Groups>;
     listAll(t: TransactionTask, actingUserId: string, filters?: { is_active?: boolean; name?: string; code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
 }
 
@@ -52,13 +52,13 @@ export class UnifiedGroupService implements IUnifiedGroupService {
         return this.groupRepository.findAllPaginated(t, filters, pagination);
     }
 
-    async create(t: TransactionTask, actingUserId: string, data: CreateGroupRequestDto): Promise<Groups> {
+    async create(t: TransactionTask, actingUserId: string, data: CreateGroupRequestDto, auditCtx?: AuditContext): Promise<Groups> {
         if (!data.name) throw new Error('Group name is required');
         if (!data.code) throw new Error('Group code is required');
 
-        const existing = await this.groupRepository.findByCode(t, data.name);
+        const existing = await this.groupRepository.findByCode(t, data.code);
         if (existing) {
-            throw new DuplicateAssignmentError(`group name '${data.name}'`);
+            throw new DuplicateAssignmentError(`group code '${data.code}'`);
         }
 
         const group = await this.groupRepository.create(t, {
@@ -87,6 +87,8 @@ export class UnifiedGroupService implements IUnifiedGroupService {
             entity_id: group.id,
             old_values: null,
             new_values: { ...data } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         });
 
@@ -97,7 +99,8 @@ export class UnifiedGroupService implements IUnifiedGroupService {
         t: TransactionTask,
         actingUserId: string,
         groupId: string,
-        data: CreateGroupRequestDto
+        data: CreateGroupRequestDto,
+        auditCtx?: AuditContext
     ): Promise<Groups> {
         const existing = await this.groupRepository.findById(t, groupId);
         if (!existing) throw new GroupNotFoundError(groupId);
@@ -132,13 +135,15 @@ export class UnifiedGroupService implements IUnifiedGroupService {
             entity_id: groupId,
             old_values: { ...existing } as Record<string, unknown>,
             new_values: { ...data } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
 
         return result;
     }
 
-    async delete(t: TransactionTask, actingUserId: string, groupId: string): Promise<void> {
+    async delete(t: TransactionTask, actingUserId: string, groupId: string, auditCtx?: AuditContext): Promise<void> {
         const existing = await this.groupRepository.findById(t, groupId);
         if (!existing) throw new GroupNotFoundError(groupId);
 
@@ -151,7 +156,9 @@ export class UnifiedGroupService implements IUnifiedGroupService {
             module_code: MODULE_CODE,
             entity_id: groupId,
             old_values: { ...existing } as Record<string, unknown>,
-            new_values: { is_deleted: true },
+            new_values: { delete: true, actingUserId: actingUserId } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address,
+            user_agent: auditCtx?.user_agent,
             status: 'success'
         })
     }

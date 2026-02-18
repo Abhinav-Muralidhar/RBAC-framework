@@ -1,0 +1,220 @@
+/* RoleTree.css */
+
+.role-tree-container {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: clamp(1rem, 2vw, 1.5rem);
+    min-height: 400px;
+    overflow-x: auto;
+}
+
+.tree-header {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    font-weight: 700;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 12px;
+}
+
+.tree-wrapper {
+    /* Main container for the tree lines */
+    position: relative;
+}
+
+/* --- Tree Branch Logic --- */
+
+.tree-branch {
+    position: relative;
+    list-style: none;
+}
+
+.tree-children {
+    padding-left: 24px;
+    /* Indentation for children */
+    margin-left: 12px;
+    /* Alignment for the vertical line */
+    border-left: 3px solid #000000;
+    /* The vertical connector line */
+}
+
+/* --- The Row (Node Content) --- */
+
+.tree-node-content {
+    display: flex;
+    align-items: center;
+    padding: 6px 0;
+    position: relative;
+}
+
+/* The horizontal line connector for children */
+.connector-elbow {
+    position: absolute;
+    left: -24px;
+    /* Move back into the padding of the parent */
+    top: 50%;
+    width: 45px;
+    height: 2px;
+    background-color: #000000;
+    z-index: 1;
+}
+
+/* Toggle Button (Chevron) */
+.tree-toggle {
+    background: transparent;
+    border: 1px solid black;
+    cursor: pointer;
+    color: #64748b;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+    border-radius: 4px;
+    transition: background 0.2s;
+    z-index: 2;
+    position: relative;
+    background-color: #fff;
+    /* Masks the line behind it */
+}
+
+.tree-toggle:hover {
+    background-color: #f1f5f9;
+    color: #0f172a;
+}
+
+.tree-toggle.invisible {
+    visibility: hidden;
+}
+
+/* --- The Node Card Styling --- */
+
+.node-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid #000000;
+    border-radius: 6px;
+    background-color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: clamp(180px, 40vw, 250px);
+    max-width: 100%;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.node-card:hover {
+    border-color: #3b82f6;
+    /* Primary color */
+    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1);
+    transform: translateY(-1px);
+}
+
+.node-icon {
+    color: #64748b;
+    display: flex;
+    align-items: center;
+}
+
+.node-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.node-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #1e293b;
+    line-height: 1.2;
+}
+
+.node-code {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    font-family: monospace;
+}
+
+/* --- Action Buttons (Hover to show) --- */
+
+.node-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: 12px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.tree-node-content:hover .node-actions {
+    opacity: 1;
+}
+
+.btn-icon-mini {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #64748b;
+    transition: all 0.1s;
+}
+
+.btn-icon-mini:hover {
+    background: #f1f5f9;
+    color: #3b82f6;
+    border-color: #cbd5e1;
+}
+
+.btn-icon-mini.danger:hover {
+    background: #fef2f2;
+    color: #ef4444;
+    border-color: #fecaca;
+}
+
+/* Root node specific styling */
+.tree-node-content.root-node .node-card {
+    background-color: #f8fafc;
+    border-color: #000000;
+}
+
+.tree-node-content.root-node .node-name {
+    font-size: 1rem;
+    color: #0f172a;
+}
+
+/* Add this specific style for the Create button */
+.btn-icon-mini.success:hover {
+    background: #f0fdf4;
+    color: #16a34a;
+    /* Green-600 */
+    border-color: #bbf7d0;
+}
+
+/* Ensure the node actions container has enough width */
+.node-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: 12px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    /* Ensure it doesn't wrap awkwardly */
+    flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+    .role-tree-container {
+        padding: 1rem;
+    }
+
+    .node-card {
+        min-width: 200px;
+    }
+}
