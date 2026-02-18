@@ -259,9 +259,6 @@
     cursor: pointer;
 }
 
-.data-table tbody tr td.clickable-cell:hover {
-    background: #f8fafc;
-}
 
 /* Responsive */
 @media (max-width: 640px) {

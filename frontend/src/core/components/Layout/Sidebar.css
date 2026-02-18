@@ -24,7 +24,8 @@
 .sidebar-header {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   padding: 1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   min-height: 64px;
@@ -42,6 +43,8 @@
   border-radius: 0.5rem;
   transition: background 0.2s ease;
   user-select: none;
+  min-width: 0;
+  flex: 1;
 }
 
 .sidebar-logo-img {
@@ -49,6 +52,31 @@
   height: 28px;
   object-fit: contain;
   border-radius: 4px;
+}
+
+.sidebar-org-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sidebar-collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .sidebar-logo:hover {

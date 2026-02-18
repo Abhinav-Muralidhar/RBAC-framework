@@ -14,6 +14,7 @@ import { EvaluationService } from '../services/evaluation.service';
 import { requirePermission } from '../middleware/requirePermission.middleware';
 import { TransactionTask, withTransaction } from '../utils/transaction.utils';
 import { parsePagination } from './_paramUtils';
+import type { AuthSessionListItemDto } from '../dto/auth-session.dto';
 /**
  * Standard response envelope
  */
@@ -44,7 +45,20 @@ export function createSessionsRouter(db: IDatabase<unknown>, auditService: IAudi
                 const sessions = await authSessionService.findAll(t, filters, pagination);
                 return sessions;
             });
-            sendSuccess(res, result.data, {
+            const now = new Date();
+            const items: AuthSessionListItemDto[] = result.data.map((session) => ({
+                id: session.id,
+                user_id: session.user_id,
+                username: session.username ?? null,
+                session_token: session.session_token,
+                ip_address: session.ip_address,
+                user_agent: session.user_agent,
+                login_at: session.login_at,
+                logout_at: session.logout_at ?? null,
+                expires_at: session.expires_at,
+                is_active: !session.logout_at && session.expires_at > now
+            }));
+            sendSuccess(res, items, {
                 page: result.pagination.page,
                 limit: result.pagination.limit,
                 total: result.pagination.total,

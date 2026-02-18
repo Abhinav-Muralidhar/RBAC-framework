@@ -59,6 +59,15 @@ export function SessionsPage() {
         }
     };
 
+    const revokeUserName = revokeModal.data?.username ?? '';
+    const revokeAllUserName = revokeAllModal.data?.username ?? '';
+    const revokeMessage = revokeUserName
+        ? `Are you sure you want to revoke this session for ${revokeUserName}?`
+        : 'Are you sure you want to revoke this session?';
+    const revokeAllMessage = revokeAllUserName
+        ? `Are you sure you want to revoke all sessions for ${revokeAllUserName}?`
+        : 'Are you sure you want to revoke all sessions for this user?';
+
     return (
         <div className="settings-page">
             <header className="page-header">
@@ -73,7 +82,7 @@ export function SessionsPage() {
                     <Search size={18} />
                     <input
                         type="text"
-                        placeholder="Search by User ID..."
+                        placeholder="Search by username or IP..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -102,7 +111,7 @@ export function SessionsPage() {
                             <thead>
                                 <tr>
                                     <th>Session ID</th>
-                                    <th>User ID</th>
+                                    <th>User</th>
                                     <th>IP Address</th>
                                     <th>User Agent</th>
                                     <th>Login Time</th>
@@ -117,7 +126,9 @@ export function SessionsPage() {
                                         <td data-label="Session ID">
                                             <code>{session.id.slice(0, 8)}</code>
                                         </td>
-                                        <td data-label="User ID">{session.user_id}</td>
+                                        <td data-label="User" title={session.user_id}>
+                                            {session.username ?? session.user_id}
+                                        </td>
                                         <td data-label="IP Address">{session.ip_address}</td>
                                         <td data-label="User Agent" title={session.user_agent}>{session.user_agent}</td>
                                         <td data-label="Login Time">{format(new Date(session.login_at), 'MMM d, HH:mm')}</td>
@@ -167,8 +178,7 @@ export function SessionsPage() {
             <ConfirmModal
                 isOpen={revokeModal.isOpen}
                 title="Revoke Session"
-                message="Are you sure you want to revoke this session?"
-                itemName={revokeModal.data?.id.slice(0, 8) + '...'}
+                message={revokeMessage}
                 confirmLabel="Revoke"
                 variant="danger"
                 isLoading={revokeLoading}
@@ -179,8 +189,7 @@ export function SessionsPage() {
             <ConfirmModal
                 isOpen={revokeAllModal.isOpen}
                 title="Revoke All Sessions"
-                message="Are you sure you want to revoke all sessions for this user?"
-                itemName={revokeAllModal.data?.user_id}
+                message={revokeAllMessage}
                 confirmLabel="Revoke All"
                 variant="danger"
                 isLoading={revokeLoading}

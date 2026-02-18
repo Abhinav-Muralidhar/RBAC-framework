@@ -172,13 +172,11 @@
     font-size: 0.875rem;
     color: #374151;
     border-bottom: 2px solid #e2e8f0;
-    word-break: break-word;
+    overflow-wrap: break-word;
+    word-break: normal;
     vertical-align: top;
 }
 
-.data-table tbody tr:hover {
-    background: #edf4ff;
-}
 
 .data-table tbody tr:nth-child(even) {
     background: #eef3fb;
@@ -194,17 +192,11 @@
     transition: background 0.15s ease;
 }
 
-.data-table td.clickable-cell:hover {
-    background: rgba(59, 130, 246, 0.06);
-}
 
 .data-table tr.clickable-row {
     cursor: pointer;
 }
 
-.data-table tr.clickable-row:hover {
-    background: rgba(59, 130, 246, 0.06);
-}
 
 .font-medium {
     font-weight: 500;
@@ -237,6 +229,7 @@
     font-size: 0.75rem;
     font-weight: 500;
     text-transform: capitalize;
+    white-space: nowrap;
 }
 
 .status-active {
@@ -263,6 +256,7 @@
     font-size: 0.75rem;
     font-weight: 500;
     text-transform: uppercase;
+    white-space: nowrap;
 }
 
 /* Action Buttons */

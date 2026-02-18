@@ -17,6 +17,7 @@ import {
     LogOut,
     User,
     Shield,
+    ChevronLeft,
 } from 'lucide-react';
 import { organizationApi } from '../../api/rbac.api';
 import { formatUserName } from '../../constants/userPreferences';
@@ -54,6 +55,11 @@ export function Sidebar({ isCollapsed, isMobile, isMobileOpen, onToggle, onClose
     const { openSettings } = useAdminSettings();
     const [branding, setBranding] = useState<OrganizationBrandingDto | null>(null);
     const showLabels = !isCollapsed || isMobile;
+    const orgName = branding?.company_name || 'RBAC';
+    const maxOrgNameLength = 20;
+    const displayOrgName = orgName.length > maxOrgNameLength
+        ? `${orgName.slice(0, maxOrgNameLength)}...`
+        : orgName;
 
     useEffect(() => {
         organizationApi.getBranding().then(setBranding).catch(() => { });
@@ -62,6 +68,14 @@ export function Sidebar({ isCollapsed, isMobile, isMobileOpen, onToggle, onClose
     const logoUrl = branding?.company_logo
         ? `${API_BASE_URL}/${branding.company_logo}`
         : null;
+
+    const handleSidebarToggle = () => {
+        if (isMobile) {
+            onCloseMobile();
+        } else {
+            onToggle();
+        }
+    };
 
     const handleLogout = async () => {
         await logout();
@@ -90,10 +104,10 @@ export function Sidebar({ isCollapsed, isMobile, isMobileOpen, onToggle, onClose
             <div className="sidebar-header">
                 <div
                     className="sidebar-logo"
-                    onClick={onToggle}
+                    onClick={handleSidebarToggle}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && onToggle()}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSidebarToggle()}
                     aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                     title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 >
@@ -102,8 +116,23 @@ export function Sidebar({ isCollapsed, isMobile, isMobileOpen, onToggle, onClose
                     ) : (
                         <Shield size={28} />
                     )}
-                    {showLabels && <span>{branding?.company_name || 'RBAC'}</span>}
+                    {showLabels && (
+                        <span className="sidebar-org-name" title={orgName}>
+                            {displayOrgName}
+                        </span>
+                    )}
                 </div>
+                {showLabels && (
+                    <button
+                        type="button"
+                        className="sidebar-collapse-btn"
+                        onClick={handleSidebarToggle}
+                        aria-label="Collapse sidebar"
+                        title="Collapse sidebar"
+                    >
+                        <ChevronLeft size={18} />
+                    </button>
+                )}
             </div>
 
             <nav className="sidebar-nav">

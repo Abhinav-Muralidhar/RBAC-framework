@@ -7,7 +7,7 @@
  * All mutations are audit logged.
  */
 
-import { AuthSessions } from '../models/auth_sessions.model';
+import { AuthSessions, AuthSessionWithUsername } from '../models/auth_sessions.model';
 import { IAuthSessionsRepository } from '../repositories/auth_sessions.repository';
 import { IAuditService } from './audit.service';
 import { RBACInternalError } from '../errors/rbac.errors';
@@ -103,7 +103,7 @@ export interface IAuthSessionService {
      */
     resolveSession(t: TransactionTask | undefined, sessionToken: string): Promise<AuthSessions>;
 
-    findAll(t: TransactionTask, filters?: { userId?: string; isActive?: boolean; search?: string }, pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessions>>;
+    findAll(t: TransactionTask, filters?: { userId?: string; isActive?: boolean; search?: string }, pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessionWithUsername>>;
 }
 
 /**
@@ -124,7 +124,7 @@ export class AuthSessionService implements IAuthSessionService {
         return session;
     }
 
-    async findAll(t: TransactionTask, filters?: { userId?: string; isActive?: boolean; search?: string }, pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessions>> {
+    async findAll(t: TransactionTask, filters?: { userId?: string; isActive?: boolean; search?: string }, pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessionWithUsername>> {
         return this.authSessionsRepository.findAll(t, filters, pagination);
     }
 
@@ -318,11 +318,6 @@ export class AuthSessionService implements IAuthSessionService {
 
         if (!session) {
             throw new RBACInternalError(`Session not found for token`);
-        }
-
-        // Check if session is logged out
-        if (session.logout_at) {
-            throw new RBACInternalError('Session has been logged out');
         }
 
         // Check if session is expired
