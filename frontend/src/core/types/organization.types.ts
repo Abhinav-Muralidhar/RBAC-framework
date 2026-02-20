@@ -6,6 +6,7 @@ export type OrganizationStatus = 'active' | 'inactive';
 
 export interface Organization {
     id: string;
+    version: number;
 
     // Core
     company_name: string;
@@ -47,6 +48,7 @@ export interface Organization {
  * (No create / delete for now)
  */
 export interface UpdateOrganizationDto {
+    version: number;
     company_name?: string;
     company_logo?: string | null;
 
@@ -74,6 +76,7 @@ export interface UpdateOrganizationDto {
 
 export interface OrganizationResponseDto {
     id: string;
+    version: number;
     company_name: string;
     company_logo: string;
     address: string;

@@ -1,5 +1,6 @@
 export interface Roles {
   id: string;
+  version: number;
 
   name: string;
   code: string;
@@ -11,4 +12,5 @@ export interface Roles {
 
   created_at: Date;
   created_by?: string | null;
+  updated_at?: Date | null;
 }

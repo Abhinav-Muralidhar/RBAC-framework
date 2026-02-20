@@ -17,6 +17,7 @@ export interface CreateSharingRuleRequestDto {
 }
 
 export interface UpdateSharingRuleRequestDto {
+    version: number;
     rule_type?: SharingRuleType;
     is_active?: boolean;
 }
@@ -27,6 +28,7 @@ export interface UpdateSharingRuleRequestDto {
 
 export interface SharingRuleResponseDto {
     id: string;
+    version: number;
     rule_type: SharingRuleType;
     module_id: string;
     is_active: boolean;

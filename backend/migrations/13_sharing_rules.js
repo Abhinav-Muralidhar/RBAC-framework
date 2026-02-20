@@ -10,6 +10,8 @@ exports.up = async function (knex) {
         table.boolean('is_active').defaultTo(true).notNullable();
         table.timestamp('created_at').defaultTo(knex.fn.now()).notNullable();
         table.bigInteger('created_by').nullable().references('id').inTable('users').onDelete('SET NULL');
+        table.timestamp('updated_at').nullable();
+        table.integer('version').notNullable().defaultTo(1);
         table.index(['module_id']);
         table.unique(['module_id']);
     })

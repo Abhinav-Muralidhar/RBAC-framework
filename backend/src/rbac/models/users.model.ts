@@ -4,6 +4,7 @@ export type TrailingZeroHandling = 'show' | 'hide';
 
 export interface Users {
   id: string;
+  version: number;
 
   username: string;
   password: string;

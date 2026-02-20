@@ -134,6 +134,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
         try {
             if (isEditing && group) {
                 const updateData: UpdateGroupDto = {
+                    version: group.version,
                     name: formData.name.trim(),
                     description: formData.description || undefined,
                     role_ids: selectedRoles,

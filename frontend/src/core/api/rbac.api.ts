@@ -325,7 +325,7 @@ export const organizationApi = {
      */
     update: async (
         id: string,
-        data: Partial<Organization>,
+        data: UpdateOrganizationDto,
         logoFile?: File
     ): Promise<Organization> => {
         if (logoFile) {

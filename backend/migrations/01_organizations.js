@@ -22,6 +22,7 @@ exports.up = async function (knex) {
     table.integer('financial_year_start_month');
     table.string('gstin', 15).notNullable().unique();
     table.boolean('is_active').defaultTo(true);
+    table.integer('version').notNullable().defaultTo(1);
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.bigInteger('created_by').unsigned();
     table.timestamp('updated_at');

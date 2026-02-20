@@ -108,6 +108,7 @@ export class OrganizationService implements IOrganizationService {
 
         const updated: Organizations = {
             id,
+            version: data.version,
             company_name: data.company_name ?? organization.company_name as string,
             company_logo: data.company_logo ?? organization.company_logo as string,
             address: data.address ?? organization.address as string,

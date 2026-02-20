@@ -58,6 +58,7 @@ export class SharingRuleService implements ISharingRuleService {
 
         const share: SharingRules = {
             id: existing.id,
+            version: data.version,
             module_id: existing.module_id,
             rule_type: data.rule_type ?? existing.rule_type,
             is_active: data.is_active ?? existing.is_active,

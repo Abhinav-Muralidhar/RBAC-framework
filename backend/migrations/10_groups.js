@@ -11,6 +11,8 @@ exports.up = async function (knex) {
         table.boolean('is_active').notNullable().defaultTo(true);
         table.timestamp('created_at').defaultTo(knex.fn.now()).notNullable();
         table.bigInteger('created_by').nullable().references('id').inTable('users').onDelete('SET NULL');
+        table.timestamp('updated_at').nullable();
+        table.integer('version').notNullable().defaultTo(1);
     })
 }
 

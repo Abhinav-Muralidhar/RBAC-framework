@@ -4,6 +4,7 @@
 
 export interface Group {
     id: string;
+    version: number;
     name: string;
     code: string;
     description: string | null;
@@ -26,6 +27,7 @@ export interface CreateGroupDto {
 }
 
 export interface UpdateGroupDto {
+    version: number;
     name?: string;
     code?: string;
     description?: string | null;

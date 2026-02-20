@@ -2,6 +2,7 @@ import { IDatabase, ITask } from 'pg-promise';
 import { SharingRules, SharingRuleType } from '../models/sharing_rules.model';
 import { CreateSharingRuleInput, UpdateSharingRuleInput } from '../types/repository.types';
 import { buildPaginatedResult, getPaginationOffset, normalizePaginationParams, PaginatedResult, PaginationParams } from '../utils/pagination.utils';
+import { ConcurrentModificationError } from '../errors/rbac.errors';
 
 export interface ISharingRulesRepository {
   create(t: ITask<unknown> | undefined, input: CreateSharingRuleInput): Promise<SharingRules>;
@@ -127,17 +128,20 @@ export class SharingRulesRepository implements ISharingRulesRepository {
     const res = await (t ?? this.db).oneOrNone<SharingRules>(
       `UPDATE ${this.tableName}
        SET rule_type = $1,
-           is_active = $2
-       WHERE id = $3
+           is_active = $2,
+           updated_at = NOW(),
+           version = version + 1
+       WHERE id = $3 AND version = $4
        RETURNING *`,
       [
         input.rule_type,
         input.is_active ?? null,
-        id
+        id,
+        input.version
       ]
     );
 
-    if (!res) throw new Error(`SharingRules ${id} not found`);
+    if (!res) throw new ConcurrentModificationError('SharingRule', id);
     return res;
   }
 

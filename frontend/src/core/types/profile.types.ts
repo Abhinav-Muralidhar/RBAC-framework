@@ -4,6 +4,7 @@
 
 export interface Profile {
     id: string;
+    version: number;
     name: string;
     code: string;
     description: string | null;
@@ -32,6 +33,7 @@ export interface CreateProfileDto {
 }
 
 export interface UpdateProfileDto {
+    version: number;
     name?: string;
     code?: string;
     description?: string;

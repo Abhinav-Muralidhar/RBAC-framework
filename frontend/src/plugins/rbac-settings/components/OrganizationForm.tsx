@@ -119,34 +119,37 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
         setLoading(true);
 
         try {
-            const payload = {
-                company_name: formData.company_name,
-                address: formData.address || undefined,
-                city: formData.city || undefined,
-                state: formData.state || undefined,
-                postal_code: formData.postal_code || undefined,
-                country: formData.country || undefined,
-                country_code: formData.country_code || undefined,
-                phone: formData.phone || undefined,
-                fax: formData.fax || undefined,
-                website: formData.website || undefined,
-                facebook: formData.facebook || undefined,
-                twitter: formData.twitter || undefined,
-                linkedin: formData.linkedin || undefined,
-                financial_year_start_month: formData.financial_year_start_month
-                    ? parseInt(formData.financial_year_start_month)
-                    : undefined,
-                gstin: formData.gstin,
-                is_active: formData.is_active,
-            };
-
-            let result;
+            let result: OrganizationResponseDto | undefined;
 
             if (isEditing && organization) {
+                const payload = {
+                    version: organization.version,
+                    company_name: formData.company_name,
+                    address: formData.address || undefined,
+                    city: formData.city || undefined,
+                    state: formData.state || undefined,
+                    postal_code: formData.postal_code || undefined,
+                    country: formData.country || undefined,
+                    country_code: formData.country_code || undefined,
+                    phone: formData.phone || undefined,
+                    fax: formData.fax || undefined,
+                    website: formData.website || undefined,
+                    facebook: formData.facebook || undefined,
+                    twitter: formData.twitter || undefined,
+                    linkedin: formData.linkedin || undefined,
+                    financial_year_start_month: formData.financial_year_start_month
+                        ? parseInt(formData.financial_year_start_month)
+                        : undefined,
+                    gstin: formData.gstin,
+                    is_active: formData.is_active,
+                };
+
                 result = await organizationApi.update(organization.id, payload, logoFile || undefined);
             }
 
-            onSuccess(result);
+            if (result) {
+                onSuccess(result);
+            }
         } catch (err) {
             onError(parseApiError(err instanceof Error ? err.message : 'Failed to save organization'));
         } finally {

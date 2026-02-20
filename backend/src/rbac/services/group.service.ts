@@ -14,7 +14,7 @@ import {
     GroupNotFoundError,
     DuplicateAssignmentError
 } from '../errors/rbac.errors';
-import { CreateGroupRequestDto, GroupResponseDto } from '../dto/group.dto';
+import { CreateGroupRequestDto, GroupResponseDto, UpdateGroupRequestDto } from '../dto/group.dto';
 import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
 import { IUserGroupsRepository } from '../repositories/user_groups.repository';
 
@@ -25,7 +25,7 @@ export interface IUnifiedGroupService {
     getById(t: TransactionTask, actingUserId: string, groupId: string): Promise<GroupResponseDto>;
     create(t: TransactionTask, actingUserId: string, data: CreateGroupRequestDto, auditCtx?: AuditContext): Promise<Groups>;
     delete(t: TransactionTask, actingUserId: string, groupId: string, auditCtx?: AuditContext): Promise<void>;
-    update(t: TransactionTask, actingUserId: string, groupId: string, data: CreateGroupRequestDto, auditCtx?: AuditContext): Promise<Groups>;
+    update(t: TransactionTask, actingUserId: string, groupId: string, data: UpdateGroupRequestDto, auditCtx?: AuditContext): Promise<Groups>;
     listAll(t: TransactionTask, actingUserId: string, filters?: { is_active?: boolean; name?: string; code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
 }
 
@@ -99,7 +99,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
         t: TransactionTask,
         actingUserId: string,
         groupId: string,
-        data: CreateGroupRequestDto,
+        data: UpdateGroupRequestDto,
         auditCtx?: AuditContext
     ): Promise<Groups> {
         const existing = await this.groupRepository.findById(t, groupId);
@@ -107,6 +107,7 @@ export class UnifiedGroupService implements IUnifiedGroupService {
 
         const updated: Groups = {
             id: existing.id,
+            version: data.version,
             name: data.name ?? existing.name,
             code: data.code ?? existing.code,
             description: (data.description ?? existing.description) as string | null,

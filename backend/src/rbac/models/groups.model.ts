@@ -1,5 +1,6 @@
 export interface Groups {
   id: string;
+  version: number;
 
   name: string;
   code: string;
@@ -9,4 +10,5 @@ export interface Groups {
 
   created_at: Date;
   created_by?: string | null;
+  updated_at?: Date | null;
 }

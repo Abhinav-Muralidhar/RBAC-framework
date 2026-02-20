@@ -19,6 +19,7 @@ export interface CreateProfileRequestDto {
 }
 
 export interface UpdateProfileRequestDto {
+    version: number;
     name?: string;
     code?: string;
     description?: string | null;
@@ -44,6 +45,7 @@ export interface ProfileListFilterDto {
  */
 export interface ProfileResponseDto {
     id: string;
+    version: number;
     name: string;
     code: string;
     description: string | null;

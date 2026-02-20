@@ -14,6 +14,7 @@ export type TrailingZeroHandling = 'show' | 'hide';
 
 export interface User {
     id: string;
+    version: number;
 
     username: string;
     password: string;
@@ -136,6 +137,7 @@ export interface CreateUserDto {
 }
 
 export interface UpdateUserDto {
+    version: number;
     username?: string;
     password?: string;  // Will trigger validation if provided
     status?: Exclude<UserStatus, 'deleted'>;  // Cannot set to 'deleted' via update

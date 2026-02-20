@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { sharingRulesApi } from '../../../core/api/rbac.api';
-import type { SharingRule, UpdateSharingRuleDto } from '../../../core/types/sharingrule.types';
+import type { SharingRule } from '../../../core/types/sharingrule.types';
+import { parseApiError } from '../../../core/utils';
 import { Search, Filter } from 'lucide-react';
 import './SettingsPage.css';
 
@@ -18,6 +19,7 @@ export function SharingRules() {
             const res = await sharingRulesApi.list();
             const rulesData: SharingRule[] = (res as any || []).map(r => ({
                 id: Number(r.id),
+                version: Number(r.version),
                 rule_type: r.rule_type,
                 module_id: Number(r.module_id),
                 is_active: r.is_active,
@@ -84,18 +86,19 @@ export function SharingRules() {
 
                                     {/* Rule Type Toggle */}
                                     <td data-label="Rule Type">
-                                        <button
-                                            onClick={async () => {
-                                                try {
-                                                    const newType = rule.rule_type === 'public' ? 'private' : 'public';
-                                                    await sharingRulesApi.update(rule.id, { rule_type: newType });
-                                                    setRules(prev =>
-                                                        prev.map(r => r.id === rule.id ? { ...r, rule_type: newType } : r)
-                                                    );
-                                                } catch (err) {
-                                                    console.error(err);
-                                                }
-                                            }}
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            const newType = rule.rule_type === 'public' ? 'private' : 'public';
+                                                            const updated = await sharingRulesApi.update(rule.id, { version: rule.version, rule_type: newType });
+                                                            setRules(prev =>
+                                                                prev.map(r => r.id === rule.id ? { ...r, rule_type: newType, version: updated.version } : r)
+                                                            );
+                                                        } catch (err) {
+                                                            const raw = err instanceof Error ? err.message : 'Failed to update rule type';
+                                                            setError(parseApiError(raw));
+                                                        }
+                                                    }}
                                             className={`btn btn-min ${rule.rule_type === 'public' ? 'btn-primary' : 'btn-secondary'}`}
                                         >
                                             {rule.rule_type === 'public' ? 'Public' : 'Private'}
@@ -113,12 +116,13 @@ export function SharingRules() {
                                                 onClick={async () => {
                                                     try {
                                                         const newStatus = !rule.is_active;
-                                                        await sharingRulesApi.update(rule.id, { is_active: newStatus });
+                                                        const updated = await sharingRulesApi.update(rule.id, { version: rule.version, is_active: newStatus });
                                                         setRules(prev =>
-                                                            prev.map(r => r.id === rule.id ? { ...r, is_active: newStatus } : r)
+                                                            prev.map(r => r.id === rule.id ? { ...r, is_active: newStatus, version: updated.version } : r)
                                                         );
                                                     } catch (err) {
-                                                        console.error(err);
+                                                        const raw = err instanceof Error ? err.message : 'Failed to update rule status';
+                                                        setError(parseApiError(raw));
                                                     }
                                                 }}
                                             >

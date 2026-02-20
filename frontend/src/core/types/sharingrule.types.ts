@@ -2,6 +2,7 @@ export type SharingRuleType = 'public' | 'private';
 
 export type SharingRule = {
     id: number;
+    version: number;
     rule_type: string;
     module_id: number;
     is_active: boolean;
@@ -20,6 +21,7 @@ export interface CreateSharingRuleDto {
 
 // For updating an existing rule
 export interface UpdateSharingRuleDto {
+    version: number;
     rule_type?: string;      // optional
     module_id?: string;      // optional
     is_active?: boolean;     // optional

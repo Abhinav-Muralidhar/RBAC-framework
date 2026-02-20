@@ -49,6 +49,7 @@ exports.up = async function (knex) {
 
     table.string('aggregation_format');
     table.text('signature');
+    table.integer('version').notNullable().defaultTo(1);
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.bigInteger('created_by').unsigned().references('id').inTable('users').onDelete('SET NULL');
     table.timestamp('updated_at');

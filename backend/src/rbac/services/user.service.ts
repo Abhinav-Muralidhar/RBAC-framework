@@ -139,6 +139,7 @@ export class UserService implements IUserService {
             ...oldUser,
             ...cleanData,
             id,
+            version: data.version,
             created_at: oldUser.created_at,
             status: data.status ?? oldUser.status,
             last_login_at: cleanData.last_login_at !== undefined ? (cleanData.last_login_at as Date | null) : (oldUser.last_login_at ?? null),
@@ -221,6 +222,7 @@ export class UserService implements IUserService {
 
         const updatedUser: Users = {
             ...oldUser,
+            version: oldUser.version,
             password: newHashedPassword,
             password_changed_at: new Date()
         };

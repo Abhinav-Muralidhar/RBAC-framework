@@ -71,6 +71,7 @@ export interface CreateUserInput {
 
 /** Fields that can be updated on a user */
 export interface UpdateUserInput {
+    version: number;
     password?: string;
     username?: string;
     status?: 'active' | 'inactive' | 'deleted';
@@ -128,6 +129,7 @@ export interface CreateRoleInput {
 
 /** Fields that can be updated on a role */
 export interface UpdateRoleInput {
+    version: number;
     name?: string;
     code?: string;
     description?: string | null;
@@ -205,6 +207,7 @@ export interface CreateSharingRuleInput {
 
 /** Fields that can be updated on a sharing rule */
 export interface UpdateSharingRuleInput {
+    version: number;
     rule_type?: 'public' | 'private';
     is_active?: boolean;
 }

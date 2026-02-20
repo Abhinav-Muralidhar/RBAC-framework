@@ -18,6 +18,7 @@ export interface CreateRoleRequestDto {
 }
 
 export interface UpdateRoleRequestDto {
+    version: number;
     name?: string;
     code?: string;
     description?: string | null;
@@ -45,6 +46,7 @@ export interface RoleListFilterDto {
  */
 export interface RoleResponseDto {
     id: string;
+    version: number;
     name: string;
     code: string;
     description: string | null;

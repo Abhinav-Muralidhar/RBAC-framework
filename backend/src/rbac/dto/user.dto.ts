@@ -77,6 +77,7 @@ export interface CreateUserRequestDto {
  * All fields optional for partial updates
  */
 export interface UpdateUserRequestDto {
+    version: number;
     username?: string;
     password?: string;  // Will trigger validation if provided
     status?: Exclude<UserStatus, 'deleted'>;  // Cannot set to 'deleted' via update
@@ -152,6 +153,7 @@ export interface UserListFilterDto {
  */
 export interface UserResponseDto {
     id: string;
+    version: number;
     username: string;
     status: UserStatus;
 

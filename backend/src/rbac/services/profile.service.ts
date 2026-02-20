@@ -108,6 +108,7 @@ export class ProfileService implements IProfileService {
 
         const prof: Profiles = {
             id: profileId,
+            version: data.version,
             name: data.name ?? existing.name,
             code: data.code ?? existing.code,
             description: data.description ?? null,
@@ -149,6 +150,7 @@ export class ProfileService implements IProfileService {
 
         const prof: Profiles = {
             id: profileId,
+            version: existing.version,
             name: existing.name,
             code: existing.code,
             description: existing.description as string,

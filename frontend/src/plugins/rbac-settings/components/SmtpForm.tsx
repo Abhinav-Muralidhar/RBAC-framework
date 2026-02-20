@@ -153,6 +153,7 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
         try {
             if (isEditing && config) {
                 const updateData: UpdateSmtpConfigDto = {
+                    version: config.version,
                     name: formData.name,
                     host: formData.host,
                     port: Number(formData.port),

@@ -13,6 +13,15 @@ export class RBACError extends Error {
     }
 }
 
+export class ConcurrentModificationError extends RBACError {
+    constructor(
+        public readonly entityType: string,
+        public readonly entityId: string
+    ) {
+        super(`${entityType} '${entityId}' was modified by another user. Please refresh and try again.`);
+    }
+}
+
 // Custom error for sharing rules
 export class SharingRuleNotFoundError extends RBACError {
     constructor(ruleId: string) {

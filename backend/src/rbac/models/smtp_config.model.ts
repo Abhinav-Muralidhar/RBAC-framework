@@ -2,6 +2,7 @@ export type SmtpEncryption = 'none' | 'ssl' | 'tls';
 
 export interface SmtpConfig {
   id: string;
+  version: number;
 
   name: string;
 
@@ -18,4 +19,5 @@ export interface SmtpConfig {
   reply_to_email?: string | null;
 
   is_active: boolean;
+  updated_at?: Date | null;
 }

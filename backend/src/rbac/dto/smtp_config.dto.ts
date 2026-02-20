@@ -20,6 +20,7 @@ export interface SmtpConfigCreate {
 }
 
 export interface SmtpConfigUpdate {
+    version: number;
     name: string;
 
     host: string;
