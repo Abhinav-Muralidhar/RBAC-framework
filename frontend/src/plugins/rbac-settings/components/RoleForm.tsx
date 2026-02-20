@@ -204,6 +204,7 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
             const finalParentRoleId = selectedParentRole === '' ? null : selectedParentRole;
             if (isEditing && role) {
                 const updateData: UpdateRoleDto = {
+                    version: role.version,
                     name: formData.name.trim(),
                     description: formData.description || undefined,
                     is_active: formData.is_active,

@@ -124,6 +124,7 @@ export function validatePort(port: number | string): string | null {
  * Map raw backend error strings to user-friendly messages
  */
 const ERROR_PATTERNS: Array<{ pattern: RegExp; message: string }> = [
+    { pattern: /modified by another user|concurrent modification/i, message: 'This record was changed by someone else. Please refresh and try again.' },
     { pattern: /duplicate key|already exists|violates unique constraint/i, message: 'A record with this value already exists. Please use a different one.' },
     { pattern: /invalid credentials|request failed 401|authentication failed|incorrect password/i, message: 'Invalid username or password.' },
     { pattern: /not found/i, message: 'The requested item could not be found.' },

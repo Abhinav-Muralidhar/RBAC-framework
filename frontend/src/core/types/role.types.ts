@@ -4,6 +4,7 @@
 
 export interface Role {
     id: string;
+    version: number;
     name: string;
     code: string;
     description: string | null;
@@ -34,6 +35,7 @@ export interface CreateRoleDto {
 }
 
 export interface UpdateRoleDto {
+    version: number;
     name?: string;
     code?: string;
     description?: string | null;

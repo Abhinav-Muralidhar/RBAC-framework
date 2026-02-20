@@ -11,9 +11,11 @@ import { CreateUserInput, UpdateUserInput } from '../types/repository.types';
 import { UserStatus } from '../models/users.model';
 import { IDatabase } from 'pg-promise';
 import { TransactionTask } from './user_groups.repository';
+import { ConcurrentModificationError } from '../errors/rbac.errors';
 
 export interface UserDetail {
   id: string;
+  version: number;
   username: string;
   status: UserStatus;
 
@@ -369,10 +371,11 @@ export class UsersRepository implements IUsersRepository {
       input.created_by ?? null,
       input.last_login_at ?? null,
       input.password_changed_at ?? null,
-      input.id
+      input.id,
+      input.version
     ];
 
-    const res = await this.task(t).one<Users>(
+    const res = await this.task(t).oneOrNone<Users>(
       `UPDATE ${this.tableName}
        SET username=$1, password=$2, last_name=$3, primary_email=$4,
            status=$5, first_name=$6, title=$7, department=$8, reports_to_user_id=$9,
@@ -382,13 +385,14 @@ export class UsersRepository implements IUsersRepository {
            phone_country_code=$24, full_screen_preview=$25, preferred_currency=$26,
            digit_grouping_pattern=$27, decimal_separator=$28, decimal_precision=$29,
            symbol_placement=$30, time_zone=$31, business_hours=$32, trailing_zero_handling=$33,
-           aggregation_format=$34, signature=$35, created_by=$36, last_login_at=$37, password_changed_at=$38
-       WHERE id = $39
+           aggregation_format=$34, signature=$35, created_by=$36, last_login_at=$37, password_changed_at=$38,
+           updated_at = NOW(), version = version + 1
+       WHERE id = $39 AND version = $40
        RETURNING *`,
       values
     );
 
-    if (!res) throw new Error('User not found for update');
+    if (!res) throw new ConcurrentModificationError('User', input.id);
     return res;
   }
 

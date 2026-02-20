@@ -12,6 +12,8 @@ exports.up = async function (knex) {
     table.boolean('is_active').notNullable().defaultTo(true);
     table.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
     table.bigInteger('created_by').unsigned().nullable().references('id').inTable('users');
+    table.timestamp('updated_at').nullable();
+    table.integer('version').notNullable().defaultTo(1);
     table.unique('code');
     table.index('parent_role_id');
     table.check(

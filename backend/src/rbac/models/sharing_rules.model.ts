@@ -2,6 +2,7 @@ export type SharingRuleType = 'public' | 'private';
 
 export interface SharingRules {
   id: string;
+  version: number;
 
   rule_type: SharingRuleType;
 
@@ -11,4 +12,5 @@ export interface SharingRules {
 
   created_at: Date;
   created_by?: string | null;
+  updated_at?: Date | null;
 }

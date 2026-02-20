@@ -9,6 +9,7 @@ import {
 } from '../utils/pagination.utils';
 import { CreateOrganizationInput } from '../types/repository.types';
 import { TransactionTask } from '../utils/transaction.utils';
+import { ConcurrentModificationError } from '../errors/rbac.errors';
 
 export interface IOrganizationRepository {
     getById(t: TransactionTask | undefined, id: string): Promise<Organizations | null>;
@@ -159,8 +160,9 @@ export class OrganizationRepository implements IOrganizationRepository {
                  financial_year_start_month = $15,
                  gstin = $16,
                  is_active = $17,
-                 updated_at = $18
-             WHERE id = $19
+                 updated_at = NOW(),
+                 version = version + 1
+             WHERE id = $18 AND version = $19
              RETURNING *`,
             [
                 input.company_name,
@@ -180,13 +182,13 @@ export class OrganizationRepository implements IOrganizationRepository {
                 input.financial_year_start_month,
                 input.gstin,
                 input.is_active,
-                new Date(),
-                input.id
+                input.id,
+                input.version
             ]
         );
 
         if (!row) {
-            throw new Error('Organization not found or update failed');
+            throw new ConcurrentModificationError('Organization', input.id);
         }
 
         return row;

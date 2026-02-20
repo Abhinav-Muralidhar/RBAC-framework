@@ -1,5 +1,6 @@
 export interface Organizations {
   id: string; // bigIncrements
+  version: number;
 
   company_name: string;
   company_logo: string;

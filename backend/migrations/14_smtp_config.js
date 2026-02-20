@@ -15,6 +15,8 @@ exports.up = async function (knex) {
         table.string('from_email').notNullable();
         table.string('from_name').notNullable();
         table.string('reply_to_email').nullable();
+        table.timestamp('updated_at').nullable();
+        table.integer('version').notNullable().defaultTo(1);
         table.index('name');
     })
 }

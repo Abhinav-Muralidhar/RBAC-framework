@@ -128,6 +128,7 @@ export class RoleService implements IRoleService {
 
         const role: Roles = {
             id: existing.id,
+            version: data.version,
             name: data.name ?? existing.name,
             code: data.code ?? existing.code,
             description: data.description ?? existing.description as string | null,

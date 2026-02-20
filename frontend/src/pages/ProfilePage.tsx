@@ -162,6 +162,7 @@ export function ProfilePage() {
 
         try {
             await usersApi.update(user.id, {
+                version: user.version,
                 ...formData,
                 first_name: formData.first_name.trim(),
                 last_name: formData.last_name.trim(),
@@ -248,7 +249,8 @@ export function ProfilePage() {
         setIsSaving(true);
 
         try {
-            await usersApi.update(user.id, { password: newPassword });
+            await usersApi.update(user.id, { version: user.version, password: newPassword });
+            await refreshUser();
             setSuccess('Password updated successfully!');
             resetSensitiveState();
         } catch (err) {
@@ -266,7 +268,7 @@ export function ProfilePage() {
         setIsSaving(true);
 
         try {
-            await usersApi.update(user.id, { primary_email: newEmail });
+            await usersApi.update(user.id, { version: user.version, primary_email: newEmail });
             await refreshUser();
             setSuccess('Email updated successfully!');
             resetSensitiveState();

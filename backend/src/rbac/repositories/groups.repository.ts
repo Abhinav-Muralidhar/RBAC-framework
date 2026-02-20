@@ -9,6 +9,7 @@ import {
   buildPaginatedResult
 } from '../utils/pagination.utils';
 import { CreateGroupInput } from '../types/repository.types';
+import { ConcurrentModificationError } from '../errors/rbac.errors';
 
 export interface IGroupRepository {
   create(t: TransactionTask, input: CreateGroupInput): Promise<Groups>;
@@ -23,6 +24,7 @@ export interface IGroupRepository {
 
 export interface GroupResponse {
   id: string;
+  version: number;
   name: string;
   code: string;
   description: string | null;
@@ -105,6 +107,7 @@ export class GroupRepository implements IGroupRepository {
 
     return {
       id: group.id,
+      version: group.version,
       name: group.name,
       code: group.code,
       description: group.description ?? null,
@@ -179,20 +182,23 @@ export class GroupRepository implements IGroupRepository {
        SET name = $1,
            code = $2,
            description = $3,
-           is_active = $4
-       WHERE id = $5
+           is_active = $4,
+           updated_at = NOW(),
+           version = version + 1
+       WHERE id = $5 AND version = $6
        RETURNING *`,
       [
         input.name,
         input.code,
         input.description ?? null,
         input.is_active ?? null,
-        id
+        id,
+        input.version
       ]
     );
 
     if (!row) {
-      throw new Error(`Group ${id} not found for update`);
+      throw new ConcurrentModificationError('Group', id);
     }
 
     return row;

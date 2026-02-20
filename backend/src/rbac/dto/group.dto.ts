@@ -18,6 +18,7 @@ export interface CreateGroupRequestDto {
 }
 
 export interface UpdateGroupRequestDto {
+    version: number;
     name?: string;
     code?: string;
     description?: string | null;
@@ -44,6 +45,7 @@ export interface GroupListFilterDto {
  */
 export interface GroupResponseDto {
     id: string;
+    version: number;
     name: string;
     code: string;
     description: string | null;

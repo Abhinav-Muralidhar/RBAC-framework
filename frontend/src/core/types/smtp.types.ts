@@ -6,6 +6,7 @@ export type SmtpEncryption = 'none' | 'ssl' | 'tls';
 
 export interface SmtpConfig {
     id: string;
+    version: number;
     name: string;
     host: string;
     port: number;
@@ -31,6 +32,7 @@ export interface CreateSmtpConfigDto {
 }
 
 export interface UpdateSmtpConfigDto {
+    version: number;
     name?: string;
     host?: string;
     port?: number;

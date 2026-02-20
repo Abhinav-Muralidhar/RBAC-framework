@@ -9,9 +9,11 @@ import {
   buildPaginatedResult
 } from '../utils/pagination.utils';
 import { CreateProfileInput } from '../types/repository.types';
+import { ConcurrentModificationError } from '../errors/rbac.errors';
 
 export interface ProfileDetail {
   id: string;
+  version: number;
   name: string;
   code: string;
   description: string | null;
@@ -137,6 +139,7 @@ export class ProfilesRepository implements IProfilesRepository {
 
     return {
       id: profile.id,
+      version: profile.version,
       name: profile.name,
       code: profile.code,
       description: profile.description ?? null,
@@ -212,14 +215,16 @@ export class ProfilesRepository implements IProfilesRepository {
     id: string,
     input: Profiles
   ): Promise<Profiles> {
-    return (t ?? this.db).one<Profiles>(
+    const row = await (t ?? this.db).oneOrNone<Profiles>(
       `UPDATE ${this.tableName}
        SET name = $2,
            code = $3,
            description = $4,
            is_active = $5,
-           created_by = $6
-       WHERE id = $1
+           created_by = $6,
+           updated_at = NOW(),
+           version = version + 1
+       WHERE id = $1 AND version = $7
        RETURNING *`,
       [
         id,
@@ -227,8 +232,15 @@ export class ProfilesRepository implements IProfilesRepository {
         input.code,
         input.description ?? null,
         input.is_active ?? null,
-        input.created_by ?? null
+        input.created_by ?? null,
+        input.version
       ]
     );
+
+    if (!row) {
+      throw new ConcurrentModificationError('Profile', id);
+    }
+
+    return row;
   }
 }

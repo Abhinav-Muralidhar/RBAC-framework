@@ -340,6 +340,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
 
             if (isEditing && user) {
                 const updateData: UpdateUserDto = {
+                    version: user.version,
                     ...commonFields,
                     status: formData.status,
                 };

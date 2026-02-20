@@ -3,6 +3,7 @@ import { TransactionTask } from '../utils/transaction.utils';
 import { SmtpConfig } from '../models/smtp_config.model';
 import { CreateSmtpConfigInput } from '../types/repository.types';
 import { buildPaginatedResult, getPaginationOffset, normalizePaginationParams, PaginatedResult, PaginationParams } from '../utils/pagination.utils';
+import { ConcurrentModificationError } from '../errors/rbac.errors';
 
 export interface ISmtpConfigRepository {
   create(t: TransactionTask, input: CreateSmtpConfigInput): Promise<SmtpConfig>;
@@ -108,7 +109,7 @@ export class SmtpConfigRepository implements ISmtpConfigRepository {
   }
 
   async update(t: TransactionTask, id: string, input: SmtpConfig): Promise<SmtpConfig> {
-    const res = await t.one<SmtpConfig>(
+    const res = await t.oneOrNone<SmtpConfig>(
       `UPDATE ${this.tableName}
        SET name = $1,
            host = $2,
@@ -119,8 +120,10 @@ export class SmtpConfigRepository implements ISmtpConfigRepository {
            from_email = $7,
            from_name = $8,
            is_active = $9,
-           reply_to_email = $10
-       WHERE id = $11
+           reply_to_email = $10,
+           updated_at = NOW(),
+           version = version + 1
+       WHERE id = $11 AND version = $12
        RETURNING *`,
       [
         input.name,
@@ -133,9 +136,14 @@ export class SmtpConfigRepository implements ISmtpConfigRepository {
         input.from_name,
         input.is_active,
         input.reply_to_email,
-        id
+        id,
+        input.version
       ]
     );
+
+    if (!res) {
+      throw new ConcurrentModificationError('SmtpConfig', id);
+    }
 
     return res;
   }

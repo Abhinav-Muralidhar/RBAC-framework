@@ -8,9 +8,11 @@ import {
   buildPaginatedResult
 } from '../utils/pagination.utils';
 import { CreateRoleInput, UpdateRoleInput } from '../types/repository.types';
+import { ConcurrentModificationError } from '../errors/rbac.errors';
 
 export interface RoleDetail {
   id: string;
+  version: number;
   name: string;
   code: string;
   description: string | null;
@@ -146,6 +148,7 @@ export class RoleRepository implements IRoleRepository {
 
     return {
       id: role.id,
+      version: role.version,
       name: role.name,
       code: role.code,
       description: role.description ?? null,
@@ -271,14 +274,16 @@ export class RoleRepository implements IRoleRepository {
     id: string,
     input: UpdateRoleInput
   ): Promise<Roles> {
-    return (t ?? this.db).one<Roles>(
+    const row = await (t ?? this.db).oneOrNone<Roles>(
       `UPDATE ${this.tableName}
        SET name = $2,
            code = $3,
            description = $4,
            parent_role_id = $5,
-           is_active = $6
-       WHERE id = $1
+           is_active = $6,
+           updated_at = NOW(),
+           version = version + 1
+       WHERE id = $1 AND version = $7
        RETURNING *`,
       [
         id,
@@ -286,9 +291,16 @@ export class RoleRepository implements IRoleRepository {
         input.code,
         input.description ?? null,
         input.parent_role_id ?? null,
-        input.is_active ?? null
+        input.is_active ?? null,
+        input.version
       ]
     );
+
+    if (!row) {
+      throw new ConcurrentModificationError('Role', id);
+    }
+
+    return row;
   }
 
   async delete(

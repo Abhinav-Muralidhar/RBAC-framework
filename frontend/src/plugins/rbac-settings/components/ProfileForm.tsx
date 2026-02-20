@@ -111,6 +111,7 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
         try {
             if (isEditing && profile) {
                 const updateData: UpdateProfileDto = {
+                    version: profile.version,
                     name: formData.name.trim(),
                     description: formData.description || undefined,
                     is_active: formData.is_active,

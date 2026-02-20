@@ -34,7 +34,7 @@ export interface ISmtpConfigService {
     update(
         t: TransactionTask,
         configId: string,
-        data: Partial<SmtpConfig>,
+        data: SmtpConfigUpdate,
         actingUserId: string,
         auditCtx?: AuditContext
     ): Promise<SmtpConfig>;
@@ -154,6 +154,7 @@ export class SmtpConfigService implements ISmtpConfigService {
             ...existing,
             ...data,
             id: existing.id,
+            version: data.version,
         };
         const errors = validateSmtpConfig(updated);
         if (errors.length > 0) {

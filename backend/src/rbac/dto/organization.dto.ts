@@ -31,6 +31,7 @@ export interface CreateOrganizationRequestDto {
 
 
 export interface UpdateOrganizationRequestDto {
+    version: number;
     company_name?: string;
     company_logo?: string;
     address?: string;
@@ -68,6 +69,7 @@ export interface OrganizationListFilterDto {
 
 export interface OrganizationResponseDto {
     id: string;
+    version: number;
     company_name: string;
     company_logo: string;
     address: string;
