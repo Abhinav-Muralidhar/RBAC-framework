@@ -1,198 +1,465 @@
-.admin-settings-overlay {
+/* ==========================================================================
+   Admin Settings Modal - Premium Workspace Design System
+   ========================================================================== */
+
+/* Full Screen Frosted Glass Backdrop */
+.admin-settings-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.38);
-    backdrop-filter: blur(14px);
-    z-index: 300;
+    z-index: 1000;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0;
-    animation: fadeIn 0.2s ease-out;
+    padding: clamp(1rem, 2.5vw, 2.5rem);
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    animation: adminModalFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes fadeIn {
+@keyframes adminModalFadeIn {
     from {
         opacity: 0;
     }
-
     to {
         opacity: 1;
     }
 }
 
-.admin-settings-modal {
+/* Floating Luxury Modal Dialog Frame */
+.admin-settings-container {
+    position: relative;
     width: 100%;
+    max-width: 1520px;
     height: 100%;
-    background: var(--surface-glass);
-    border: none;
-    border-radius: 0;
+    max-height: 900px;
     display: flex;
     flex-direction: column;
-    box-shadow: var(--shadow-strong);
-    animation: slideUp 0.2s ease-out;
+    background: #ffffff;
+    border-radius: 1.5rem;
+    border: 1px solid rgba(226, 232, 240, 0.85);
+    box-shadow:
+        0 25px 60px -15px rgba(15, 23, 42, 0.3),
+        0 0 0 1px rgba(15, 23, 42, 0.05);
     overflow: hidden;
-    backdrop-filter: blur(22px);
+    animation: adminModalSlideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes slideUp {
+@keyframes adminModalSlideUp {
     from {
         opacity: 0;
-        transform: translateY(18px);
+        transform: scale(0.96) translateY(12px);
     }
-
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: scale(1) translateY(0);
     }
 }
 
+/* --------------------------------------------------------------------------
+   Modal Header & Top Navigation Bar
+   -------------------------------------------------------------------------- */
 .admin-settings-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.75rem 1.35rem;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-    background: rgba(255, 255, 255, 0.48);
-}
-
-.admin-settings-header h2 {
-    margin: 0;
-    font-size: 1.2rem;
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    color: #0f172a;
-}
-
-.admin-settings-close {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    border: 1px solid rgba(148, 163, 184, 0.18);
-    background: rgba(255, 255, 255, 0.75);
-    color: #64748b;
-    border-radius: 0.95rem;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.admin-settings-close:hover {
-    background: #fff;
-    color: #0f172a;
-}
-
-.admin-settings-body {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-}
-
-.admin-settings-nav {
-    width: clamp(230px, 20vw, 300px);
-    flex-shrink: 0;
-    padding: 1.25rem 0.85rem;
-    border-right: 1px solid rgba(148, 163, 184, 0.12);
-    background: rgba(255, 255, 255, 0.94);
-    backdrop-filter: blur(28px);
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.settings-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.85rem 1rem;
-    border: none;
-    background: transparent;
-    color: #475569;
-    border-radius: 1rem;
-    cursor: pointer;
-    font-size: 0.9rem;
-    font-weight: 500;
-    text-align: left;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.settings-nav-item:hover {
-    background: rgba(241, 245, 249, 0.8);
-    color: #0f172a;
-}
-
-.settings-nav-item.active {
-    background: rgba(14, 165, 233, 0.06);
-    color: #0369a1;
-    font-weight: 600;
-}
-
-.settings-nav-item svg {
+    padding: 1rem 1.75rem;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    border-bottom: 1px solid #e2e8f0;
     flex-shrink: 0;
 }
 
-.admin-settings-content {
-    flex: 1;
-    padding: clamp(1rem, 2vw, 1.25rem);
-    overflow-y: auto;
-    background: rgba(255, 255, 255, 0.18);
+.admin-settings-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
     min-width: 0;
 }
 
-.admin-settings-content .settings-page {
-    max-width: 100%;
+.admin-settings-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.875rem;
+    background: linear-gradient(135deg, #0284c7 0%, #4f46e5 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+    flex-shrink: 0;
+}
+
+.admin-settings-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.admin-settings-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+}
+
+.admin-settings-title-row h2 {
     margin: 0;
-    width: 100%;
-}
-
-.admin-settings-content .page-header {
-    padding: 0;
-    margin-bottom: 1.25rem;
-}
-
-.admin-settings-content .page-header h1 {
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: -0.025em;
     color: #0f172a;
 }
 
-.admin-settings-content .page-header p {
+.admin-settings-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    background: #e0f2fe;
+    color: #0369a1;
+    font-size: 0.725rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.admin-settings-subtitle {
+    margin: 0;
+    font-size: 0.825rem;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-settings-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+}
+
+.admin-settings-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-weight: 600;
+    color: #64748b;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.4rem;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+}
+
+.admin-settings-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.35rem;
+    height: 2.35rem;
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-settings-close-btn:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #dc2626;
+    transform: scale(1.05);
+}
+
+/* --------------------------------------------------------------------------
+   Modal Body Layout (Left Sidebar + Right Content)
+   -------------------------------------------------------------------------- */
+.admin-settings-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    background: #f8fafc;
+}
+
+/* Left Navigation Rail */
+.admin-settings-sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: #ffffff;
+    border-right: 1px solid #e2e8f0;
+    padding: 1.25rem 0.85rem;
+    overflow-y: auto;
+}
+
+.admin-settings-nav-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.admin-settings-category-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.admin-settings-category-title {
+    padding: 0 0.75rem;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #94a3b8;
+}
+
+.admin-settings-category-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.admin-settings-nav-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid transparent;
+    border-radius: 0.75rem;
+    background: transparent;
+    color: #475569;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-settings-nav-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    transition: transform 0.18s ease, color 0.18s ease;
+}
+
+.admin-settings-nav-label {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-settings-nav-arrow {
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: all 0.18s ease;
+    color: #94a3b8;
+}
+
+.admin-settings-nav-btn:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+.admin-settings-nav-btn:hover .admin-settings-nav-icon {
+    color: #0284c7;
+    transform: translateX(2px);
+}
+
+.admin-settings-nav-btn:hover .admin-settings-nav-arrow {
+    opacity: 0.6;
+    transform: translateX(0);
+}
+
+/* Active State */
+.admin-settings-nav-btn.active {
+    background: linear-gradient(135deg, rgba(2, 132, 199, 0.08) 0%, rgba(79, 70, 229, 0.05) 100%);
+    border-color: rgba(2, 132, 199, 0.2);
+    color: #0284c7;
+    box-shadow: 0 2px 6px rgba(2, 132, 199, 0.06);
+}
+
+.admin-settings-nav-btn.active .admin-settings-nav-icon {
+    color: #0284c7;
+}
+
+.admin-settings-nav-btn.active .admin-settings-nav-arrow {
+    opacity: 1;
+    transform: translateX(0);
+    color: #0284c7;
+}
+
+/* Sidebar Footer */
+.admin-settings-sidebar-footer {
+    padding-top: 1rem;
+    margin-top: 1rem;
+    border-top: 1px solid #f1f5f9;
+}
+
+.admin-settings-status-pill {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.625rem;
+    font-size: 0.725rem;
+    font-weight: 600;
     color: #64748b;
 }
 
-.admin-settings-content .page-content {
-    padding: 0;
+.admin-settings-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+    animation: statusPulse 2s infinite;
 }
 
-@media (max-width: 768px) {
-    .admin-settings-modal {
-        width: 100%;
+@keyframes statusPulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.4;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   Right Main Content View Canvas
+   -------------------------------------------------------------------------- */
+.admin-settings-content {
+    flex: 1;
+    min-width: 0;
+    padding: clamp(1.25rem, 2.5vw, 2.25rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: #f8fafc;
+}
+
+/* Loading Suspense Fallback */
+.admin-settings-loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    min-height: 20rem;
+    color: #64748b;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.admin-settings-spinner {
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 3px solid #e2e8f0;
+    border-top-color: #0284c7;
+    border-radius: 50%;
+    animation: adminSpinner 0.6s linear infinite;
+}
+
+@keyframes adminSpinner {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Scrollbar Customization */
+.admin-settings-content::-webkit-scrollbar,
+.admin-settings-sidebar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.admin-settings-content::-webkit-scrollbar-track,
+.admin-settings-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.admin-settings-content::-webkit-scrollbar-thumb,
+.admin-settings-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 9999px;
+}
+
+.admin-settings-content::-webkit-scrollbar-thumb:hover,
+.admin-settings-sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.6);
+}
+
+/* --------------------------------------------------------------------------
+   Responsive Breakpoints
+   -------------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+    .admin-settings-backdrop {
+        padding: 0;
+    }
+
+    .admin-settings-container {
+        max-width: 100%;
+        max-height: 100%;
         height: 100%;
-        max-width: none;
-        max-height: none;
         border-radius: 0;
+        border: none;
     }
 
     .admin-settings-body {
         flex-direction: column;
     }
 
-    .admin-settings-nav {
+    .admin-settings-sidebar {
         width: 100%;
-        padding: 0.75rem;
         border-right: none;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-        flex-direction: row;
+        border-bottom: 1px solid #e2e8f0;
+        padding: 0.75rem 1rem;
         overflow-x: auto;
-        gap: 0.65rem;
     }
 
-    .settings-nav-item {
-        flex: 0 0 auto;
-        justify-content: center;
-        padding: 0.85rem 1rem;
+    .admin-settings-nav-scroll {
+        flex-direction: row;
+        gap: 0.75rem;
     }
 
-    .settings-nav-item span {
+    .admin-settings-category-group {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .admin-settings-category-title {
+        display: none;
+    }
+
+    .admin-settings-category-items {
+        flex-direction: row;
+        gap: 0.35rem;
+    }
+
+    .admin-settings-nav-btn {
+        padding: 0.5rem 0.85rem;
+        font-size: 0.8rem;
+    }
+
+    .admin-settings-nav-arrow {
+        display: none;
+    }
+
+    .admin-settings-sidebar-footer {
         display: none;
     }
 }
