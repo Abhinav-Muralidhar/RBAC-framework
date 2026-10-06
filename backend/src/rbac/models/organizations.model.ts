@@ -4,7 +4,7 @@ export interface Organizations {
 
   company_name: string;
   company_logo: string;
-  company_logo_file_id: string | null;
+  company_logo_file_id?: string | null;
 
   address: string;
   city: string;

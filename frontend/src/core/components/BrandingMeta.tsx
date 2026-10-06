@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useBranding } from '../hooks/useBranding';
 
-const DEFAULT_APP_NAME = 'Crescent Workforce';
+const DEFAULT_APP_NAME = 'RBAC Framework';
 const DEFAULT_THEME_COLOR = '#0f172a';
 
 function updateMeta(name: string, content: string) {

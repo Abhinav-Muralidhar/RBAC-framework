@@ -103,7 +103,7 @@ function buildRbacDependencies(db: IDatabase<unknown>) {
         auditService
     );
     const groupService = new UnifiedGroupService(groupRepository, groupRoleRepository, auditService, userGroupsRepository);
-    const organizationService = new OrganizationService(organizationRepository, auditService, filesRepository);
+    const organizationService = new OrganizationService(organizationRepository, auditService);
     const smtpConfigService = new SmtpConfigService(smtpConfigRepository, auditService);
     const permissionService = new PermissionService(
         permissionsRepository,
@@ -158,7 +158,7 @@ function buildPublicAuthDependencies(db: IDatabase<unknown>) {
     const userService = new UserService(usersRepository, userRolesRepository, evaluationService, auditService);
     const otpService = new OtpService(otpTokenRepository);
     const smtpConfigService = new SmtpConfigService(smtpConfigRepository, auditService);
-    const organizationService = new OrganizationService(organizationRepository, auditService, filesRepository);
+    const organizationService = new OrganizationService(organizationRepository, auditService);
 
     return {
         evaluationService,

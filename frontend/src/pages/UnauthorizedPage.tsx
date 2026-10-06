@@ -26,7 +26,7 @@ export function UnauthorizedPage() {
 
 
                     <a
-                        href="mailto:support@crescent.com"
+                        href="mailto:support@example.com"
                         className="btn btn-secondary"
                     >
                         <Mail size={18} />

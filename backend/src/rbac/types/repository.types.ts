@@ -349,6 +349,7 @@ export interface CreateOtpTokenInput {
 
 export interface CreateOrganizationInput {
     company_name: string;
+    company_logo?: string | null;
     company_logo_file_id?: string | null;
     address?: string | null;
     city?: string | null;

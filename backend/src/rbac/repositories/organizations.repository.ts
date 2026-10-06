@@ -1,4 +1,4 @@
-import { IDatabase, ITask } from 'pg-promise';
+import { IDatabase } from 'pg-promise';
 import { Organizations } from '../models/organizations.model';
 import {
     PaginationParams,
@@ -34,7 +34,7 @@ export interface IOrganizationRepository {
 
 export class OrganizationRepository implements IOrganizationRepository {
     private tableName = 'organizations';
-    private readonly selectColumns = 'o.id, o.version, o.company_name, f.storage_path AS company_logo, o.company_logo_file_id, o.address, o.city, o.state, o.postal_code, o.country, o.country_code, o.phone, o.fax, o.website, o.facebook, o.twitter, o.linkedin, o.financial_year_start_month, o.gstin, o.is_active, o.created_at, o.created_by, o.updated_at, o.updated_by';
+    private readonly selectColumns = 'o.id, o.version, o.company_name, o.company_logo, o.address, o.city, o.state, o.postal_code, o.country, o.country_code, o.phone, o.fax, o.website, o.facebook, o.twitter, o.linkedin, o.financial_year_start_month, o.gstin, o.is_active, o.created_at, o.created_by, o.updated_at, o.updated_by';
 
     constructor(private db: IDatabase<unknown>) { }
 
@@ -49,29 +49,29 @@ export class OrganizationRepository implements IOrganizationRepository {
     async create(t: TransactionTask | undefined, input: CreateOrganizationInput): Promise<Organizations> {
         const row = await (t ?? this.db).oneOrNone<Organizations>(
             `INSERT INTO ${this.tableName}
-         (company_name, company_logo_file_id, address, city, state, postal_code, country, country_code, phone, fax, website, facebook, twitter, linkedin, financial_year_start_month, gstin, is_active, created_by,,updated_by,updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,$19,NOW())
+         (company_name, company_logo, address, city, state, postal_code, country, country_code, phone, fax, website, facebook, twitter, linkedin, financial_year_start_month, gstin, is_active, created_by, updated_by, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
          RETURNING *`,
             [
                 input.company_name,
-                input.company_logo_file_id ?? null,
-                input.address,
-                input.city,
-                input.state,
-                input.postal_code,
-                input.country,
-                input.country_code,
-                input.phone,
-                input.fax,
-                input.website,
-                input.facebook,
-                input.twitter,
-                input.linkedin,
-                input.financial_year_start_month,
-                input.gstin,
-                input.is_active,
-                input.created_by,
-                input.created_by
+                input.company_logo ?? '',
+                input.address ?? '',
+                input.city ?? '',
+                input.state ?? '',
+                input.postal_code ?? '',
+                input.country ?? '',
+                input.country_code ?? '',
+                input.phone ?? null,
+                input.fax ?? null,
+                input.website ?? null,
+                input.facebook ?? null,
+                input.twitter ?? null,
+                input.linkedin ?? null,
+                input.financial_year_start_month ?? null,
+                input.gstin ?? '',
+                input.is_active ?? true,
+                input.created_by ?? null,
+                input.created_by ?? null
             ]
         );
 
@@ -89,7 +89,6 @@ export class OrganizationRepository implements IOrganizationRepository {
         const rows = await this.query<Organizations>(
             `SELECT ${this.selectColumns}
              FROM ${this.tableName} o
-             LEFT JOIN files f ON o.company_logo_file_id = f.id
              WHERE o.id = $1`,
             [id],
             t
@@ -112,7 +111,6 @@ export class OrganizationRepository implements IOrganizationRepository {
                  ELSE NULL
                END AS updated_by_name
              FROM ${this.tableName} o
-             LEFT JOIN files f ON o.company_logo_file_id = f.id
              LEFT JOIN users c ON o.created_by = c.id
              LEFT JOIN users ub ON o.updated_by = ub.id
              WHERE o.id = $1`,
@@ -121,6 +119,7 @@ export class OrganizationRepository implements IOrganizationRepository {
         );
         return rows[0] ?? null;
     }
+
     async getAll(
         t: TransactionTask | undefined,
         filters?: { is_active?: boolean; name?: string },
@@ -153,7 +152,6 @@ export class OrganizationRepository implements IOrganizationRepository {
         const res = await this.query<Organizations>(
             `SELECT ${this.selectColumns}
              FROM ${this.tableName} o
-             LEFT JOIN files f ON o.company_logo_file_id = f.id
              ${whereClause}
              ORDER BY o.created_at DESC
              LIMIT $${params.length - 1}
@@ -176,7 +174,7 @@ export class OrganizationRepository implements IOrganizationRepository {
         const row = await (t ?? this.db).oneOrNone<Organizations>(
             `UPDATE ${this.tableName}
              SET company_name = $1,
-                 company_logo_file_id = $2,
+                 company_logo = $2,
                  address = $3,
                  city = $4,
                  state = $5,
@@ -199,23 +197,23 @@ export class OrganizationRepository implements IOrganizationRepository {
              RETURNING *`,
             [
                 input.company_name,
-                input.company_logo_file_id ?? null,
+                input.company_logo ?? '',
                 input.address,
                 input.city,
                 input.state,
                 input.postal_code,
                 input.country,
                 input.country_code,
-                input.phone,
-                input.fax,
-                input.website,
-                input.facebook,
-                input.twitter,
-                input.linkedin,
-                input.financial_year_start_month,
+                input.phone ?? null,
+                input.fax ?? null,
+                input.website ?? null,
+                input.facebook ?? null,
+                input.twitter ?? null,
+                input.linkedin ?? null,
+                input.financial_year_start_month ?? null,
                 input.gstin,
                 input.is_active,
-                input.updated_by,
+                input.updated_by ?? null,
                 input.id,
                 input.version
             ]

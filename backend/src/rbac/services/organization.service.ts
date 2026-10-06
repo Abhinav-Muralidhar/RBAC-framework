@@ -10,11 +10,9 @@ import { Organizations } from '../models/organizations.model';
 import { DuplicateAssignmentError, OrganizationNotFoundError } from '../errors/rbac.errors';
 import { PaginationParams, PaginatedResult } from '../../utils/pagination.utils';
 import { CreateOrganizationRequestDto, UpdateOrganizationRequestDto } from '../dto';
-import { CreateFileInput, CreateOrganizationInput, OrganizationLogoCleanup, UploadedFileReference } from '../types/repository.types';
+import { CreateOrganizationInput, OrganizationLogoCleanup, UploadedFileReference } from '../types/repository.types';
 import { IAuditService } from '../services/audit.service';
 import { deleteStoredUpload } from '../storage/file-storage';
-import { IFilesRepository } from '../repositories/files.repository';
-import path from 'node:path';
 import {
     assertRequiredString,
     assertOptionalString,
@@ -40,8 +38,7 @@ const MODULE_CODE = 'SETTINGS';
 export class OrganizationService implements IOrganizationService {
     constructor(
         private organizationRepository: IOrganizationRepository,
-        private auditService: IAuditService,
-        private filesRepository: IFilesRepository
+        private auditService: IAuditService
     ) { }
 
     /**
@@ -85,15 +82,9 @@ export class OrganizationService implements IOrganizationService {
             );
         }
 
-        const createdLogo = await this.filesRepository.create(t, {
-            storage_path: data.company_logo,
-            original_name: path.basename(data.company_logo),
-            created_by: acting_user_id
-        });
-
         const org: CreateOrganizationInput = {
             company_name: data.company_name,
-            company_logo_file_id: createdLogo.id,
+            company_logo: data.company_logo,
             address: data.address,
             city: data.city,
             state: data.state,
@@ -113,8 +104,6 @@ export class OrganizationService implements IOrganizationService {
         };
 
         const organization = await this.organizationRepository.create(t, org);
-        organization.company_logo = createdLogo.storage_path;
-        organization.company_logo_file_id = createdLogo.id;
 
         await this.auditService.log(t, {
             user_id: acting_user_id,
@@ -188,35 +177,18 @@ export class OrganizationService implements IOrganizationService {
         }
 
         let nextLogoPath = organization.company_logo as string;
-        let nextLogoFileId = organization.company_logo_file_id;
 
         if (uploadedLogo) {
-            const fileInput: CreateFileInput = {
-                storage_path: uploadedLogo.storedPath,
-                original_name: uploadedLogo.originalName,
-                mime_type: uploadedLogo.mimeType,
-                size_bytes: uploadedLogo.sizeBytes,
-                created_by: actingUserId
-            };
-            const createdFile = await this.filesRepository.create(t, fileInput);
             nextLogoPath = uploadedLogo.storedPath;
-            nextLogoFileId = createdFile.id;
         } else if (data.company_logo !== undefined && data.company_logo !== organization.company_logo) {
-            const createdFile = await this.filesRepository.create(t, {
-                storage_path: data.company_logo,
-                original_name: path.basename(data.company_logo),
-                created_by: actingUserId
-            });
             nextLogoPath = data.company_logo;
-            nextLogoFileId = createdFile.id;
         }
 
         const updated: Organizations = {
             id,
             version: data.version,
             company_name: data.company_name ?? organization.company_name as string,
-            company_logo: organization.company_logo,
-            company_logo_file_id: nextLogoFileId,
+            company_logo: nextLogoPath,
             address: data.address ?? organization.address as string,
             city: data.city ?? organization.city as string,
             state: data.state ?? organization.state as string,
@@ -242,9 +214,6 @@ export class OrganizationService implements IOrganizationService {
 
         const updatedOrganization = await this.organizationRepository.update(t, updated);
 
-        updatedOrganization.company_logo = nextLogoPath;
-        updatedOrganization.company_logo_file_id = updated.company_logo_file_id;
-
         await this.auditService.log(t, {
             user_id: actingUserId,
             action: 'update',
@@ -267,10 +236,6 @@ export class OrganizationService implements IOrganizationService {
 
         if (cleanup.previousLogoPath) {
             await deleteStoredUpload(cleanup.previousLogoPath, 'logos');
-        }
-
-        if (cleanup.previousLogoFileId) {
-            await this.filesRepository.delete(undefined, cleanup.previousLogoFileId);
         }
     }
 }
