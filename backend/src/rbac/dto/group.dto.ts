@@ -68,6 +68,9 @@ export interface GroupResponseDto {
     created_at: Date;
     created_by: string | null;
     created_by_name: string | null;  // JOINed: creator's name
+    updated_at: Date | null;
+    updated_by: string | null;
+    updated_by_name: string | null;  // JOINed: updater's name
 }
 
 export interface GroupSummaryDto {

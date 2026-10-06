@@ -16,6 +16,12 @@ export interface SmtpConfig {
     from_name: string;
     reply_to_email?: string | null;
     is_active: boolean;
+    created_at?: string;
+    created_by?: string | null;
+    updated_at?: string | null;
+    updated_by?: string | null;
+    created_by_name?: string | null;
+    updated_by_name?: string | null;
 }
 
 export interface CreateSmtpConfigDto {

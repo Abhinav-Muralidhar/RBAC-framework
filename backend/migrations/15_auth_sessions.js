@@ -15,6 +15,7 @@ exports.up = async function (knex) {
         table.index('user_id');
         table.index('session_token');
         table.index('login_at');
+        table.index(['user_id', 'logout_at']);
     })
 }
 exports.down = async function (knex) {

@@ -6,27 +6,35 @@ import {
     normalizePaginationParams,
     getPaginationOffset,
     buildPaginatedResult
-} from '../utils/pagination.utils';
+} from '../../utils/pagination.utils';
 import { CreateOrganizationInput } from '../types/repository.types';
-import { TransactionTask } from '../utils/transaction.utils';
+import { TransactionTask } from '../../utils/transaction.utils';
 import { ConcurrentModificationError } from '../errors/rbac.errors';
 
 export interface IOrganizationRepository {
+    /** Fetch an organization by its primary key. */
     getById(t: TransactionTask | undefined, id: string): Promise<Organizations | null>;
+    /** Fetch organization with JOINed creator and updater names. */
+    getByIdWithDetails(t: TransactionTask | undefined, id: string): Promise<(Organizations & { created_by_name: string | null; updated_by_name: string | null }) | null>;
+    /** Update organization attributes with optimistic concurrency (version check). */
     update(t: TransactionTask | undefined, input: Organizations): Promise<Organizations>;
+    /** Hard-delete an organization. */
     delete(t: TransactionTask | undefined, id: string): Promise<void>;
+    /** List all organizations with optional active/name filters and pagination. */
     getAll(
         t: TransactionTask | undefined,
-        filters?: { is_active?: boolean; name?: string; code?: string },
+        filters?: { is_active?: boolean; name?: string },
         pagination?: Partial<PaginationParams>
     ): Promise<PaginatedResult<Organizations>>;
+    /** Set an organization's status to active. */
     activate(t: TransactionTask | undefined, id: string): Promise<void>;
+    /** Insert a new organization row. */
     create(t: TransactionTask | undefined, input: CreateOrganizationInput): Promise<Organizations>;
-    updateLogo(t: TransactionTask | undefined, id: string, logoPath: string): Promise<void>;
 }
 
 export class OrganizationRepository implements IOrganizationRepository {
     private tableName = 'organizations';
+    private readonly selectColumns = 'o.id, o.version, o.company_name, f.storage_path AS company_logo, o.company_logo_file_id, o.address, o.city, o.state, o.postal_code, o.country, o.country_code, o.phone, o.fax, o.website, o.facebook, o.twitter, o.linkedin, o.financial_year_start_month, o.gstin, o.is_active, o.created_at, o.created_by, o.updated_at, o.updated_by';
 
     constructor(private db: IDatabase<unknown>) { }
 
@@ -41,12 +49,12 @@ export class OrganizationRepository implements IOrganizationRepository {
     async create(t: TransactionTask | undefined, input: CreateOrganizationInput): Promise<Organizations> {
         const row = await (t ?? this.db).oneOrNone<Organizations>(
             `INSERT INTO ${this.tableName}
-         (company_name, company_logo, address, city, state, postal_code, country, country_code, phone, fax, website, facebook, twitter, linkedin, financial_year_start_month, gstin, is_active, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+         (company_name, company_logo_file_id, address, city, state, postal_code, country, country_code, phone, fax, website, facebook, twitter, linkedin, financial_year_start_month, gstin, is_active, created_by,,updated_by,updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,$19,NOW())
          RETURNING *`,
             [
                 input.company_name,
-                input.company_logo,
+                input.company_logo_file_id ?? null,
                 input.address,
                 input.city,
                 input.state,
@@ -62,6 +70,7 @@ export class OrganizationRepository implements IOrganizationRepository {
                 input.financial_year_start_month,
                 input.gstin,
                 input.is_active,
+                input.created_by,
                 input.created_by
             ]
         );
@@ -78,16 +87,43 @@ export class OrganizationRepository implements IOrganizationRepository {
         id: string
     ): Promise<Organizations | null> {
         const rows = await this.query<Organizations>(
-            `SELECT * FROM ${this.tableName} WHERE id = $1`,
+            `SELECT ${this.selectColumns}
+             FROM ${this.tableName} o
+             LEFT JOIN files f ON o.company_logo_file_id = f.id
+             WHERE o.id = $1`,
             [id],
             t
         );
         return rows[0] ?? null;
     }
 
+    async getByIdWithDetails(
+        t: TransactionTask | undefined,
+        id: string
+    ): Promise<(Organizations & { created_by_name: string | null; updated_by_name: string | null }) | null> {
+        const rows = await this.query<Organizations & { created_by_name: string | null; updated_by_name: string | null }>(
+            `SELECT ${this.selectColumns},
+               CASE
+                 WHEN c.id IS NOT NULL THEN c.username
+                 ELSE NULL
+               END AS created_by_name,
+               CASE
+                 WHEN ub.id IS NOT NULL THEN ub.username
+                 ELSE NULL
+               END AS updated_by_name
+             FROM ${this.tableName} o
+             LEFT JOIN files f ON o.company_logo_file_id = f.id
+             LEFT JOIN users c ON o.created_by = c.id
+             LEFT JOIN users ub ON o.updated_by = ub.id
+             WHERE o.id = $1`,
+            [id],
+            t
+        );
+        return rows[0] ?? null;
+    }
     async getAll(
         t: TransactionTask | undefined,
-        filters?: { is_active?: boolean; name?: string; code?: string },
+        filters?: { is_active?: boolean; name?: string },
         pagination?: Partial<PaginationParams>
     ): Promise<PaginatedResult<Organizations>> {
         const p = normalizePaginationParams(pagination);
@@ -97,22 +133,17 @@ export class OrganizationRepository implements IOrganizationRepository {
         const where: string[] = [];
 
         params.push(filters?.is_active ?? true);
-        where.push(`is_active = $${params.length}`);
+        where.push(`o.is_active = $${params.length}`);
 
         if (filters?.name) {
             params.push(`%${filters.name}%`);
-            where.push(`name ILIKE $${params.length}`);
-        }
-
-        if (filters?.code) {
-            params.push(`%${filters.code}%`);
-            where.push(`code ILIKE $${params.length}`);
+            where.push(`o.company_name ILIKE $${params.length}`);
         }
 
         const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
         const totalRes = await this.query<{ count: string }>(
-            `SELECT COUNT(*) FROM ${this.tableName} ${whereClause}`,
+            `SELECT COUNT(*) FROM ${this.tableName} o ${whereClause}`,
             params,
             t
         );
@@ -120,10 +151,11 @@ export class OrganizationRepository implements IOrganizationRepository {
         params.push(p.limit, offset);
 
         const res = await this.query<Organizations>(
-            `SELECT *
-             FROM ${this.tableName}
+            `SELECT ${this.selectColumns}
+             FROM ${this.tableName} o
+             LEFT JOIN files f ON o.company_logo_file_id = f.id
              ${whereClause}
-             ORDER BY created_at DESC
+             ORDER BY o.created_at DESC
              LIMIT $${params.length - 1}
              OFFSET $${params.length}`,
             params,
@@ -144,7 +176,7 @@ export class OrganizationRepository implements IOrganizationRepository {
         const row = await (t ?? this.db).oneOrNone<Organizations>(
             `UPDATE ${this.tableName}
              SET company_name = $1,
-                 company_logo = $2,
+                 company_logo_file_id = $2,
                  address = $3,
                  city = $4,
                  state = $5,
@@ -161,12 +193,13 @@ export class OrganizationRepository implements IOrganizationRepository {
                  gstin = $16,
                  is_active = $17,
                  updated_at = NOW(),
+                 updated_by = $18,
                  version = version + 1
-             WHERE id = $18 AND version = $19
+             WHERE id = $19 AND version = $20
              RETURNING *`,
             [
                 input.company_name,
-                input.company_logo,
+                input.company_logo_file_id ?? null,
                 input.address,
                 input.city,
                 input.state,
@@ -182,6 +215,7 @@ export class OrganizationRepository implements IOrganizationRepository {
                 input.financial_year_start_month,
                 input.gstin,
                 input.is_active,
+                input.updated_by,
                 input.id,
                 input.version
             ]
@@ -209,15 +243,6 @@ export class OrganizationRepository implements IOrganizationRepository {
              SET is_active = true, updated_at = NOW()
              WHERE id = $1`,
             [id]
-        );
-    }
-
-    async updateLogo(t: TransactionTask | undefined, id: string, logoPath: string): Promise<void> {
-        await (t ?? this.db).none(
-            `UPDATE ${this.tableName}
-             SET company_logo = $1, updated_at = NOW()
-             WHERE id = $2`,
-            [logoPath, id]
         );
     }
 }

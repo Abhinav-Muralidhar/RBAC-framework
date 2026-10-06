@@ -11,4 +11,5 @@ export interface Groups {
   created_at: Date;
   created_by?: string | null;
   updated_at?: Date | null;
+  updated_by?: string | null;
 }

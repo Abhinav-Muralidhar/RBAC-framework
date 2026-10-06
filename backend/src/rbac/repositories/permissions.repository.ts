@@ -4,18 +4,33 @@ import { CreatePermissionInput } from '../types/repository.types';
 import { PermissionEffect } from '../models/profile_permissions.model';
 
 export interface IPermissionsRepository {
+    /** Fetch a single permission by primary key. */
     findById(t: ITask<unknown> | undefined, id: string): Promise<Permissions | null>;
-    findAll(t: ITask<unknown> | undefined, filters?: { module_id?: string; action?: PermissionAction; }): Promise<Permissions[]>;
+    /** List all permissions with optional module/action filters. */
+    findAll(t: ITask<unknown> | undefined, filters?: {
+        module_id?: string;
+        module_ids?: string[];
+        action?: PermissionAction;
+        actions?: PermissionAction[];
+        is_active?: boolean;
+    }): Promise<Permissions[]>;
+    /** Fetch a permission by module ID and action (e.g. read/write). */
     findByModuleAndAction(t: ITask<unknown> | undefined, moduleId: string, action: PermissionAction): Promise<Permissions | null>;
+    /** Insert a new permission row. */
     create(t: ITask<unknown> | undefined, input: CreatePermissionInput): Promise<Permissions>;
+    /** Update a permission row. */
     update(t: ITask<unknown> | undefined, id: string, input: Permissions): Promise<Permissions>;
+    /** Hard-delete a permission. */
     delete(t: ITask<unknown> | undefined, id: string): Promise<void>;
+    /** Determine the set of permission effects (allow/deny) for a user on a specific module action. */
     findEffectsByUserAndModuleAction(t: ITask<unknown> | undefined, userId: string, moduleCode: string, action: PermissionAction): Promise<PermissionEffect[]>;
+    /** Fetch multiple permissions by IDs (returns partial objects). */
     findByIds(t: ITask<unknown> | undefined, ids: string[]): Promise<{ id: string }[]>
 }
 
 export class PermissionsRepository implements IPermissionsRepository {
     private tableName = 'permissions';
+    private readonly baseColumns = 'id, module_id, action, description, is_active';
 
     constructor(private db: IDatabase<unknown>) { }
 
@@ -32,30 +47,58 @@ export class PermissionsRepository implements IPermissionsRepository {
         id: string
     ): Promise<Permissions | null> {
         return (t ?? this.db).oneOrNone<Permissions>(
-            `SELECT * FROM ${this.tableName} WHERE id = $1`,
+            `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE id = $1`,
             [id]
         );
     }
 
-    async findAll(t: ITask<unknown> | undefined, filters?: { module_id?: string; action?: PermissionAction }): Promise<Permissions[]> {
+    async findAll(t: ITask<unknown> | undefined, filters?: {
+        module_id?: string;
+        module_ids?: string[];
+        action?: PermissionAction;
+        actions?: PermissionAction[];
+        is_active?: boolean;
+    }): Promise<Permissions[]> {
         const where: string[] = [];
         const params: unknown[] = [];
         let paramIdx = 1;
 
-        if (filters?.module_id) {
-            where.push(`module_id = $${paramIdx++}`);
-            params.push(filters.module_id);
+        const moduleIds = new Set<string>();
+        if (filters?.module_id) moduleIds.add(filters.module_id);
+        if (filters?.module_ids?.length) {
+            for (const id of filters.module_ids) {
+                if (id) moduleIds.add(id);
+            }
         }
 
-        if (filters?.action) {
-            where.push(`action = $${paramIdx++}`);
-            params.push(filters.action);
+        if (moduleIds.size) {
+            const ids = Array.from(moduleIds).map((id) => BigInt(id));
+            where.push(`module_id = ANY($${paramIdx++}::bigint[])`);
+            params.push(ids);
+        }
+
+        const actions = new Set<PermissionAction>();
+        if (filters?.action) actions.add(filters.action);
+        if (filters?.actions?.length) {
+            for (const action of filters.actions) {
+                if (action) actions.add(action);
+            }
+        }
+
+        if (actions.size) {
+            where.push(`action = ANY($${paramIdx++}::text[])`);
+            params.push(Array.from(actions));
+        }
+
+        if (filters?.is_active !== undefined) {
+            where.push(`is_active = $${paramIdx++}`);
+            params.push(filters.is_active);
         }
 
         const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
         return this.query<Permissions>(
-            `SELECT * FROM ${this.tableName} ${whereClause}`,
+            `SELECT ${this.baseColumns} FROM ${this.tableName} ${whereClause}`,
             params,
             t
         );
@@ -67,7 +110,7 @@ export class PermissionsRepository implements IPermissionsRepository {
         action: PermissionAction
     ): Promise<Permissions | null> {
         return (t ?? this.db).oneOrNone<Permissions>(
-            `SELECT * FROM ${this.tableName} WHERE module_id = $1 AND action = $2`,
+            `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE module_id = $1 AND action = $2`,
             [moduleId, action]
         );
     }

@@ -1,59 +1,50 @@
-/**
- * Unauthorized Page Styles
- */
-
 .unauthorized-page {
     min-height: 100vh;
     min-height: 100dvh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    padding: 1rem;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem;
 }
 
 .unauthorized-card {
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
-    padding: clamp(1.75rem, 3vw, 3rem);
-    max-width: 480px;
-    width: 100%;
+    width: min(100%, 560px);
+    padding: clamp(1.75rem, 3vw, 2.5rem);
     text-align: center;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    border-radius: 2rem;
+    background:
+        radial-gradient(circle at top, rgba(56, 189, 248, 0.18), transparent 26%),
+        var(--surface-glass);
+    border: 1px solid rgba(255, 255, 255, 0.74);
+    box-shadow: var(--shadow-strong);
+    backdrop-filter: blur(22px);
 }
 
 .unauthorized-icon {
-    color: #ef4444;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 5rem;
+    height: 5rem;
     margin-bottom: 1.5rem;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.6;
-    }
+    border-radius: 1.6rem;
+    background: rgba(254, 226, 226, 0.9);
+    color: #dc2626;
+    box-shadow: 0 18px 34px -24px rgba(220, 38, 38, 0.65);
 }
 
 .unauthorized-card h1 {
-    color: #fff;
-    font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
-    font-weight: 700;
-    margin-bottom: 1rem;
+    color: #0f172a;
+    font-size: clamp(1.8rem, 1.45rem + 1vw, 2.5rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    margin-bottom: 0.8rem;
 }
 
 .unauthorized-message {
-    color: rgba(255, 255, 255, 0.7);
+    color: #475569;
     font-size: 1rem;
-    line-height: 1.6;
-    margin-bottom: 2rem;
+    line-height: 1.65;
+    margin-bottom: 1.8rem;
 }
 
 .unauthorized-actions {
@@ -66,71 +57,53 @@
 .unauthorized-actions .btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    border-radius: 8px;
-    font-weight: 500;
+    justify-content: center;
+    gap: 0.55rem;
+    padding: 0.85rem 1.2rem;
+    border-radius: 1rem;
+    font-weight: 700;
     text-decoration: none;
-    transition: all 0.2s ease;
+    transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
     cursor: pointer;
     border: none;
 }
 
-.unauthorized-actions .btn-primary {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    color: #fff;
-}
-
-.unauthorized-actions .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+.unauthorized-actions .btn:hover {
+    transform: translateY(-1px);
 }
 
 .unauthorized-actions .btn-secondary {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.unauthorized-actions .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.88);
+    color: #0f172a;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    box-shadow: 0 18px 32px -28px rgba(15, 23, 42, 0.5);
 }
 
 .unauthorized-footer {
     margin-top: 2rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 1.25rem;
+    border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .unauthorized-footer p {
-    color: rgba(255, 255, 255, 0.4);
+    color: #64748b;
     font-size: 0.875rem;
 }
 
 .unauthorized-footer code {
-    background: rgba(239, 68, 68, 0.2);
-    color: #ef4444;
+    background: rgba(254, 226, 226, 0.75);
+    color: #dc2626;
     padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-family: monospace;
+    border-radius: 0.5rem;
+    font-family: var(--font-mono);
 }
 
-/* Responsive */
 @media (max-width: 480px) {
-    .unauthorized-card {
-        padding: 2rem;
-    }
-
-    .unauthorized-card h1 {
-        font-size: 1.5rem;
-    }
-
     .unauthorized-actions {
         flex-direction: column;
     }
 
     .unauthorized-actions .btn {
         width: 100%;
-        justify-content: center;
     }
 }

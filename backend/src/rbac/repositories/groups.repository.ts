@@ -1,24 +1,32 @@
 import { IDatabase, ITask } from 'pg-promise';
 import { Groups } from '../models/groups.model';
-import { TransactionTask } from '../utils/transaction.utils';
+import { TransactionTask } from '../../utils/transaction.utils';
 import {
   PaginationParams,
   PaginatedResult,
   normalizePaginationParams,
   getPaginationOffset,
   buildPaginatedResult
-} from '../utils/pagination.utils';
+} from '../../utils/pagination.utils';
 import { CreateGroupInput } from '../types/repository.types';
 import { ConcurrentModificationError } from '../errors/rbac.errors';
 
 export interface IGroupRepository {
+  /** Insert a new group row. */
   create(t: TransactionTask, input: CreateGroupInput): Promise<Groups>;
+  /** Update a group row with optimistic concurrency (version check). */
   update(t: TransactionTask, id: string, input: Groups): Promise<Groups>;
+  /** Soft-delete a group (sets is_active = false). */
   delete(t: TransactionTask, id: string): Promise<void>;
+  /** Fetch a single group by primary key. */
   findById(t: TransactionTask, id: string): Promise<Groups | null>;
+  /** Fetch a group with JOINed audit names, associated roles, and users. */
   findByIdWithDetails(t: TransactionTask, id: string): Promise<GroupResponse | null>;
+  /** Search groups by name with optional active filter. */
   findByName(t: TransactionTask, name: string, isActive?: boolean): Promise<PaginatedResult<Groups>>;
+  /** Check if a group code already exists. */
   findByCode(t: TransactionTask, code: string, isActive?: boolean): Promise<boolean>;
+  /** List groups with optional active/name/code filters and pagination. */
   findAllPaginated(t: TransactionTask, filters?: { isActive?: boolean; name?: string, code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Groups>>;
 }
 
@@ -35,10 +43,14 @@ export interface GroupResponse {
   created_at: Date;
   created_by: string | null;
   created_by_name: string | null;
+  updated_at: Date | null;
+  updated_by: string | null;
+  updated_by_name: string | null;
 }
 
 export class GroupRepository implements IGroupRepository {
   private tableName = 'groups';
+  private readonly baseColumns = 'id, version, name, code, description, is_active, created_at, created_by, updated_at, updated_by';
 
   constructor(private db: IDatabase<unknown>) { }
 
@@ -48,7 +60,7 @@ export class GroupRepository implements IGroupRepository {
 
   async findById(t: TransactionTask, id: string): Promise<Groups | null> {
     const rows = await this.query<Groups>(
-      `SELECT * FROM ${this.tableName} WHERE id = $1`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE id = $1`,
       [id],
       t
     );
@@ -57,7 +69,7 @@ export class GroupRepository implements IGroupRepository {
 
   async findByCode(t: TransactionTask, code: string, isActive = true): Promise<boolean> {
     const rows = await this.query<Groups>(
-      `SELECT * FROM ${this.tableName} WHERE code = $1 AND is_active = $2`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE code = $1 AND is_active = $2`,
       [code, isActive],
       t
     );
@@ -70,15 +82,21 @@ export class GroupRepository implements IGroupRepository {
       Groups & { created_by_name: string | null; user_count: string }
     >(
       `SELECT
-         g.*,
+         g.id, g.version, g.name, g.code, g.description, g.is_active, g.created_at, g.created_by, g.updated_at, g.updated_by,
          CASE
            WHEN u.id IS NOT NULL
-           THEN COALESCE(u.first_name, '') || ' ' || u.last_name
+           THEN u.username
            ELSE NULL
          END AS created_by_name,
+         CASE
+           WHEN ub.id IS NOT NULL
+           THEN ub.username
+           ELSE NULL
+         END AS updated_by_name,
          (SELECT COUNT(*) FROM user_groups ug WHERE ug.group_id = g.id) AS user_count
        FROM ${this.tableName} g
        LEFT JOIN users u ON g.created_by = u.id
+       LEFT JOIN users ub ON g.updated_by = ub.id
        WHERE g.id = $1`,
       [id],
       t
@@ -117,7 +135,10 @@ export class GroupRepository implements IGroupRepository {
       user_count: parseInt(group.user_count, 10),
       created_at: group.created_at,
       created_by: group.created_by ?? null,
-      created_by_name: group.created_by_name ?? null
+      created_by_name: group.created_by_name ?? null,
+      updated_at: group.updated_at ?? null,
+      updated_by: (group as any).updated_by ?? null,
+      updated_by_name: (group as any).updated_by_name ?? null
     };
   }
 
@@ -143,7 +164,7 @@ export class GroupRepository implements IGroupRepository {
     params.push(p.limit, offset);
 
     const res = await this.query<Groups>(
-      `SELECT *
+      `SELECT ${this.baseColumns}
        FROM ${this.tableName}
        WHERE name ILIKE $1 AND is_active = $2
        ORDER BY created_at DESC
@@ -163,14 +184,15 @@ export class GroupRepository implements IGroupRepository {
   async create(t: TransactionTask, input: CreateGroupInput): Promise<Groups> {
     return (t ?? this.db).one<Groups>(
       `INSERT INTO ${this.tableName}
-       (name, code, description, is_active, created_by)
-       VALUES ($1, $2, $3, COALESCE($4, true), $5)
+       (name, code, description, is_active, created_by,updated_by, updated_at)
+       VALUES ($1, $2, $3, COALESCE($4, true), $5,$6, NOW())
        RETURNING *`,
       [
         input.name,
         input.code,
         input.description ?? null,
         input.is_active ?? null,
+        input.created_by ?? null,
         input.created_by ?? null
       ]
     );
@@ -184,14 +206,16 @@ export class GroupRepository implements IGroupRepository {
            description = $3,
            is_active = $4,
            updated_at = NOW(),
+           updated_by = $5,
            version = version + 1
-       WHERE id = $5 AND version = $6
+       WHERE id = $6 AND version = $7
        RETURNING *`,
       [
         input.name,
         input.code,
         input.description ?? null,
         input.is_active ?? null,
+        input.updated_by ?? null,
         id,
         input.version
       ]
@@ -262,7 +286,7 @@ export class GroupRepository implements IGroupRepository {
 
     // Fetch paginated results with filters
     const res = await this.query<Groups>(
-      `SELECT *
+      `SELECT id,name,code,description,is_active
        FROM ${this.tableName}
        ${whereClause}
        ORDER BY created_at DESC, id DESC

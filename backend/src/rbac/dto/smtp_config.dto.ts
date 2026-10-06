@@ -17,6 +17,7 @@ export interface SmtpConfigCreate {
     reply_to_email?: string | null;
 
     is_active: boolean;
+    created_by?: string | null;
 }
 
 export interface SmtpConfigUpdate {

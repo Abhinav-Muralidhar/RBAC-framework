@@ -1,13 +1,13 @@
 /**
  * SharingRuleService
  *
- * Service layer for SharingRule management.
- * All mutating operations require RBAC enforcement.
- * All mutations are audit logged.
+ * Business logic for sharing rule management.
+ * Sharing rules control data visibility (public/private) per module.
+ * All mutations are audit-logged.
  */
 
 import { IDatabase } from 'pg-promise';
-import { TransactionTask } from '../utils/transaction.utils';
+import { TransactionTask } from '../../utils/transaction.utils';
 import { SharingRules, SharingRuleType } from '../models/sharing_rules.model';
 import { ISharingRulesRepository } from '../repositories/sharing_rules.repository';
 import { IEvaluationService } from './evaluation.service';
@@ -16,14 +16,19 @@ import { SharingRuleNotFoundError } from '../errors/rbac.errors';
 import {
     UpdateSharingRuleRequestDto
 } from '../dto/sharing-rule.dto';
-import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
+import { PaginationParams, PaginatedResult } from '../../utils/pagination.utils';
+import { assertInEnum } from '../../utils/validators';
 // Module code for RBAC operations
 const MODULE_CODE = 'SETTINGS';
 
 export interface ISharingRuleService {
+    /** Retrieve a sharing rule by ID with module details and audit names. */
     getById(t: TransactionTask, actingUserId: string, ruleId: string): Promise<SharingRules>;
+    /** List sharing rules with optional active filter and pagination. */
     listAll(t: TransactionTask, actingUserId: string, filters?: { is_active?: boolean }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<SharingRules>>;
+    /** Update a sharing rule's type (public/private) or active status. */
     update(t: TransactionTask, actingUserId: string, ruleId: string, data: UpdateSharingRuleRequestDto, auditCtx?: AuditContext): Promise<SharingRules>;
+    /** Hard-delete a sharing rule. */
     delete(t: TransactionTask, actingUserId: string, ruleId: string, auditCtx?: AuditContext): Promise<void>;
 }
 export class SharingRuleService implements ISharingRuleService {
@@ -33,19 +38,28 @@ export class SharingRuleService implements ISharingRuleService {
         private auditService: IAuditService
     ) { }
 
-    async getById(t: TransactionTask, actingUserId: string, ruleId: string): Promise<SharingRules> {
+    /**
+     * Retrieve a sharing rule by ID with module details and audit names.
+     * @throws SharingRuleNotFoundError if the rule does not exist.
+     */
+    async getById(t: TransactionTask, actingUserId: string, ruleId: string) {
 
-        const rule = await this.sharingRulesRepository.findById(t, ruleId);
+        const rule = await this.sharingRulesRepository.findByIdWithDetails(t, ruleId);
         if (!rule) throw new SharingRuleNotFoundError(ruleId);
         return rule;
     }
 
 
+    /** List all sharing rules with optional active filter and pagination. */
     async listAll(t: TransactionTask, actingUserId: string, filters?: { is_active?: boolean }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<SharingRules>> {
 
         return this.sharingRulesRepository.findAll(t, filters, pagination)
     }
 
+    /**
+     * Update a sharing rule's type (public/private) or active status.
+     * @throws SharingRuleNotFoundError if the rule does not exist.
+     */
     async update(
         t: TransactionTask,
         actingUserId: string,
@@ -53,6 +67,7 @@ export class SharingRuleService implements ISharingRuleService {
         data: UpdateSharingRuleRequestDto,
         auditCtx?: AuditContext
     ): Promise<SharingRules> {
+        assertInEnum(data.rule_type, ['public', 'private'], 'Rule type');
         const existing = await this.sharingRulesRepository.findById(t, ruleId);
         if (!existing) throw new SharingRuleNotFoundError(ruleId);
 
@@ -63,7 +78,8 @@ export class SharingRuleService implements ISharingRuleService {
             rule_type: data.rule_type ?? existing.rule_type,
             is_active: data.is_active ?? existing.is_active,
             created_at: existing.created_at,
-            created_by: existing.created_by as string
+            created_by: existing.created_by as string,
+            updated_by: actingUserId
         };
 
         const updatedRule = await this.sharingRulesRepository.update(t, ruleId, share);
@@ -85,6 +101,10 @@ export class SharingRuleService implements ISharingRuleService {
 
     }
 
+    /**
+     * Hard-delete a sharing rule.
+     * @throws SharingRuleNotFoundError if the rule does not exist.
+     */
     async delete(t: TransactionTask, actingUserId: string, ruleId: string, auditCtx?: AuditContext): Promise<void> {
         const existing = await this.sharingRulesRepository.findById(t, ruleId);
         if (!existing) throw new SharingRuleNotFoundError(ruleId);

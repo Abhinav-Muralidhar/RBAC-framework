@@ -4,6 +4,7 @@ export interface Organizations {
 
   company_name: string;
   company_logo: string;
+  company_logo_file_id: string | null;
 
   address: string;
   city: string;
@@ -30,4 +31,5 @@ export interface Organizations {
   created_by?: string | null;
 
   updated_at?: Date | null;
+  updated_by?: string | null;
 }

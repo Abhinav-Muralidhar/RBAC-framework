@@ -136,10 +136,11 @@ export interface UpdateUserRequestDto {
  * Whitelisted query parameters for listing users
  */
 export interface UserListFilterDto {
-    status: string,
-    email: string,
-    username: string,
-    name: string
+    status?: string;
+    email?: string;
+    username?: string;
+    name?: string;
+    search?: string;
 }
 
 // ============================================================================
@@ -210,6 +211,8 @@ export interface UserResponseDto {
     created_by: string | null;
     created_by_name: string | null;        // JOINed: creator's first_name + ' ' + last_name
     updated_at: Date | null;
+    updated_by: string | null;
+    updated_by_name: string | null;
     last_login_at: Date | null;
     password_changed_at: Date | null;
 }

@@ -30,7 +30,6 @@ export interface AuthSessionListFilterDto {
 export interface AuthSessionResponseDto {
     id: string;
     user_id: string;
-    session_token: string;
     username?: string | null;
     ip_address: string;
     user_agent: string;
@@ -51,7 +50,6 @@ export interface AuthSessionListItemDto {
     id: string;
     user_id: string;
     username: string | null;
-    session_token: string;
     ip_address: string;
     user_agent: string;
     login_at: Date;

@@ -1,27 +1,42 @@
 /**
  * AuthSessionService
- * 
- * Service layer for authentication session management.
- * OWNS: Session lifecycle, session validation, concurrent session limits
- * MUST NOT: Evaluate permissions, manage users, handle authentication logic
- * All mutations are audit logged.
+ *
+ * Service layer for authentication session lifecycle management.
+ * Handles session creation, validation, logout, revocation, and cleanup.
+ * Enforces concurrent session limits per user.
+ * All mutations are audit-logged.
  */
 
 import { AuthSessions, AuthSessionWithUsername } from '../models/auth_sessions.model';
 import { IAuthSessionsRepository } from '../repositories/auth_sessions.repository';
+import { IUsersRepository } from '../repositories/users.repository';
 import { IAuditService } from './audit.service';
 import { RBACInternalError } from '../errors/rbac.errors';
 import crypto from 'node:crypto';
 import { ConcurrentSessionLimitError, SessionNotFoundError } from '../errors/rbac.errors';
-import { PaginatedResult } from '../utils/pagination.utils';
+import { PaginatedResult } from '../../utils/pagination.utils';
 import { IEvaluationService } from './evaluation.service';
 import { IDatabase } from 'pg-promise';
-import { TransactionTask } from '../utils/transaction.utils';
+import { TransactionTask } from '../../utils/transaction.utils';
+import { assertRequiredString, assertOptionalIpAddress, assertOptionalString } from '../../utils/validators';
+import { config } from '../../config';
 
 // CONSTANTS
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 Hours
-const MAX_CONCURRENT_SESSIONS_PER_USER = 5;
+const MAX_CONCURRENT_SESSIONS_PER_USER = config.limits.maxConcurrentSessionsPerUser;
 const MODULE_CODE = 'SETTINGS';
+
+function sanitizeSessionForAudit(session: AuthSessions): Record<string, unknown> {
+    return {
+        id: session.id,
+        user_id: session.user_id,
+        login_at: session.login_at,
+        expires_at: session.expires_at,
+        logout_at: session.logout_at,
+        ip_address: session.ip_address,
+        user_agent: session.user_agent
+    };
+}
 
 
 export interface IAuthSessionService {
@@ -112,10 +127,15 @@ export interface IAuthSessionService {
 export class AuthSessionService implements IAuthSessionService {
     constructor(
         private readonly authSessionsRepository: IAuthSessionsRepository,
+        private readonly usersRepository: IUsersRepository,
         private readonly auditService: IAuditService,
         private readonly evaluationService: IEvaluationService,
     ) { }
 
+    /**
+     * Retrieve a single session by ID.
+     * @throws SessionNotFoundError if the session does not exist.
+     */
     async getById(t: TransactionTask | undefined, sessionId: string): Promise<AuthSessions> {
         const session = await this.authSessionsRepository.findById(t, sessionId);
         if (!session) {
@@ -124,10 +144,15 @@ export class AuthSessionService implements IAuthSessionService {
         return session;
     }
 
+    /** List all sessions system-wide with optional user/active/search filters and pagination. */
     async findAll(t: TransactionTask, filters?: { userId?: string; isActive?: boolean; search?: string }, pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessionWithUsername>> {
         return this.authSessionsRepository.findAll(t, filters, pagination);
     }
 
+    /**
+     * Revoke a specific session belonging to a given user.
+     * @throws SessionNotFoundError if the session does not exist.
+     */
     async revokeOneForUser(t: TransactionTask, sessionId: string, userId: string, actingUserId: string, auditCtx?: AuditContext): Promise<void> {
         const session = await this.getById(t, sessionId);
         if (!session) {
@@ -140,7 +165,7 @@ export class AuthSessionService implements IAuthSessionService {
             module_code: MODULE_CODE,
             entity_type: 'session',
             entity_id: session.id,
-            old_values: { ...session } as Record<string, unknown>,
+            old_values: sanitizeSessionForAudit(session),
             new_values: { delete: true, actingUserId: actingUserId } as Record<string, unknown>,
             ip_address: auditCtx?.ip_address ?? session.ip_address,
             user_agent: auditCtx?.user_agent ?? session.user_agent,
@@ -150,22 +175,34 @@ export class AuthSessionService implements IAuthSessionService {
     }
 
 
+    /** List only active (non-expired, non-logged-out) sessions for a user with pagination. */
     async listActiveByUser(t: TransactionTask, userId: string, pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessions>> {
         return this.authSessionsRepository.findActiveByUser(t, userId, pagination);
     }
 
+    /** List all sessions (active and logged-out) for a user with pagination. */
     async listAllByUser(t: TransactionTask, userId: string, pagination?: { page?: number; limit?: number }): Promise<PaginatedResult<AuthSessions>> {
         return this.authSessionsRepository.findAllByUser(t, userId, pagination);
     }
 
+    /**
+     * Create a new authenticated session.
+     * Generates a cryptographically secure 256-bit token and sets TTL.
+     * @throws ConcurrentSessionLimitError if user has MAX_CONCURRENT_SESSIONS_PER_USER active sessions.
+     */
     async create(t: TransactionTask, data: {
         user_id: string;
         ip_address?: string;
         user_agent?: string;
     }): Promise<AuthSessions> {
-        // Check concurrent session limit
-        const activeSessions = await this.authSessionsRepository.findActiveByUser(t, data.user_id);
-        if (activeSessions.data.length >= MAX_CONCURRENT_SESSIONS_PER_USER) {
+        assertRequiredString(data.user_id, 'User ID');
+        assertOptionalIpAddress(data.ip_address, 'IP address');
+        assertOptionalString(data.user_agent, 'User agent');
+
+        // Serialize session creation per user so the concurrent-session limit cannot race.
+        await this.usersRepository.lockById(t, data.user_id);
+        const activeSessionCount = await this.authSessionsRepository.countActiveByUser(t, data.user_id);
+        if (activeSessionCount >= MAX_CONCURRENT_SESSIONS_PER_USER) {
             throw new ConcurrentSessionLimitError(data.user_id);
         }
 
@@ -174,7 +211,7 @@ export class AuthSessionService implements IAuthSessionService {
 
         const session = await this.authSessionsRepository.create(t, {
             user_id: data.user_id,
-            session_token: crypto.randomUUID(),
+            session_token: crypto.randomBytes(32).toString('hex'),
             ip_address: data.ip_address || '',
             user_agent: data.user_agent || '',
             login_at: now,
@@ -190,7 +227,13 @@ export class AuthSessionService implements IAuthSessionService {
             entity_type: 'session',
             entity_id: session.id,
             old_values: null,
-            new_values: { ...data, login_at: now.toISOString() } as Record<string, unknown>,
+            new_values: {
+                user_id: data.user_id,
+                ip_address: data.ip_address,
+                user_agent: data.user_agent,
+                login_at: now.toISOString(),
+                expires_at: expiresAt.toISOString()
+            } as Record<string, unknown>,
             ip_address: data.ip_address,
             user_agent: data.user_agent,
             status: 'success'
@@ -199,6 +242,10 @@ export class AuthSessionService implements IAuthSessionService {
         return session;
     }
 
+    /**
+     * Update session fields (e.g. extend expiry, set logout_at).
+     * @throws SessionNotFoundError if the session does not exist.
+     */
     async update(t: TransactionTask | undefined, sessionId: string, data: Partial<AuthSessions>): Promise<AuthSessions> {
         // Verify session exists
         const existing = await this.getById(t, sessionId);
@@ -215,42 +262,42 @@ export class AuthSessionService implements IAuthSessionService {
         return this.authSessionsRepository.update(t, sessionId, updated);
     }
 
+    /**
+     * Log out a session by setting logout_at and expires_at to now.
+     * @throws SessionNotFoundError if the session does not exist.
+     */
     async logout(t: TransactionTask, sessionId: string, auditCtx?: AuditContext): Promise<void> {
         // Verify session exists
         const existing = await this.getById(t, sessionId);
-        const updated: AuthSessions = {
-            id: existing.id,
-            user_id: existing.user_id,
-            session_token: existing.session_token,
-            login_at: existing.login_at,
-            expires_at: new Date(),
-            logout_at: new Date(),
-            ip_address: existing.ip_address,
-            user_agent: existing.user_agent,
-        };
-        await this.authSessionsRepository.update(t, sessionId, updated);
+        
+        // Use the repository's direct delete method which sets logout_at = NOW(), expires_at = NOW()
+        await this.authSessionsRepository.delete(t, sessionId);
 
-        // AUDIT: Log session logout (fire-and-forget)
-        await this.auditService.log(undefined, {
+        // AUDIT: Log session logout (fire-and-forget, but part of transaction if 't' is passed)
+        await this.auditService.log(t, {
             user_id: existing.user_id,
             module_code: MODULE_CODE,
             action: 'update',
             entity_type: 'session',
             entity_id: sessionId,
-            old_values: { ...existing } as Record<string, unknown>,
-            new_values: { delete: true } as Record<string, unknown>,
-            ip_address: auditCtx?.ip_address,
-            user_agent: auditCtx?.user_agent,
+            old_values: sanitizeSessionForAudit(existing),
+            new_values: { logout: true, logout_at: new Date().toISOString() } as Record<string, unknown>,
+            ip_address: auditCtx?.ip_address || existing.ip_address,
+            user_agent: auditCtx?.user_agent || existing.user_agent,
             status: 'success'
         })
     }
 
+    /**
+     * Administratively revoke a session (immediate invalidation).
+     * @throws SessionNotFoundError if the session does not exist.
+     */
     async revoke(t: TransactionTask, sessionId: string, actingUserId: string, auditCtx?: AuditContext): Promise<void> {
         const session = await this.getById(t, sessionId);
         if (!session) {
             throw new SessionNotFoundError(sessionId);
         }
-        await this.authSessionsRepository.delete(t, sessionId, actingUserId);
+        await this.authSessionsRepository.delete(t, sessionId);
 
         // AUDIT: Log session revocation (fire-and-forget)
         await this.auditService.log(undefined, {
@@ -259,7 +306,7 @@ export class AuthSessionService implements IAuthSessionService {
             action: 'delete',
             entity_type: 'session',
             entity_id: sessionId,
-            old_values: { ...session } as Record<string, unknown>,
+            old_values: sanitizeSessionForAudit(session),
             new_values: { revoked: true, revoked_by: actingUserId } as Record<string, unknown>,
             ip_address: auditCtx?.ip_address,
             user_agent: auditCtx?.user_agent,
@@ -267,6 +314,7 @@ export class AuthSessionService implements IAuthSessionService {
         })
     }
 
+    /** Revoke all sessions for a given user (bulk logout). */
     async revokeAllByUser(t: TransactionTask, userId: string, actingUserId: string, auditCtx?: AuditContext): Promise<void> {
         // Get session count for audit
         const sessions = await this.authSessionsRepository.findAllByUser(t, userId);
@@ -289,6 +337,7 @@ export class AuthSessionService implements IAuthSessionService {
         })
     }
 
+    /** Delete sessions that have passed their expires_at time. */
     async cleanupExpired(t: TransactionTask): Promise<void> {
         await this.authSessionsRepository.deleteExpired(t);
     }
@@ -314,15 +363,10 @@ export class AuthSessionService implements IAuthSessionService {
      * @throws RBACInternalError if session not found or invalid
      */
     async resolveSession(t: TransactionTask | undefined, sessionToken: string): Promise<AuthSessions> {
-        const session = await this.authSessionsRepository.findBySessionToken(t, sessionToken);
+        const session = await this.authSessionsRepository.findValidBySessionToken(t, sessionToken);
 
         if (!session) {
             throw new RBACInternalError(`Session not found for token`);
-        }
-
-        // Check if session is expired
-        if (new Date() > session.expires_at) {
-            throw new RBACInternalError('Session has expired');
         }
 
         return session;

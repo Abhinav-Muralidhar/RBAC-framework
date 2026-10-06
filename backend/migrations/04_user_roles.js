@@ -10,6 +10,7 @@ exports.up = async function (knex) {
         table.bigInteger('assigned_by')
             .nullable().references('id').inTable('users').onDelete('SET NULL');
         table.primary(['user_id', 'role_id']);
+        table.index(['role_id']);
     })
 }
 exports.down = async function (knex) {

@@ -5,14 +5,14 @@
  * These routes set signed cookies for session management.
  */
 
-import { Router, Request, Response, CookieOptions } from 'express';
+import { Router, Request, Response, CookieOptions, NextFunction } from 'express';
 import { AuthSessionsRepository, TransactionTask } from '../repositories/auth_sessions.repository';
 import { UsersRepository } from '../repositories/users.repository';
 import { AuditLogsRepository } from '../repositories/audit_logs.repository';
 import { AuthSessionService } from '../services/authSession.service';
 import { AuditService } from '../services/audit.service';
 import { authLimiter } from '../middleware/rateLimit.middleware';
-import { hashPassword, verifyPassword } from '../utils/crypto.utils';
+import { hashPassword, verifyPassword } from '../../utils/crypto.utils';
 import { createAuthenticateMiddleware } from '../middleware/authenticate.middleware';
 import { EvaluationService } from '../services/evaluation.service';
 import { PermissionsRepository } from '../repositories/permissions.repository';
@@ -29,7 +29,10 @@ import { UserRoleRepository } from '../repositories/user_roles.repository';
 import { PERMISSION_ACTIONS, PermissionAction } from '../models/permissions.model';
 import { OtpService } from '../services/otp.service';
 import { OtpTokenRepository } from '../repositories/otp_token.repository';
-import { withTransaction } from '../utils/transaction.utils';
+import { withTransaction } from '../../utils/transaction.utils';
+import { badRequest, internalError, unauthorized } from '../errors/api.errors';
+import { getRequiredBodyString } from './_paramUtils';
+import { sendSuccess } from './_response';
 // Cookie configuration
 const COOKIE_OPTIONS: CookieOptions = {
     httpOnly: true,
@@ -39,16 +42,6 @@ const COOKIE_OPTIONS: CookieOptions = {
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
 };
 
-function sendError(res: Response, status: number, message: string, code?: string) {
-    res.status(status).json({
-        data: null,
-        error: { message, code: code ?? 'ERROR' },
-        meta: {}
-    });
-}
-function sendSuccess<T>(res: Response, data: T, meta?: Record<string, unknown>) {
-    res.json({ data, error: null, meta: meta ?? {} });
-}
 function resolveEffect(effects: PermissionEffect[]): PermissionEffect {
     if (effects.includes('deny')) return 'deny';
     if (effects.includes('allow')) return 'allow';
@@ -74,7 +67,7 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
 
     // Services
     const auditService = new AuditService(auditLogsRepo, evaluationService, moduleRepository, usersRepo, roleRepository);
-    const authSessionService = new AuthSessionService(sessionsRepo, auditService, evaluationService);
+    const authSessionService = new AuthSessionService(sessionsRepo, usersRepo, auditService, evaluationService);
     const requireAuth = createAuthenticateMiddleware(authSessionService);
     const usersService = new UserService(usersRepo, userRolesRepository, evaluationService, auditService);
     const otpService = new OtpService(new OtpTokenRepository(db));
@@ -83,15 +76,13 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
      * POST /auth/login
      * 
      * Authenticates user and sets session cookie.
-     * Rate limited: 5 attempts per 15 minutes.
+     * Rate limited: 100 attempts per 15 minutes.
      */
-    router.post('/login', authLimiter, async (req: Request, res: Response): Promise<void> => {
+    router.post('/login', authLimiter, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            if (!req.body.username || !req.body.password) {
-                return sendError(res, 400, 'Username and password are required', 'VALIDATION_ERROR');
-            }
-            const result = await withTransaction(async (t: TransactionTask) => {
-                const { username, password } = req.body;
+            const result = await withTransaction(db, async (t: TransactionTask) => {
+                const username = getRequiredBodyString(req.body, 'username');
+                const password = getRequiredBodyString(req.body, 'password');
                 const user = await usersService.findByUsername(t, username.toLowerCase());
                 if (!user) throw new Error('AUTH_FAILED');
 
@@ -106,9 +97,6 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
                     ip_address: req.ip || 'unknown',
                     user_agent: req.headers['user-agent'] || 'unknown'
                 });
-                console.log('LOGIN TOKEN:', session.session_token);
-
-
                 // Update last login timestamp
                 await usersService.recordLogin(t, user.id);
 
@@ -121,13 +109,13 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
             sendSuccess(res, result.userResponse, { message: 'Login successful' });
         } catch (error: any) {
             if (error.message === 'AUTH_FAILED') {
-                return sendError(res, 401, 'Invalid username or password', 'AUTH_FAILED');
+                return next(unauthorized('Invalid username or password', 'AUTH_FAILED'));
             }
             if (error.message === 'ACCOUNT_INACTIVE') {
-                return sendError(res, 401, 'Account is not active', 'ACCOUNT_INACTIVE');
+                return next(unauthorized('Account is not active', 'ACCOUNT_INACTIVE'));
             }
-
-            sendError(res, 500, 'Login failed', 'INTERNAL_ERROR');
+            console.error('Login error:', error);
+            return next(internalError('Login failed'));
         }
     });
 
@@ -136,60 +124,76 @@ export function createAuthRouter(db: IDatabase<unknown>): Router {
      * 
      * Clears session cookie. Graceful - works even if not authenticated.
      */
-    router.post('/logout', async (req: Request, res: Response): Promise<void> => {
+    router.post('/logout', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            await withTransaction(db, async (t: TransactionTask) => {
                 // Try to invalidate session if cookie exists
-                const sessionToken = req.signedCookies['sessionToken'];
+                // Fallback to unsigned cookie just in case, but usually signed.
+                const sessionToken = req.signedCookies['sessionToken'] || req.cookies['sessionToken'];
                 if (sessionToken) {
-                    const session = await authSessionService.resolveSession(t, sessionToken);
-                    await authSessionService.logout(t, session.id);
+                    try {
+                        const session = await authSessionService.resolveSession(t, sessionToken);
+                        await authSessionService.logout(t, session.id, {
+                            ip_address: req.ip || 'unknown',
+                            user_agent: req.get('user-agent') || 'unknown'
+                        } as any);
+                    } catch (err) {
+                        // If session not found or already invalid, just ignore it
+                        console.warn('Logout resolution failed:', err);
+                    }
                 }
             });
             res.clearCookie('sessionToken', COOKIE_OPTIONS);
             sendSuccess(res, { message: 'Logged out successfully' });
         } catch (error) {
+            console.error('Logout error:', error);
             res.clearCookie('sessionToken', COOKIE_OPTIONS);
-            sendError(res, 500, 'Logout failed', 'INTERNAL_ERROR');
+            next(internalError('Logout failed'));
         }
     });
 
     // GET /rbac/users/me
-    router.get('/users/me', requireAuth, async (req, res) => {
-        const result = await withTransaction(async (t: TransactionTask) => {
-            const userId = req.user!.id; // from session middleware
+    router.get('/users/me', requireAuth, async (req, res, next) => {
+        try {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
+                const userId = req.user!.id; // from session middleware
 
-            const user = await usersService.getById(t, userId, userId);
-            const modules = await moduleRepository.findAll();
+                const [user, modules] = await Promise.all([
+                    usersService.getById(t, userId, userId),
+                    moduleRepository.findAll(t)
+                ]);
 
-            const permissions: Record<
-                string,
-                Record<PermissionAction, PermissionEffect>
-            > = {};
+                const permissions: Record<
+                    string,
+                    Record<PermissionAction, PermissionEffect>
+                > = {};
 
-            for (const module of modules) {
-                const modulePermissions: Record<
-                    PermissionAction,
-                    PermissionEffect
-                > = {} as Record<PermissionAction, PermissionEffect>;
-
-                for (const action of PERMISSION_ACTIONS) {
-                    const effects =
-                        await permissionsRepository.findEffectsByUserAndModuleAction(
-                            undefined,
+                const checks = modules.flatMap((module) =>
+                    PERMISSION_ACTIONS.map(async (action) => {
+                        const effects = await permissionsRepository.findEffectsByUserAndModuleAction(
+                            t,
                             userId,
                             module.code,
                             action
                         );
+                        return { moduleCode: module.code, action, effect: resolveEffect(effects) };
+                    })
+                );
 
-                    modulePermissions[action] = resolveEffect(effects);
+                const resolved = await Promise.all(checks);
+
+                for (const item of resolved) {
+                    const modulePermissions =
+                        permissions[item.moduleCode] ??
+                        (permissions[item.moduleCode] = {} as Record<PermissionAction, PermissionEffect>);
+                    modulePermissions[item.action] = item.effect;
                 }
-
-                permissions[module.code] = modulePermissions;
-            }
-            return { user, permissions };
-        });
-        sendSuccess(res, result);
+                return { user, permissions };
+            });
+            sendSuccess(res, result);
+        } catch (error) {
+            next(error);
+        }
     });
     return router;
 }

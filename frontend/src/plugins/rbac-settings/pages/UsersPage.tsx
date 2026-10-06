@@ -4,34 +4,43 @@
  * Manage user accounts using centralized hooks for pagination and CRUD.
  */
 
-import { useState, useMemo } from 'react';
+import { Suspense, lazy, useMemo, useRef } from 'react';
 import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import { usersApi } from '../../../core/api/rbac.api';
 import { formatUserName } from '../../../core/constants/userPreferences';
 import type { User } from '../../../core/types/user.types';
-import { usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
-import { useToast } from '../../../core/contexts/ToastContext';
+import { createPaginatedSource, usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
+import { useToast } from '../../../core/contexts/useToast';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { FormModal } from '../../../core/components/FormModal';
 import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
-import { UserForm, submitUserForm } from '../components';
+import { RbacFormSkeleton, RbacPageSkeleton } from '../components/RbacPageSkeleton';
+import type { RbacFormHandle } from '../components';
 import './SettingsPage.css';
+
+const UserForm = lazy(() => import('../components/UserForm').then((module) => ({ default: module.UserForm })));
 
 export function UsersPage() {
     const toast = useToast();
+    const formRef = useRef<RbacFormHandle>(null);
     const {
         data: users,
-        isLoading,
+        isInitialLoading,
         error: listError,
         searchQuery,
         setSearchQuery,
         page,
         totalPages,
+        limit,
+        limitOptions,
         setPage,
+        setLimit,
         reload,
         filters,
-        setFilters
-    } = usePaginatedData<User>(usersApi.list, { initialLimit: 20 });
+        draftFilters,
+        setDraftFilters,
+        filterModal
+    } = usePaginatedData<User>(createPaginatedSource('users', usersApi.list));
 
     const {
         showFormModal,
@@ -56,7 +65,6 @@ export function UsersPage() {
         toast,
     });
 
-    const [showFilterModal, setShowFilterModal] = useState(false);
     const detailsModal = useDetailsModal();
 
     const userFields = useMemo<FieldConfig<User>[]>(() => [
@@ -66,8 +74,8 @@ export function UsersPage() {
         { label: 'Title', key: 'title' },
         { label: 'Department', key: 'department' },
         {
-            label: 'Status', key: 'status', render: (v: string) => (
-                <span className={`status-badge status-${v?.toLowerCase()}`}>{v}</span>
+            label: 'Status', key: 'status', render: (v: unknown) => (
+                <span className={`status-badge status-${(v as string)?.toLowerCase()}`}>{v as string}</span>
             )
         },
         { label: 'Role', key: 'rolesname' },
@@ -84,54 +92,57 @@ export function UsersPage() {
         { label: 'Postal Code', key: 'postal_code' },
         { label: 'Time Zone', key: 'time_zone' },
         {
-            label: 'Groups', key: 'groups', render: (v: any) => {
+            label: 'Groups', key: 'groups', render: (v: unknown) => {
                 if (!v || !Array.isArray(v) || v.length === 0) return '—';
-                return v.map((g: any) => g.name).join(', ');
+                return v.map((g: { name: string }) => g.name).join(', ');
             }
         },
-        { label: 'Created At', key: 'created_at', render: (v: any) => v ? new Date(v).toLocaleString() : '—' },
-        { label: 'Last Login', key: 'last_login_at', render: (v: any) => v ? new Date(v).toLocaleString() : '—' },
+        { label: 'Created At', key: 'created_at', render: (v: unknown) => v ? new Date(v as string).toLocaleString() : '—' },
+        { label: 'Created By', key: 'created_by_name' },
+        { label: 'Updated At', key: 'updated_at', render: (v: unknown) => v ? new Date(v as string).toLocaleString() : '—' },
+        { label: 'Updated By', key: 'updated_by_name' },
+        { label: 'Last Login', key: 'last_login_at', render: (v: unknown) => v ? new Date(v as string).toLocaleString() : '—' },
     ], []);
 
     const error = listError || crudError;
 
     return (
         <div className="settings-page">
-            <header className="page-header">
-                <div>
-                    <h1>Users</h1>
-                    <p>Manage user accounts and their access</p>
-                </div>
-                <button className="btn btn-primary" onClick={openCreate}>
-                    <Plus size={18} /> Add User
-                </button>
-            </header>
-
-            <div className="page-toolbar">
-                <div className="search-box">
-                    <Search size={18} />
-                    <input
-                        type="text"
-                        placeholder="Search users..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
-                <button
-                    className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setShowFilterModal(true)}
-                >
-                    <Filter size={18} /> Filter
-                    {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
-                </button>
-            </div>
-
-            {error && <div className="error-banner">{error}</div>}
-
-            {isLoading ? (
-                <div className="loading-state">Loading users...</div>
+            {isInitialLoading ? (
+                <RbacPageSkeleton columns={5} rows={4} />
             ) : (
                 <>
+                    <header className="page-header">
+                        <div>
+                            <h1>Users</h1>
+                            <p>Manage user accounts and their access</p>
+                        </div>
+                        <button className="btn btn-primary" onClick={openCreate}>
+                            <Plus size={18} /> Add User
+                        </button>
+                    </header>
+
+                    <div className="page-toolbar">
+                        <div className="search-box">
+                            <Search size={18} />
+                            <input
+                                type="text"
+                                placeholder="Search users..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+                        <button
+                            className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={filterModal.open}
+                        >
+                            <Filter size={18} /> Filter
+                            {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
+                        </button>
+                    </div>
+
+                    {error && <div className="error-banner">{error}</div>}
+
                     <div className="data-table-wrapper">
                         <table className="data-table">
                             <thead>
@@ -186,6 +197,18 @@ export function UsersPage() {
                     </div>
 
                     <div className="pagination">
+                        <div className="page-size">
+                            <label className="form-label">Rows</label>
+                            <select
+                                className="form-control"
+                                value={limit}
+                                onChange={(e) => setLimit(Number(e.target.value))}
+                            >
+                                {limitOptions.map((option) => (
+                                    <option key={option} value={option}>{option}</option>
+                                ))}
+                            </select>
+                        </div>
                         <button
                             disabled={page <= 1}
                             onClick={() => setPage(page - 1)}
@@ -208,16 +231,19 @@ export function UsersPage() {
                 isOpen={showFormModal}
                 title={editingItem ? 'Edit User' : 'Add New User'}
                 isLoading={false}
-                onSubmit={() => submitUserForm()}
+                onSubmit={() => formRef.current?.submit()}
                 onCancel={closeForm}
                 size="md"
             >
-                <UserForm
-                    user={editingItem}
-                    onSuccess={handleFormSuccess}
-                    onError={(err) => toast.error(err)}
-                    setLoading={() => { }}
-                />
+                <Suspense fallback={<RbacFormSkeleton />}>
+                    <UserForm
+                        ref={formRef}
+                        user={editingItem}
+                        onSuccess={handleFormSuccess}
+                        onError={(err) => toast.error(err)}
+                        setLoading={() => { }}
+                    />
+                </Suspense>
             </FormModal>
 
             {/* Delete Confirmation */}
@@ -235,10 +261,10 @@ export function UsersPage() {
 
             {/* Filter Modal Placeholder */}
             <FormModal
-                isOpen={showFilterModal}
+                isOpen={filterModal.isOpen}
                 title="Filter Users"
-                onSubmit={() => setShowFilterModal(false)}
-                onCancel={() => setShowFilterModal(false)}
+                onSubmit={filterModal.submit}
+                onCancel={filterModal.close}
                 size="sm"
             >
                 <div className="filter-form">
@@ -246,8 +272,8 @@ export function UsersPage() {
                         <label className="form-label">Status</label>
                         <select
                             className="form-control"
-                            value={filters.status || ''}
-                            onChange={(e) => setFilters({ ...filters, status: e.target.value || undefined })}
+                            value={(draftFilters.status as string) || ''}
+                            onChange={(e) => setDraftFilters({ ...draftFilters, status: e.target.value || undefined })}
                         >
                             <option value="">All Statuses</option>
                             <option value="active">Active</option>
@@ -255,12 +281,11 @@ export function UsersPage() {
                             <option value="deleted">Deleted</option>
                         </select>
                     </div>
-                    {Object.keys(filters).length > 0 && (
+                    {Object.keys(draftFilters).length > 0 && (
                         <button
                             className="btn btn-text filter-clear"
                             onClick={() => {
-                                setFilters({});
-                                setShowFilterModal(false);
+                                setDraftFilters({});
                             }}
                         >
                             Clear All Filters

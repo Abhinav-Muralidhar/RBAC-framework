@@ -1,76 +1,96 @@
-// backend/src/server.ts
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import path from 'node:path';
-import dotenv from 'dotenv';
+import { randomUUID } from 'node:crypto';
 import { db } from './db';
+import { config } from './config';
 import { createRBACRouter, createPublicAuthRouter } from './rbac/routes';
 import { createAuthRouter } from './rbac/routes/auth.routes';
 import { errorHandler, notFoundHandler } from './rbac/middleware/errorHandler.middleware';
 import { standardLimiter } from './rbac/middleware/rateLimit.middleware';
 
-dotenv.config();
-
 const app = express();
-const PORT = process.env.PORT || 3001;
+const apiRouter = express.Router();
+const PORT = config.port;
 
-// Validate required environment variables
-if (!process.env.COOKIE_SECRET) {
-  console.error('FATAL: COOKIE_SECRET environment variable is not set');
-  process.exit(1);
-}
-app.set('trust proxy', 0);
+app.set('trust proxy', 1);
 
-// Standard Middleware
 app.use(cors({
-  origin: [
-    process.env.CORS_ORIGIN || 'http://localhost:3000',
-    'http://localhost:3001'
-  ],
+  origin: config.corsOrigins,
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
-// Cookie parser with secret for signed cookies
-app.use(cookieParser(process.env.COOKIE_SECRET));
+app.use((req, res, next) => {
+  const startedAt = process.hrtime.bigint();
+  const inboundRequestId = req.headers['x-request-id'];
+  const requestId = typeof inboundRequestId === 'string' && inboundRequestId.trim()
+    ? inboundRequestId
+    : randomUUID();
 
-// Global rate limiting (100 req/min) for all routes
-app.use(standardLimiter);
+  req.requestId = requestId;
 
-// Static file serving for uploads (logos, documents, etc.)
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+  res.setHeader('x-request-id', requestId);
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('x-frame-options', 'DENY');
+  res.setHeader('referrer-policy', 'no-referrer');
+  res.setHeader('x-permitted-cross-domain-policies', 'none');
 
-// Basic Health Check Route (no auth required)
-app.get('/health', (req: Request, res: Response) => {
-  res.json({
-    status: 'online',
-    message: 'RBAC Backend is running',
-    environment: process.env.NODE_ENV || 'development'
+  res.on('finish', () => {
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    const log = {
+      requestId,
+      method: req.method,
+      path: req.originalUrl,
+      statusCode: res.statusCode,
+      durationMs: Number(durationMs.toFixed(2))
+    };
+    console.info(JSON.stringify(log));
   });
+
+  next();
 });
 
-// Auth routes (public)
-app.use('/auth', createAuthRouter(db));
+app.use(cookieParser(config.cookieSecret));
+app.use(standardLimiter);
 
-// RBAC routes (protected)
-app.use('/rbac', createRBACRouter(db));
+app.use('/uploads', express.static(config.uploads.root));
 
-app.use('/public', createPublicAuthRouter(db));
+apiRouter.get('/ready', async (_req: Request, res: Response) => {
+  try {
+    await db.one<{ ok: number }>('SELECT 1 AS ok');
+    res.status(200).json({
+      status: 'ready',
+      service: 'rbac-backend',
+      environment: config.env,
+      version: config.appVersion
+    });
+  } catch {
+    res.status(503).json({
+      status: 'not_ready',
+      service: 'rbac-backend',
+      environment: config.env,
+      version: config.appVersion
+    });
+  }
+});
 
-// Error handling middleware (must be after all routes)
+apiRouter.use('/auth', createAuthRouter(db));
+apiRouter.use('/rbac', createRBACRouter(db));
+apiRouter.use('/public', createPublicAuthRouter(db));
+
+app.use('/v1', apiRouter);
+
 app.use(notFoundHandler);
 app.use(errorHandler);
 
 app.listen(PORT, () => {
-  console.log(`-----------------------------------------`);
-  console.log(`🚀 Server is breathing at: http://localhost:${PORT}`);
-  console.log(`📁 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔐 RBAC routes mounted at: /rbac/*`);
-  console.log(`🔒 Signed cookies enabled`);
-  console.log(`⚡ Rate limiting active: ${process.env.RATE_LIMIT_API_MAX || 100} req/min`);
-  console.log(`-----------------------------------------`);
-  console.log('SERVER PID:', process.pid);
-  console.log('DB URL:', process.env.DATABASE_URL);
-
+  console.log('-----------------------------------------');
+  console.log(`Server is listening on: http://localhost:${PORT}`);
+  console.log(`Environment: ${config.env}`);
+  console.log('RBAC routes mounted at: /v1/rbac/*');
+  console.log('Signed cookies enabled');
+  console.log('Rate limiting middleware active');
+  console.log('-----------------------------------------');
+  console.log(`SERVER PID: ${process.pid}`);
 });

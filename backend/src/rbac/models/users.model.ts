@@ -57,6 +57,7 @@ export interface Users {
   created_by?: string | null;
 
   updated_at?: Date | null;
+  updated_by?: string | null;
   last_login_at?: Date | null;
   password_changed_at?: Date | null;
 }

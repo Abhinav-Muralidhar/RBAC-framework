@@ -133,3 +133,84 @@ export function parsePagination(query: Query): { page: number; limit: number } {
 
     return { page, limit };
 }
+
+export function parseBooleanQuery(query: Query, key: string): boolean | undefined {
+    const value = getOptionalQuery(query, key);
+    if (value === undefined) {
+        return undefined;
+    }
+    if (value === 'true') {
+        return true;
+    }
+    if (value === 'false') {
+        return false;
+    }
+    throw new Error(`Query parameter '${key}' must be 'true' or 'false'`);
+}
+
+export function getBodyObject(input: unknown): Record<string, unknown> {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+        throw new Error('Request body must be an object');
+    }
+    return input as Record<string, unknown>;
+}
+
+export function getRequiredBodyString(input: unknown, key: string): string {
+    const body = getBodyObject(input);
+    const value = body[key];
+    if (typeof value !== 'string' || value.trim() === '') {
+        throw new Error(`${key} is required`);
+    }
+    return value.trim();
+}
+
+export function getOptionalBodyString(input: unknown, key: string): string | undefined {
+    const body = getBodyObject(input);
+    const value = body[key];
+    if (value === undefined || value === null) {
+        return undefined;
+    }
+    if (typeof value !== 'string') {
+        throw new Error(`${key} must be a string`);
+    }
+    const trimmed = value.trim();
+    return trimmed === '' ? undefined : trimmed;
+}
+
+export function getRequiredBodyNumber(input: unknown, key: string): number {
+    const body = getBodyObject(input);
+    const value = body[key];
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+        throw new Error(`${key} must be a number`);
+    }
+    return value;
+}
+
+export function getRequiredBodyBoolean(input: unknown, key: string): boolean {
+    const body = getBodyObject(input);
+    const value = body[key];
+    if (typeof value !== 'boolean') {
+        throw new Error(`${key} must be a boolean`);
+    }
+    return value;
+}
+
+export function pickAllowedFields<T extends object, K extends keyof T>(
+    input: unknown,
+    allowedKeys: readonly K[]
+): Partial<Pick<T, K>> {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+        return {};
+    }
+
+    const source = input as Record<string, unknown>;
+    const result: Partial<Pick<T, K>> = {};
+
+    for (const key of allowedKeys) {
+        if (Object.prototype.hasOwnProperty.call(source, key as string)) {
+            (result as Record<string, unknown>)[key as string] = source[key as string];
+        }
+    }
+
+    return result;
+}

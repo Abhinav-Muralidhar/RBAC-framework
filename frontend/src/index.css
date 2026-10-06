@@ -1,5 +1,5 @@
 /* Global Styles */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@500;600;700;800&display=swap');
 
 *,
 *::before,
@@ -23,15 +23,51 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-size-adjust: 100%;
+  scrollbar-gutter: stable both-edges;
 }
 
 body {
   min-height: 100vh;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #f8fafc;
-  color: #374151;
-  line-height: 1.5;
+  font-family: var(--font-sans);
+  position: relative;
+  background: var(--page-gradient);
+  color: var(--color-text);
+  line-height: 1.55;
+  letter-spacing: -0.01em;
   overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-gutter: stable both-edges;
+}
+
+/*
+ * Radix dialogs lock body scrolling and add right-side compensation to avoid
+ * layout shift. Our product shell already reserves scrollbar gutter space, so
+ * that extra compensation causes the fixed sidebar/content seam to jump.
+ */
+body[data-scroll-locked] {
+  padding-right: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important;
+  overflow-y: scroll !important;
+  scrollbar-gutter: stable both-edges !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+html:has(body[data-scroll-locked]) {
+  scrollbar-gutter: stable both-edges !important;
+}
+
+body[data-scroll-locked] #root {
+  width: 100% !important;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: var(--shell-glow);
+  pointer-events: none;
+  z-index: -1;
 }
 
 h1,
@@ -62,7 +98,7 @@ button {
 }
 
 code {
-  font-family: 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
 }
 
 img,
@@ -83,6 +119,13 @@ button {
 #root {
   min-height: 100vh;
   width: 100%;
+  position: relative;
+  isolation: isolate;
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.18);
+  color: var(--color-text);
 }
 
 .visually-hidden {
@@ -118,8 +161,78 @@ button {
 
 /* Focus styles for accessibility */
 :focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
+}
+
+.app-page-shell {
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+}
+
+.app-page-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: min(24rem, 34vh);
+  background:
+    radial-gradient(circle at 0% 20%, rgba(56, 189, 248, 0.14), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4), transparent 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.app-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.app-page-kicker {
+  margin-bottom: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: hsl(var(--primary));
+}
+
+.app-page-title {
+  font-size: clamp(2rem, 1.6rem + 1vw, 3rem);
+  font-weight: 800;
+  line-height: 1.05;
+  color: #0f172a;
+}
+
+.app-page-description {
+  margin-top: 0.5rem;
+  max-width: 44rem;
+  color: #475569;
+  font-size: 0.98rem;
+}
+
+.app-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.app-surface {
+  background: var(--surface-glass);
+  border: 1px solid var(--outline-soft);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(18px);
+}
+
+.app-surface-muted {
+  background: var(--surface-muted);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: var(--radius-lg);
 }
 
 @media (max-width: 1024px) {
@@ -132,4 +245,11 @@ button {
   html {
     font-size: 14px;
   }
+}
+
+/* Force select dropdown list to open upward */
+.dropdown-upward .form-search-select__dropdown {
+  top: auto !important;
+  bottom: calc(100% + 6px) !important;
+  box-shadow: 0 -28px 40px -32px rgba(15, 23, 42, 0.45) !important;
 }

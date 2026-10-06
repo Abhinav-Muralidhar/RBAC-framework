@@ -4,18 +4,19 @@
  * Uses centralized validators.
  */
 
-import { useState, useEffect } from 'react';
+import { forwardRef, useState, useEffect, useImperativeHandle, useCallback } from 'react';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { FormInput, FormSelect, FormSwitch } from '../../../core/components/FormElements';
 import type {
     SmtpConfig,
-    CreateSmtpConfigDto,
     UpdateSmtpConfigDto,
     SmtpEncryption
 } from '../../../core/types/smtp.types';
 import { smtpApi } from '../../../core/api/rbac.api';
-import { validateRequired, validateEmail, validatePort } from '../../../core/utils';
-
+import { validateRequired, validateEmail, validatePort, scrollToFirstError, parseApiError } from '../../../core/utils';
+import { getErrorMessage } from './../../../core/api/errors';
+import type { RbacFormHandle } from './form.types';
+import './EntityForm.css';
 interface SmtpFormProps {
     config?: SmtpConfig | null;
     onSuccess: () => void;
@@ -23,7 +24,7 @@ interface SmtpFormProps {
     setLoading: (loading: boolean) => void;
 }
 
-export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormProps) {
+export const SmtpForm = forwardRef<RbacFormHandle, SmtpFormProps>(function SmtpForm({ config, onSuccess, onError, setLoading }, ref) {
     const isEditing = !!config;
 
     const [formData, setFormData] = useState({
@@ -74,7 +75,7 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
 
     // ---------------- VALIDATION ----------------
 
-    const validate = (): boolean => {
+    const validate = useCallback((): boolean => {
         const newErrors: Record<string, string> = {};
 
         const nameErr = validateRequired(formData.name, 'Name');
@@ -86,8 +87,19 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
         const portErr = validatePort(Number(formData.port));
         if (portErr) newErrors.port = portErr;
 
+        const usernameErr = validateRequired(formData.username, 'Username');
+        if (usernameErr) newErrors.username = usernameErr;
+
+        if (!isEditing) {
+            const passwordErr = validateRequired(formData.password, 'Password');
+            if (passwordErr) newErrors.password = passwordErr;
+        }
+
         const fromEmailErr = validateEmail(formData.from_email);
         if (fromEmailErr) newErrors.from_email = fromEmailErr;
+
+        const fromNameErr = validateRequired(formData.from_name, 'From Name');
+        if (fromNameErr) newErrors.from_name = fromNameErr;
 
         if (formData.reply_to_email) {
             const replyErr = validateEmail(formData.reply_to_email);
@@ -96,48 +108,64 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
-    };
+    }, [
+        formData.from_email,
+        formData.from_name,
+        formData.host,
+        formData.name,
+        formData.password,
+        formData.port,
+        formData.reply_to_email,
+        formData.username,
+        isEditing,
+    ]);
 
     // ---------------- TEST CONNECTION ----------------
 
     const handleTestConnection = async () => {
         setTestResult(null);
 
-        // 1. Validate basic connection fields
-        if (!formData.host || !formData.port || !formData.username) {
-            setTestResult({ success: false, message: 'Host, Port, and Username are required.' });
-            return;
-        }
+        const canUseSavedConfig = isEditing && config?.id && !formData.password;
 
-        // 2. Validate Password (Required for test, even if editing)
-        if (!formData.password) {
-            setTestResult({ success: false, message: 'Please enter the password to test connection.' });
-            return;
+        if (!canUseSavedConfig) {
+            // Validate basic connection fields for raw test
+            if (!formData.host || !formData.port || !formData.username) {
+                setTestResult({ success: false, message: 'Host, Port, and Username are required.' });
+                return;
+            }
+
+            // Validate Password for raw test
+            if (!formData.password) {
+                setTestResult({ success: false, message: 'Please enter the password to test connection.' });
+                return;
+            }
         }
 
         setIsTesting(true);
 
         try {
-            const payload: CreateSmtpConfigDto = {
-                name: formData.name || 'Test Config',
-                host: formData.host,
-                port: Number(formData.port),
-                username: formData.username,
-                password: formData.password,
-                encryption: formData.encryption,
-                from_email: formData.from_email || 'test@example.com',
-                from_name: formData.from_name,
-                is_active: false
-            };
+            if (canUseSavedConfig && config?.id) {
+                await smtpApi.test({ id: config.id });
+            } else {
+                const payload = {
+                    name: formData.name || 'Test Config',
+                    host: formData.host,
+                    port: Number(formData.port),
+                    username: formData.username,
+                    password: formData.password,
+                    encryption: formData.encryption,
+                    from_email: formData.from_email || 'test@example.com',
+                    from_name: formData.from_name,
+                    is_active: false
+                };
 
-            // Assuming smtpApi has a test method or using a direct call pattern
-            // You might need to add test() to your api service: post('/email/test', payload)
-            await (smtpApi as any).test(payload);
+                await smtpApi.test(payload);
+            }
 
             setTestResult({ success: true, message: 'Connection successful!' });
-        } catch (err: any) {
-            const msg = err.response?.data?.error?.message || err.message || 'Connection failed';
-            setTestResult({ success: false, message: msg });
+        } catch (err: unknown) {
+            const msg = getErrorMessage(err);
+                        setTestResult({ success: false, message: parseApiError(msg) });
         } finally {
             setIsTesting(false);
         }
@@ -145,55 +173,52 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
 
     // ---------------- SUBMIT ----------------
 
-    const handleSubmit = async () => {
-        if (!validate()) return;
+    const handleSubmit = useCallback(async () => {
+        if (!validate()) {
+            scrollToFirstError();
+            return;
+        }
 
         setLoading(true);
 
         try {
-            if (isEditing && config) {
-                const updateData: UpdateSmtpConfigDto = {
-                    version: config.version,
-                    name: formData.name,
-                    host: formData.host,
-                    port: Number(formData.port),
-                    username: formData.username || undefined,
-                    encryption: formData.encryption,
-                    from_email: formData.from_email,
-                    from_name: formData.from_name || undefined,
-                    reply_to_email: formData.reply_to_email || undefined,
-                    is_active: formData.is_active,
-                };
-
-                if (formData.password) {
-                    updateData.password = formData.password;
-                }
-
-                await smtpApi.update(config.id, updateData);
-            } else {
-                const createData: CreateSmtpConfigDto = {
-                    name: formData.name,
-                    host: formData.host,
-                    port: Number(formData.port),
-                    username: formData.username || undefined,
-                    password: formData.password || undefined,
-                    encryption: formData.encryption,
-                    from_email: formData.from_email,
-                    from_name: formData.from_name || undefined,
-                    reply_to_email: formData.reply_to_email || undefined,
-                    is_active: formData.is_active,
-                };
-
-                await smtpApi.create(createData);
+            if (!isEditing || !config) {
+                throw new Error('SMTP configuration creation is not supported by the current backend contract');
             }
+
+            const updateData: UpdateSmtpConfigDto = {
+                version: config.version,
+                name: formData.name,
+                host: formData.host,
+                port: Number(formData.port),
+                username: formData.username || undefined,
+                encryption: formData.encryption,
+                from_email: formData.from_email,
+                from_name: formData.from_name || undefined,
+                reply_to_email: formData.reply_to_email || undefined,
+                is_active: formData.is_active,
+            };
+
+            if (formData.password) {
+                updateData.password = formData.password;
+            }
+
+            await smtpApi.update(config.id, updateData);
 
             onSuccess();
         } catch (err) {
-            onError(err instanceof Error ? err.message : 'Failed to save SMTP config');
+            const raw = err instanceof Error ? err.message : 'Failed to save SMTP config';
+            onError(parseApiError(raw));
         } finally {
             setLoading(false);
         }
-    };
+    }, [config, formData, isEditing, onError, onSuccess, setLoading, validate]);
+
+    useImperativeHandle(ref, () => ({
+        submit: () => {
+            void handleSubmit();
+        },
+    }), [handleSubmit]);
 
     // ---------------- UI ----------------
 
@@ -232,6 +257,7 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
                     label="Username"
                     value={formData.username}
                     onChange={e => handleChange('username', e.target.value)}
+                    error={errors.username}
                     required
                 />
 
@@ -240,8 +266,9 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
                     type="password"
                     value={formData.password}
                     onChange={e => handleChange('password', e.target.value)}
+                    error={errors.password}
                     required={!isEditing}
-                    hint={isEditing ? "Required to Test Connection" : undefined}
+                    hint={isEditing ? "Leave blank to test saved credentials" : undefined}
                 />
             </div>
 
@@ -270,6 +297,7 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
                     label="From Name"
                     value={formData.from_name}
                     onChange={e => handleChange('from_name', e.target.value)}
+                    error={errors.from_name}
                     required
                 />
             </div>
@@ -310,17 +338,12 @@ export function SmtpForm({ config, onSuccess, onError, setLoading }: SmtpFormPro
                     </div>
                 )}
             </div>
+            {isEditing && (
+                <p className="form-help-text">
+                    Leave password blank to test saved credentials. Enter a password to test new values.
+                </p>
+            )}
 
-            <button
-                type="button"
-                id="smtp-form-submit"
-                className="visually-hidden"
-                onClick={handleSubmit}
-            />
         </div>
     );
-}
-
-export function submitSmtpForm() {
-    document.getElementById('smtp-form-submit')?.click();
-}
+});

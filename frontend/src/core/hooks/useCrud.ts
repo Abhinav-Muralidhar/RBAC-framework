@@ -1,6 +1,6 @@
 /**
  * useCrud Hook
- * 
+ *
  * Encapsulates common CRUD operations:
  * - Create/Edit modal management
  * - Delete confirmation modal management
@@ -8,7 +8,8 @@
  * - Toast notifications for success/failure
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import { getErrorMessage } from '../api/errors';
 import { parseApiError } from '../utils';
 
 export interface ToastHandle {
@@ -64,6 +65,7 @@ export function useCrud<T extends { id: string }>({
     const [editingItem, setEditingItem] = useState<T | null>(null);
     const [formLoading, setFormLoading] = useState(false);
     const [editLoading, setEditLoading] = useState(false);
+    const editRequestIdRef = useRef(0);
 
     // Delete modal state
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -74,33 +76,47 @@ export function useCrud<T extends { id: string }>({
 
     // Form modal handlers
     const openCreate = useCallback(() => {
+        editRequestIdRef.current += 1;
         setEditingItem(null);
         setShowFormModal(true);
+        setEditLoading(false);
         clearError();
     }, [clearError]);
 
     const openEdit = useCallback(async (item: T) => {
+        const requestId = ++editRequestIdRef.current;
         clearError();
-        if (getByIdFn) {
-            setEditLoading(true);
-            try {
-                const fullItem = await getByIdFn(item.id);
+        setShowFormModal(true);
+        setEditingItem(item);
+
+        if (!getByIdFn) {
+            setEditLoading(false);
+            return;
+        }
+
+        setEditLoading(true);
+        try {
+            const fullItem = await getByIdFn(item.id);
+            if (requestId === editRequestIdRef.current) {
                 setEditingItem(fullItem);
-            } catch (err) {
-                console.error(`Failed to load ${entityName} details`, err);
+            }
+        } catch (err) {
+            console.error(`Failed to load ${entityName} details`, err);
+            if (requestId === editRequestIdRef.current) {
                 setEditingItem(item); // Fallback to basic data
-            } finally {
+            }
+        } finally {
+            if (requestId === editRequestIdRef.current) {
                 setEditLoading(false);
             }
-        } else {
-            setEditingItem(item);
         }
-        setShowFormModal(true);
     }, [getByIdFn, entityName, clearError]);
 
     const closeForm = useCallback(() => {
+        editRequestIdRef.current += 1;
         setShowFormModal(false);
         setEditingItem(null);
+        setEditLoading(false);
         clearError();
     }, [clearError]);
 
@@ -134,8 +150,8 @@ export function useCrud<T extends { id: string }>({
             toast?.success(`${label} deleted successfully`);
             closeDelete();
             if (onSuccess) onSuccess();
-        } catch (err: any) {
-            const raw = err instanceof Error ? err.message : `Failed to delete ${entityName}`;
+        } catch (err: unknown) {
+            const raw = getErrorMessage(err, `Failed to delete ${entityName}`);
             const friendly = parseApiError(raw);
             setError(friendly);
             toast?.error(friendly);
@@ -165,4 +181,3 @@ export function useCrud<T extends { id: string }>({
         closeDelete,
     };
 }
-

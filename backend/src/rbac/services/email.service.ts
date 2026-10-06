@@ -8,6 +8,12 @@ export interface SendEmailOptions {
     subject: string;
     text?: string;
     html?: string;
+    attachments?: Array<{
+        filename: string;
+        content: string;
+        contentType?: string;
+        encoding?: 'base64';
+    }>;
 }
 
 export class EmailService {
@@ -44,7 +50,9 @@ export class EmailService {
     }
 
     /**
-     * Verify SMTP connectivity (no email sent)
+     * Verify SMTP connectivity using the provided configuration.
+     * No email is sent. Useful for configuration validation.
+     * @throws RBACInternalError if connection fails.
      */
     async verifyConnection(): Promise<void> {
         try {
@@ -56,7 +64,9 @@ export class EmailService {
     }
 
     /**
-     * Send an email
+     * Send an email using the established SMTP transport.
+     * Supports HTML/Text bodies and custom from/reply-to headers.
+     * @throws RBACInternalError if body is missing or send fails.
      */
     async sendMail(
         options: SendEmailOptions,
@@ -78,6 +88,7 @@ export class EmailService {
                 subject: options.subject,
                 text: options.text,
                 html: options.html,
+                attachments: options.attachments,
                 replyTo: configMeta?.reply_to_email ?? configMeta?.from_email ?? 'no-reply@app.com',
             });
         } catch (err: any) {

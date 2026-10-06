@@ -14,8 +14,14 @@ export interface PaginatedResponse<T> {
     error: string | null;
 }
 
+interface RawPaginatedEnvelope<T> {
+    data?: T[];
+    meta?: { pagination?: Pagination };
+    error?: string | null;
+}
+
 export function extractPaginatedData<T>(
-    response: any,
+    response: RawPaginatedEnvelope<T>,
     defaultLimit = 20
 ): PaginatedResponse<T> {
     const data = response?.data ?? [];

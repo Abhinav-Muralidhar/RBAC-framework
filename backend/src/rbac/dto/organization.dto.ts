@@ -72,6 +72,7 @@ export interface OrganizationResponseDto {
     version: number;
     company_name: string;
     company_logo: string;
+    company_logo_file_id: string | null;
     address: string;
     city: string;
     state: string;
@@ -89,7 +90,10 @@ export interface OrganizationResponseDto {
     is_active: boolean;
     created_at: Date;
     created_by: string | null;
+    created_by_name: string | null;
     updated_at: Date | null;
+    updated_by: string | null;
+    updated_by_name: string | null;
 }
 
 export interface OrganizationSummaryDto {

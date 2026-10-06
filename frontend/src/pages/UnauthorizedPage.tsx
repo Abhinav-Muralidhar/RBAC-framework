@@ -4,13 +4,10 @@
  * Displayed when user lacks permission to access a resource.
  */
 
-import { ShieldAlert, ArrowLeft, Mail } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ShieldAlert, Mail } from 'lucide-react';
 import './UnauthorizedPage.css';
 
 export function UnauthorizedPage() {
-    const navigate = useNavigate();
-
     return (
         <div className="unauthorized-page">
             <div className="unauthorized-card">
@@ -29,7 +26,7 @@ export function UnauthorizedPage() {
 
 
                     <a
-                        href="mailto:support@example.com"
+                        href="mailto:support@crescent.com"
                         className="btn btn-secondary"
                     >
                         <Mail size={18} />

@@ -5,12 +5,22 @@
  * Uses in-memory store with automatic cleanup (no Redis required).
  * 
  * Tiers:
- * - Auth: 5 requests per 15 minutes (login, password reset)
+ * - Auth: 100 requests per 15 minutes (login, password reset)
  * - Strict: 20 requests per minute (mutations)
- * - Standard: 100 requests per minute (reads)
+ * - Standard: 1000 requests per minute (reads)
  */
 
 import rateLimit from 'express-rate-limit';
+
+const MS_PER_MINUTE = 60 * 1000;
+const parseLimit = (envVar: string | undefined, fallback: string) => parseInt(envVar ?? fallback, 10);
+const authWindowMs = parseLimit(process.env.RATE_LIMIT_AUTH_WINDOW_MS, '900000'); // 15 minutes
+const authMaxRequests = parseLimit(process.env.RATE_LIMIT_AUTH_MAX, '100');
+const strictWindowMs = parseLimit(process.env.RATE_LIMIT_STRICT_WINDOW_MS, '60000'); // 1 minute
+const strictMaxRequests = parseLimit(process.env.RATE_LIMIT_STRICT_MAX, '20');
+const apiWindowMs = parseLimit(process.env.RATE_LIMIT_API_WINDOW_MS, '60000'); // 1 minute
+const apiMaxRequests = parseLimit(process.env.RATE_LIMIT_API_MAX, '1000');
+const minutesFromWindow = (windowMs: number) => Math.max(1, Math.ceil(windowMs / MS_PER_MINUTE));
 
 /**
  * Standard response envelope for rate limit errors
@@ -28,13 +38,13 @@ const createRateLimitMessage = (retryAfterMinutes: number) => ({
 
 /**
  * Auth rate limiter - for login and password reset
- * Very strict: 5 requests per 15 minutes
- * Prevents brute-force attacks
+ * Controls how often a single IP can attempt to authenticate.
+ * Prevents brute-force attacks (defaults to 100 attempts every 15 minutes).
  */
 export const authLimiter = rateLimit({
-    windowMs: parseInt(process.env.RATE_LIMIT_AUTH_WINDOW_MS || '900000', 10), // 15 minutes
-    max: parseInt(process.env.RATE_LIMIT_AUTH_MAX || '5', 10),
-    message: createRateLimitMessage(15),
+    windowMs: authWindowMs,
+    max: authMaxRequests,
+    message: createRateLimitMessage(minutesFromWindow(authWindowMs)),
     standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
     legacyHeaders: false,  // Disable `X-RateLimit-*` headers
     skipSuccessfulRequests: false,
@@ -43,26 +53,24 @@ export const authLimiter = rateLimit({
 
 /**
  * Strict rate limiter - for mutation operations
- * 20 requests per minute
- * Prevents rapid data manipulation
+ * Prevents rapid data manipulation while still letting valid clients recover.
  */
 export const strictLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 minute
-    max: 20,
-    message: createRateLimitMessage(1),
+    windowMs: strictWindowMs,
+    max: strictMaxRequests,
+    message: createRateLimitMessage(minutesFromWindow(strictWindowMs)),
     standardHeaders: true,
     legacyHeaders: false
 });
 
 /**
  * Standard rate limiter - for read operations
- * 100 requests per minute
- * Fair usage for normal API access
+ * Fair usage for normal API access (configurable per environment).
  */
 export const standardLimiter = rateLimit({
-    windowMs: parseInt(process.env.RATE_LIMIT_API_WINDOW_MS || '60000', 10), // 1 minute
-    max: parseInt(process.env.RATE_LIMIT_API_MAX || '1000', 10),
-    message: createRateLimitMessage(1),
+    windowMs: apiWindowMs,
+    max: apiMaxRequests,
+    message: createRateLimitMessage(minutesFromWindow(apiWindowMs)),
     standardHeaders: true,
     legacyHeaders: false
 });

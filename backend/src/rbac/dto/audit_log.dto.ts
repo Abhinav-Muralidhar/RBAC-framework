@@ -12,12 +12,14 @@ import { AuditAction, AuditStatus } from '../models/audit_logs.model';
 
 export interface AuditLogListFilterDto {
     user_id?: string;
+    user_name?: string;
     action?: AuditAction;
     entity_type?: string;
     entity_id?: string;
     status?: AuditStatus;
     start_date?: Date;
     end_date?: Date;
+    search?: string;
 }
 
 // ============================================================================
@@ -71,8 +73,11 @@ export interface AuditLogSummaryDto {
     id: string;
     action: AuditAction;
     entity_type: string;
+    entity_id: string | null;
     user_name: string | null;    // JOINed for quick reference
+    user_email: string | null;
     status: AuditStatus;
+    ip_address: string;
     created_at: Date;
 }
 

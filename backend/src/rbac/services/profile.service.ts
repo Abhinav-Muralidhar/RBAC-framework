@@ -1,12 +1,12 @@
 /**
- * UnifiedProfileService
- * 
- * Business logic for profile management.
- * All mutating operations require RBAC enforcement.
- * All mutations are audit logged.
+ * ProfileService
+ *
+ * Business logic for profile lifecycle: creation, updates, soft-deletion,
+ * and management of permission assignments within profiles.
+ * All mutating operations are audit-logged.
  */
 import { IDatabase } from 'pg-promise';
-import { TransactionTask } from '../utils/transaction.utils';
+import { TransactionTask } from '../../utils/transaction.utils';
 import { Profiles } from '../models/profiles.model';
 import { IProfilesRepository } from '../repositories/profiles.repository';
 import { IProfilePermissionsRepository } from '../repositories/profile_permissions.repository';
@@ -19,16 +19,22 @@ import {
     DuplicateAssignmentError
 } from '../errors/rbac.errors';
 import { CreateProfileRequestDto, ProfileResponseDto, UpdateProfileRequestDto } from '../dto/profile.dto';
-import { PaginationParams, PaginatedResult } from '../utils/pagination.utils';
+import { PaginationParams, PaginatedResult } from '../../utils/pagination.utils';
+import { assertRequiredString, assertOptionalString, assertCodeFormat, normalizeStringArray } from '../../utils/validators';
 
 // Module code for RBAC operations
 const MODULE_CODE = 'SETTINGS';
 
 export interface IProfileService {
+    /** Retrieve a single profile by ID with its assigned permissions. */
     getById(t: TransactionTask, actingUserId: string, profileId: string): Promise<ProfileResponseDto>
+    /** List profiles with optional active/code filters and pagination. */
     listPaginated(t: TransactionTask, actingUserId: string, filters?: { is_active?: boolean, code?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<Profiles>>;
+    /** Create a new profile and optionally assign permissions to it. */
     create(t: TransactionTask, actingUserId: string, data: CreateProfileRequestDto, auditCtx?: AuditContext): Promise<Profiles>;
+    /** Update a profile's attributes and optionally reassign permissions. */
     update(t: TransactionTask, actingUserId: string, profileId: string, data: UpdateProfileRequestDto, auditCtx?: AuditContext): Promise<Profiles>;
+    /** Soft-delete a profile by setting is_active to false. */
     delete(t: TransactionTask, actingUserId: string, profileId: string, auditCtx?: AuditContext): Promise<void>;
 }
 
@@ -41,6 +47,10 @@ export class ProfileService implements IProfileService {
         private auditService: IAuditService
     ) { }
 
+    /**
+     * Retrieve a single profile with its assigned permissions and audit-field names.
+     * @throws ProfileNotFoundError if the profile does not exist.
+     */
     async getById(t: TransactionTask, actingUserId: string, profileId: string): Promise<ProfileResponseDto> {
 
         const profile = await this.profilesRepository.findByIdWithDetails(t, profileId);
@@ -48,6 +58,7 @@ export class ProfileService implements IProfileService {
         return profile;
     }
 
+    /** List profiles with optional active/code filters and pagination. */
     async listPaginated(
         t: TransactionTask, actingUserId: string,
         filters?: { is_active?: boolean, code?: string },
@@ -56,10 +67,20 @@ export class ProfileService implements IProfileService {
         return this.profilesRepository.findAllPaginated(t, filters, pagination);
     }
 
-    //create profile as well as do thing like update its premissions wiht default allow
+    /**
+     * Create a new profile and optionally assign permissions to it (default effect: allow).
+     * Validates name, code format, and checks for code uniqueness (case-insensitive).
+     * @throws DuplicateAssignmentError if profile code already exists.
+     * @throws PermissionNotFoundError if any permission ID is invalid.
+     */
     async create(t: TransactionTask, actingUserId: string, data: CreateProfileRequestDto, auditCtx?: AuditContext): Promise<Profiles> {
-        const existing = await this.profilesRepository.findAllPaginated(t, { search: data.code as string });
-        if (existing.data.length > 0) throw new DuplicateAssignmentError(`profile code '${data.code}'`);
+        assertRequiredString(data.name, 'Profile name');
+        assertRequiredString(data.code, 'Profile code');
+        assertCodeFormat(data.code, 'Profile code');
+        assertOptionalString(data.description, 'Profile description');
+        const existing = await this.profilesRepository.findAllPaginated(t, { search: data.code });
+        const codeConflict = existing.data.find(p => p.code.toLowerCase() === (data.code as string).toLowerCase());
+        if (codeConflict) throw new DuplicateAssignmentError(`profile code '${data.code}'`);
 
         const profile = await this.profilesRepository.create(t, {
             name: data.name!,
@@ -68,7 +89,7 @@ export class ProfileService implements IProfileService {
             is_active: data.is_active ?? true,
             created_by: actingUserId
         });
-        const perms = data.permission_ids ?? []
+        const perms = normalizeStringArray(data.permission_ids, 'permission_ids');
 
         if (perms.length > 0) {
             const permissions = await this.permissionsRepository.findByIds(t, perms as string[]);
@@ -96,14 +117,29 @@ export class ProfileService implements IProfileService {
 
         return profile;
     }
-    //update the profile along wihtits premissions with default allow
+    /**
+     * Update a profile's attributes and optionally reassign its permissions.
+     * Validates input, checks for code uniqueness on code change.
+     * @throws ProfileNotFoundError if the profile does not exist.
+     * @throws DuplicateAssignmentError if the new code conflicts with another profile.
+     * @throws PermissionNotFoundError if any permission ID is invalid.
+     */
     async update(t: TransactionTask, actingUserId: string, profileId: string, data: UpdateProfileRequestDto, auditCtx?: AuditContext): Promise<Profiles> {
+        if (data.name !== undefined) {
+            assertRequiredString(data.name, 'Profile name');
+        }
+        if (data.code !== undefined) {
+            assertRequiredString(data.code, 'Profile code');
+            assertCodeFormat(data.code, 'Profile code');
+        }
+        assertOptionalString(data.description, 'Profile description');
         const existing = await this.profilesRepository.findById(t, profileId);
         if (!existing) throw new ProfileNotFoundError(profileId);
 
         if (data.code && data.code !== existing.code) {
             const conflict = await this.profilesRepository.findAllPaginated(t, { search: data.code });
-            if (conflict.data.length > 0) throw new DuplicateAssignmentError(`profile code '${data.code}'`);
+            const duplicate = conflict.data.some(profile => profile.id !== profileId && profile.code.toLowerCase() === data.code!.toLowerCase());
+            if (duplicate) throw new DuplicateAssignmentError(`profile code '${data.code}'`);
         }
 
         const prof: Profiles = {
@@ -114,10 +150,11 @@ export class ProfileService implements IProfileService {
             description: data.description ?? null,
             is_active: data.is_active ?? true,
             created_at: existing.created_at,
+            updated_by: actingUserId
         }
 
         const updated = await this.profilesRepository.update(t, profileId, prof);
-        const perms = data.permission_ids ?? []
+        const perms = normalizeStringArray(data.permission_ids, 'permission_ids');
         if (perms.length > 0) {
             const permissions = await this.permissionsRepository.findByIds(t, perms as string[]);
             if (permissions.length !== perms.length) {
@@ -144,6 +181,10 @@ export class ProfileService implements IProfileService {
         return updated;
     }
 
+    /**
+     * Soft-delete a profile by setting is_active to false.
+     * @throws ProfileNotFoundError if the profile does not exist.
+     */
     async delete(t: TransactionTask, actingUserId: string, profileId: string, auditCtx?: AuditContext): Promise<void> {
         const existing = await this.profilesRepository.findById(t, profileId);
         if (!existing) throw new ProfileNotFoundError(profileId);
@@ -156,6 +197,7 @@ export class ProfileService implements IProfileService {
             description: existing.description as string,
             is_active: false,
             created_at: existing.created_at,
+            updated_by: actingUserId
         }
 
         await this.profilesRepository.update(t, profileId, prof);

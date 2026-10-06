@@ -7,7 +7,7 @@ import {
   normalizePaginationParams,
   getPaginationOffset,
   buildPaginatedResult
-} from '../utils/pagination.utils';
+} from '../../utils/pagination.utils';
 import { CreateProfileInput } from '../types/repository.types';
 import { ConcurrentModificationError } from '../errors/rbac.errors';
 
@@ -30,24 +30,35 @@ export interface ProfileDetail {
   created_at: Date;
   created_by: string | null;
   created_by_name: string | null;
+  updated_at: Date | null;
+  updated_by: string | null;
+  updated_by_name: string | null;
 }
 
 export interface IProfilesRepository {
+  /** Insert a new profile row. */
   create(t: ITask<unknown> | undefined, input: CreateProfileInput): Promise<Profiles>;
+  /** Update a profile row with optimistic concurrency (version check). */
   update(t: ITask<unknown> | undefined, id: string, input: Profiles): Promise<Profiles>;
+  /** Fetch a single profile by primary key. */
   findById(t: ITask<unknown> | undefined, id: string): Promise<Profiles | null>;
+  /** Fetch a profile with JOINed audit names and assigned permissions. */
   findByIdWithDetails(t: ITask<unknown> | undefined, id: string): Promise<ProfileDetail | null>;
+  /** List profiles with optional active/search filters and pagination. */
   findAllPaginated(
     t: ITask<unknown> | undefined,
     filters?: { is_active?: boolean; search?: string },
     pagination?: Partial<PaginationParams>
   ): Promise<PaginatedResult<Profiles>>;
+  /** Fetch multiple profiles by an array of IDs. */
   findByIds(t: ITask<unknown> | undefined, ids: string[]): Promise<Profiles[]>;
+  /** Fetch profiles associated with specific roles. */
   findByRoles(t: ITask<unknown> | undefined, roleIds: string[]): Promise<Profiles[]>
 }
 
 export class ProfilesRepository implements IProfilesRepository {
   private tableName = 'profiles';
+  private readonly baseColumns = 'id, version, name, code, description, is_active, created_at, created_by, updated_at, updated_by';
 
   constructor(private db: IDatabase<unknown>) { }
 
@@ -65,14 +76,14 @@ export class ProfilesRepository implements IProfilesRepository {
   ): Promise<Profiles[]> {
     const numericIds = ids.map(id => BigInt(id));
     return (t ?? this.db).any<Profiles>(
-      `SELECT * FROM ${this.tableName} WHERE id = ANY($1::bigint[])`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE id = ANY($1::bigint[])`,
       [numericIds]
     );
   }
 
   async findByRoles(t: ITask<unknown> | undefined, roleIds: string[]): Promise<Profiles[]> {
     return (t ?? this.db).any<Profiles>(
-      `SELECT * FROM ${this.tableName} WHERE id = ANY($1)`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE id = ANY($1)`,
       [roleIds]
     );
   }
@@ -83,7 +94,7 @@ export class ProfilesRepository implements IProfilesRepository {
     id: string
   ): Promise<Profiles | null> {
     return (t ?? this.db).oneOrNone<Profiles>(
-      `SELECT * FROM ${this.tableName} WHERE id = $1`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE id = $1`,
       [id]
     );
   }
@@ -100,14 +111,19 @@ export class ProfilesRepository implements IProfilesRepository {
       role_count: string;
     }>(
       `SELECT 
-        p.*,
+        p.id, p.version, p.name, p.code, p.description, p.is_active, p.created_at, p.created_by, p.updated_at, p.updated_by,
         CASE 
-          WHEN u.id IS NOT NULL THEN TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, ''))
+          WHEN u.id IS NOT NULL THEN u.username
           ELSE NULL
         END AS created_by_name,
+        CASE 
+          WHEN ub.id IS NOT NULL THEN ub.username
+          ELSE NULL
+        END AS updated_by_name,
         (SELECT COUNT(*) FROM role_profiles rp WHERE rp.profile_id = p.id) AS role_count
       FROM ${this.tableName} p
       LEFT JOIN users u ON p.created_by = u.id
+      LEFT JOIN users ub ON p.updated_by = ub.id
       WHERE p.id = $1`,
       [id]
     );
@@ -148,7 +164,10 @@ export class ProfilesRepository implements IProfilesRepository {
       role_count: parseInt(profile.role_count, 10),
       created_at: profile.created_at,
       created_by: profile.created_by ?? null,
-      created_by_name: profile.created_by_name ?? null
+      created_by_name: profile.created_by_name ?? null,
+      updated_at: profile.updated_at ?? null,
+      updated_by: (profile as any).updated_by ?? null,
+      updated_by_name: (profile as any).updated_by_name ?? null
     };
   }
 
@@ -181,7 +200,8 @@ export class ProfilesRepository implements IProfilesRepository {
     );
 
     const data = await this.query<Profiles>(
-      `SELECT * FROM ${this.tableName}
+      `SELECT id,name,code,description,is_active
+       FROM ${this.tableName}
        ${whereClause}
        ORDER BY created_at DESC, id DESC
        LIMIT $${idx} OFFSET $${idx + 1}`,
@@ -197,14 +217,15 @@ export class ProfilesRepository implements IProfilesRepository {
     input: CreateProfileInput
   ): Promise<Profiles> {
     return (t ?? this.db).one<Profiles>(
-      `INSERT INTO ${this.tableName} (name, code, description, is_active, created_by)
-       VALUES ($1, $2, $3, COALESCE($4, true), $5)
+      `INSERT INTO ${this.tableName} (name, code, description, is_active, created_by,updated_by,updated_at)
+       VALUES ($1, $2, $3, COALESCE($4, true), $5,$6,NOW())
        RETURNING *`,
       [
         input.name,
         input.code,
         input.description ?? null,
         input.is_active ?? null,
+        input.created_by ?? null,
         input.created_by ?? null
       ]
     );
@@ -223,8 +244,9 @@ export class ProfilesRepository implements IProfilesRepository {
            is_active = $5,
            created_by = $6,
            updated_at = NOW(),
+           updated_by = $7,
            version = version + 1
-       WHERE id = $1 AND version = $7
+       WHERE id = $1 AND version = $8
        RETURNING *`,
       [
         id,
@@ -233,6 +255,7 @@ export class ProfilesRepository implements IProfilesRepository {
         input.description ?? null,
         input.is_active ?? null,
         input.created_by ?? null,
+        input.updated_by ?? null,
         input.version
       ]
     );

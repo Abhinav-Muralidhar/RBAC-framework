@@ -6,7 +6,7 @@ import {
   normalizePaginationParams,
   getPaginationOffset,
   buildPaginatedResult
-} from '../utils/pagination.utils';
+} from '../../utils/pagination.utils';
 import { CreateRoleInput, UpdateRoleInput } from '../types/repository.types';
 import { ConcurrentModificationError } from '../errors/rbac.errors';
 
@@ -39,29 +39,45 @@ export interface RoleDetail {
   created_at: Date;
   created_by: string | null;
   created_by_name: string | null;  // JOINed: creator's name
+  updated_at: Date | null;
+  updated_by: string | null;
+  updated_by_name: string | null;  // JOINed: updater's name
 }
 
 export interface IRoleRepository {
+  /** Insert a new role row. */
   create(t: ITask<unknown> | undefined, input: CreateRoleInput): Promise<Roles>;
+  /** Update a role row with optimistic concurrency (version check). */
   update(t: ITask<unknown> | undefined, id: string, input: UpdateRoleInput): Promise<Roles>;
+  /** Soft-delete a role (sets is_active = false). */
   delete(t: ITask<unknown> | undefined, id: string): Promise<void>;
+  /** Fetch a single role by primary key. */
   findById(t: ITask<unknown> | undefined, id: string, isActive?: boolean): Promise<Roles | null>;
+  /** Fetch a role with JOINed audit names, parent info, and associated profiles. */
   findByIdWithDetails(t: ITask<unknown> | undefined, id: string): Promise<RoleDetail | null>;
+  /** Look up a role by its unique code. */
   findByCode(t: ITask<unknown> | undefined, code: string, isActive?: boolean): Promise<Roles | null>;
+  /** List roles with optional parent/active/search filters and pagination. */
   findAllPaginated(
     t: ITask<unknown> | undefined,
     filters?: { parent_role_id?: string; is_active?: boolean; search?: string },
     pagination?: Partial<PaginationParams>
   ): Promise<PaginatedResult<Roles>>;
+  /** Walk up the hierarchy and return all ancestor roles (with cycle detection). */
   findAncestors(t: ITask<unknown> | undefined, roleId: string): Promise<Roles[]>;
+  /** Fetch all direct child roles of a given role. */
   findChildRoles(t: ITask<unknown> | undefined, roleId: string): Promise<Roles[]>;
+  /** Build a flat list of all roles suitable for tree construction (with cycle detection). */
   findRoleTree(t: ITask<unknown> | undefined): Promise<Roles[]>;
+  /** Fetch multiple roles by an array of IDs. */
   findByIds(t: ITask<unknown> | undefined, ids: string[]): Promise<Roles[]>;
+  /** Check if a role has any active child roles (used before deletion). */
   hasActiveChildren(t: ITask<unknown> | undefined, roleId: string): Promise<boolean>;
 }
 
 export class RoleRepository implements IRoleRepository {
   private tableName = 'roles';
+  private readonly baseColumns = 'id, version, name, code, description, parent_role_id, is_active, created_at, created_by, updated_at, updated_by';
 
   constructor(private db: IDatabase<unknown>) { }
 
@@ -82,13 +98,13 @@ export class RoleRepository implements IRoleRepository {
     // If `is_active` is not provided, do not filter by it
     if (isActive === undefined) {
       return (t ?? this.db).oneOrNone<Roles>(
-        `SELECT * FROM ${this.tableName} WHERE id = $1`,
+        `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE id = $1`,
         [numericId]
       );
     } else {
       // If `is_active` is provided, include it in the query
       return (t ?? this.db).oneOrNone<Roles>(
-        `SELECT * FROM ${this.tableName} WHERE id = $1 AND is_active = $2`,
+        `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE id = $1 AND is_active = $2`,
         [numericId, isActive]
       );
     }
@@ -99,7 +115,7 @@ export class RoleRepository implements IRoleRepository {
     ids: string[]
   ): Promise<Roles[]> {
     return (t ?? this.db).any<Roles>(
-      `SELECT * FROM ${this.tableName} WHERE id = ANY($1)`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE id = ANY($1)`,
       [ids]
     );
   }
@@ -119,18 +135,23 @@ export class RoleRepository implements IRoleRepository {
       child_role_count: string;
     }>(
       `SELECT 
-        r.*,
+        r.id, r.version, r.name, r.code, r.description, r.parent_role_id, r.is_active, r.created_at, r.created_by, r.updated_at, r.updated_by,
         pr.name AS parent_role_name,
         pr.code AS parent_role_code,
         CASE 
-          WHEN u.id IS NOT NULL THEN COALESCE(u.first_name, '') || ' ' || u.last_name
+          WHEN u.id IS NOT NULL THEN u.username
           ELSE NULL
         END AS created_by_name,
+        CASE 
+          WHEN ub.id IS NOT NULL THEN ub.username
+          ELSE NULL
+        END AS updated_by_name,
         (SELECT COUNT(*) FROM user_roles ur WHERE ur.role_id = r.id) AS user_count,
         (SELECT COUNT(*) FROM roles cr WHERE cr.parent_role_id = r.id AND cr.is_active = true) AS child_role_count
       FROM ${this.tableName} r
       LEFT JOIN ${this.tableName} pr ON r.parent_role_id = pr.id
       LEFT JOIN users u ON r.created_by = u.id
+      LEFT JOIN users ub ON r.updated_by = ub.id
       WHERE r.id = $1`,
       [id]
     );
@@ -162,7 +183,10 @@ export class RoleRepository implements IRoleRepository {
       child_role_count: parseInt(role.child_role_count, 10),
       created_at: role.created_at,
       created_by: role.created_by ?? null,
-      created_by_name: role.created_by_name ?? null
+      created_by_name: role.created_by_name ?? null,
+      updated_at: role.updated_at ?? null,
+      updated_by: (role as any).updated_by ?? null,
+      updated_by_name: (role as any).updated_by_name ?? null
     };
   }
 
@@ -171,8 +195,15 @@ export class RoleRepository implements IRoleRepository {
     code: string,
     isActive?: boolean
   ): Promise<Roles | null> {
+    if (isActive === undefined) {
+      return (t ?? this.db).oneOrNone<Roles>(
+        `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE code = $1`,
+        [code]
+      );
+    }
+
     return (t ?? this.db).oneOrNone<Roles>(
-      `SELECT * FROM ${this.tableName} WHERE code = $1 AND is_active = $2`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE code = $1 AND is_active = $2`,
       [code, isActive]
     );
   }
@@ -211,7 +242,7 @@ export class RoleRepository implements IRoleRepository {
     );
 
     const data = await this.query<Roles>(
-      `SELECT * FROM ${this.tableName}
+      `SELECT id,name,code,description,is_active FROM ${this.tableName}
        ${whereClause}
        ORDER BY created_at DESC, id DESC
        LIMIT $${idx} OFFSET $${idx + 1}`,
@@ -227,7 +258,7 @@ export class RoleRepository implements IRoleRepository {
     roleId: string
   ): Promise<Roles[]> {
     return this.query<Roles>(
-      `SELECT * FROM ${this.tableName} WHERE parent_role_id = $1 AND is_active = true`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE parent_role_id = $1 AND is_active = true`,
       [roleId],
       t
     );
@@ -239,13 +270,17 @@ export class RoleRepository implements IRoleRepository {
   ): Promise<Roles[]> {
     const query = `
       WITH RECURSIVE ancestors AS (
-        SELECT * FROM ${this.tableName} WHERE id = $1 AND is_active = true
+        SELECT ${this.baseColumns}, ARRAY[id] AS path
+        FROM ${this.tableName} WHERE id = $1 AND is_active = true
         UNION ALL
-        SELECT r.* FROM ${this.tableName} r
+        SELECT r.id, r.version, r.name, r.code, r.description, r.parent_role_id, r.is_active, r.created_at, r.created_by, r.updated_at, r.updated_by,
+               a.path || r.id
+        FROM ${this.tableName} r
         INNER JOIN ancestors a ON a.parent_role_id = r.id
         WHERE r.is_active = true
+          AND NOT r.id = ANY(a.path)
       )
-      SELECT * FROM ancestors WHERE id != $1;
+      SELECT id, version, name, code, description, parent_role_id, is_active, created_at, created_by, updated_at, updated_by FROM ancestors WHERE id != $1;
     `;
     return this.query<Roles>(query, [roleId], t);
   }
@@ -255,8 +290,8 @@ export class RoleRepository implements IRoleRepository {
     input: CreateRoleInput
   ): Promise<Roles> {
     return (t ?? this.db).one<Roles>(
-      `INSERT INTO ${this.tableName} (name, code, description, parent_role_id, is_active, created_by)
-       VALUES ($1, $2, $3, $4, COALESCE($5, true), $6)
+      `INSERT INTO ${this.tableName} (name, code, description, parent_role_id, is_active, created_by,updated_by,updated_at)
+       VALUES ($1, $2, $3, $4, COALESCE($5, true), $6,$7,NOW())
        RETURNING *`,
       [
         input.name,
@@ -264,6 +299,7 @@ export class RoleRepository implements IRoleRepository {
         input.description ?? null,
         input.parent_role_id ?? null,
         input.is_active ?? null,
+        input.created_by ?? null,
         input.created_by ?? null
       ]
     );
@@ -282,8 +318,9 @@ export class RoleRepository implements IRoleRepository {
            parent_role_id = $5,
            is_active = $6,
            updated_at = NOW(),
+           updated_by = $7,
            version = version + 1
-       WHERE id = $1 AND version = $7
+       WHERE id = $1 AND version = $8
        RETURNING *`,
       [
         id,
@@ -292,6 +329,7 @@ export class RoleRepository implements IRoleRepository {
         input.description ?? null,
         input.parent_role_id ?? null,
         input.is_active ?? null,
+        input.updated_by ?? null,
         input.version
       ]
     );
@@ -322,7 +360,8 @@ export class RoleRepository implements IRoleRepository {
         r.id,
         r.name,
         r.parent_role_id,
-        0 AS level
+        0 AS level,
+        ARRAY[r.id]::bigint[] AS path
       FROM ${this.tableName} r
       WHERE r.parent_role_id IS NULL
         AND r.is_active = true
@@ -333,12 +372,14 @@ export class RoleRepository implements IRoleRepository {
         r.id,
         r.name,
         r.parent_role_id,
-        rt.level + 1
+        rt.level + 1,
+        rt.path || r.id
       FROM ${this.tableName} r
       JOIN role_tree rt ON r.parent_role_id = rt.id
       WHERE r.is_active = true
+        AND NOT (r.id = ANY(rt.path))
     )
-    SELECT *
+    SELECT id, name, parent_role_id, level
     FROM role_tree
     ORDER BY level, parent_role_id, id;
     `;

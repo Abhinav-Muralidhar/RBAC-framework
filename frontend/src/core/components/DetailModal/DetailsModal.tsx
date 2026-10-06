@@ -7,6 +7,7 @@
 
 import { useEffect, useCallback, useState, type ReactNode } from 'react';
 import { X, AlertCircle } from 'lucide-react';
+import { lockBodyScroll } from '../../../shared/lib/bodyScrollLock';
 import './DetailModal.css';
 
 // ---------- Types ----------
@@ -17,7 +18,7 @@ export interface FieldConfig<T> {
     /** Key on the entity object (supports dot-path for simple access) */
     key: keyof T | string;
     /** Optional custom renderer */
-    render?: (value: any, item: T) => ReactNode;
+    render?: (value: unknown, item: T) => ReactNode;
     /** Hide this field entirely */
     hidden?: boolean;
 }
@@ -36,11 +37,16 @@ export interface DetailsModalProps<T> {
 
 // ---------- Helpers ----------
 
-function getNestedValue(obj: any, path: string): any {
-    return path.split('.').reduce((acc, part) => acc?.[part], obj);
+function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+    return path.split('.').reduce<unknown>((acc, part) => {
+        if (acc && typeof acc === 'object' && part in (acc as Record<string, unknown>)) {
+            return (acc as Record<string, unknown>)[part];
+        }
+        return undefined;
+    }, obj);
 }
 
-function formatValue(value: any): ReactNode {
+function formatValue(value: unknown): ReactNode {
     if (value === null || value === undefined || value === '') return <span className="details-modal__empty">—</span>;
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
     if (value instanceof Date) return value.toLocaleString();
@@ -56,7 +62,7 @@ function formatValue(value: any): ReactNode {
 
 // ---------- Component ----------
 
-export function DetailsModal<T extends Record<string, any>>({
+export function DetailsModal<T extends object>({
     isOpen,
     title,
     entityId,
@@ -66,34 +72,36 @@ export function DetailsModal<T extends Record<string, any>>({
     size = 'md',
 }: DetailsModalProps<T>) {
     const [data, setData] = useState<T | null>(null);
-    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [loadedEntityId, setLoadedEntityId] = useState<string | null>(null);
+    const requestEntityId = entityId === null || entityId === undefined ? null : String(entityId);
+    const loading = isOpen && requestEntityId !== null && loadedEntityId !== requestEntityId && !error;
 
     // Fetch data when modal opens with a valid ID
     useEffect(() => {
-        if (!isOpen || entityId === null || entityId === undefined) {
-            setData(null);
-            setError(null);
+        if (!isOpen || requestEntityId === null) {
             return;
         }
 
         let cancelled = false;
-        setLoading(true);
-        setError(null);
 
-        fetchFn(String(entityId))
+        fetchFn(requestEntityId)
             .then((result) => {
-                if (!cancelled) setData(result);
+                if (!cancelled) {
+                    setData(result);
+                    setError(null);
+                    setLoadedEntityId(requestEntityId);
+                }
             })
-            .catch((err) => {
-                if (!cancelled) setError(err?.message || 'Failed to load details');
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
+            .catch((err: unknown) => {
+                if (!cancelled) {
+                    setError(err instanceof Error ? err.message : 'Failed to load details');
+                    setLoadedEntityId(requestEntityId);
+                }
             });
 
         return () => { cancelled = true; };
-    }, [isOpen, entityId, fetchFn]);
+    }, [fetchFn, isOpen, requestEntityId]);
 
     // ESC to close
     const handleKeyDown = useCallback(
@@ -104,13 +112,16 @@ export function DetailsModal<T extends Record<string, any>>({
     );
 
     useEffect(() => {
-        if (isOpen) {
-            document.addEventListener('keydown', handleKeyDown);
-            document.body.style.overflow = 'hidden';
+        if (!isOpen) {
+            return;
         }
+
+        document.addEventListener('keydown', handleKeyDown);
+        const unlockBodyScroll = lockBodyScroll();
+
         return () => {
             document.removeEventListener('keydown', handleKeyDown);
-            document.body.style.overflow = '';
+            unlockBodyScroll();
         };
     }, [isOpen, handleKeyDown]);
 
@@ -160,7 +171,7 @@ export function DetailsModal<T extends Record<string, any>>({
                     {!loading && !error && data && (
                         <dl className="details-modal__fields">
                             {visibleFields.map((field) => {
-                                const rawValue = getNestedValue(data, field.key as string);
+                                const rawValue = getNestedValue(data as unknown as Record<string, unknown>, field.key as string);
                                 const rendered = field.render
                                     ? field.render(rawValue, data)
                                     : formatValue(rawValue);

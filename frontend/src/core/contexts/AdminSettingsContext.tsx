@@ -4,19 +4,10 @@
  * Global state for the admin settings modal.
  */
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { useState, useCallback, type ReactNode } from 'react';
 import type { SettingsSection } from '../../routes/routes';
 import { SETTINGS_SECTIONS } from '../../routes/routes';
-
-interface AdminSettingsState {
-    isOpen: boolean;
-    activeSection: SettingsSection;
-    openSettings: (section?: SettingsSection) => void;
-    closeSettings: () => void;
-    setActiveSection: (section: SettingsSection) => void;
-}
-
-const AdminSettingsContext = createContext<AdminSettingsState | null>(null);
+import { AdminSettingsContext } from './admin-settings-context';
 
 export function AdminSettingsProvider({ children }: { children: ReactNode }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -46,12 +37,4 @@ export function AdminSettingsProvider({ children }: { children: ReactNode }) {
             {children}
         </AdminSettingsContext.Provider>
     );
-}
-
-export function useAdminSettings() {
-    const context = useContext(AdminSettingsContext);
-    if (!context) {
-        throw new Error('useAdminSettings must be used within an AdminSettingsProvider');
-    }
-    return context;
 }

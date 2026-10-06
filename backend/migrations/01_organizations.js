@@ -26,6 +26,7 @@ exports.up = async function (knex) {
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.bigInteger('created_by').unsigned();
     table.timestamp('updated_at');
+    table.bigInteger('updated_by').unsigned();
     table.index('company_name');
   });
   // Add raw constraints for PostgreSQL

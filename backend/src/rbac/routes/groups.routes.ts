@@ -9,39 +9,29 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { UnifiedGroupService } from '../services/group.service';
 import { EvaluationService } from '../services/evaluation.service';
 import { AuditService, IAuditService } from '../services/audit.service';
-import { parseId, parsePagination } from './_paramUtils';
+import { getOptionalQuery, parseBooleanQuery, parseId, parsePagination, pickAllowedFields } from './_paramUtils';
 import { IDatabase } from 'pg-promise';
 import { requirePermission } from '../middleware/requirePermission.middleware';
-import { TransactionTask, withTransaction } from '../utils/transaction.utils';
-
-/**
- * Standard response envelope
- */
-function sendSuccess<T>(res: Response, data: T, meta?: Record<string, unknown>) {
-    res.json({ data, error: null, meta: meta ?? {} });
-}
-
-function sendError(res: Response, status: number, message: string, code?: string) {
-    res.status(status).json({
-        data: null,
-        error: { message, code: code ?? 'ERROR' },
-        meta: {}
-    });
-}
-function parseFilter(query: any): any {
-    const filter: any = {};
-    if (query.name) filter.name = query.name;
-    // Parse isActive as boolean - frontend sends 'true'/'false' strings
-    if (query.isActive !== undefined) {
-        filter.isActive = query.isActive === 'true';
-    }
-    if (query.code) filter.code = query.code;
-    if (query.search) filter.search = query.search;
+import { TransactionTask, withTransaction } from '../../utils/transaction.utils';
+import { CreateGroupRequestDto, UpdateGroupRequestDto } from '../dto/group.dto';
+import { sendSuccess } from './_response';
+function parseFilter(query: Request['query']): { name?: string; isActive?: boolean; code?: string; search?: string } {
+    const filter: { name?: string; isActive?: boolean; code?: string; search?: string } = {};
+    const name = getOptionalQuery(query, 'name');
+    const isActive = parseBooleanQuery(query, 'isActive');
+    const code = getOptionalQuery(query, 'code');
+    const search = getOptionalQuery(query, 'search');
+    if (name) filter.name = name;
+    if (isActive !== undefined) filter.isActive = isActive;
+    if (code) filter.code = code;
+    if (search) filter.search = search;
     return filter;
 }
 
 export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: EvaluationService, auditService: AuditService, groupService: UnifiedGroupService): Router {
     const router = Router();
+    const createGroupFields = ['name', 'code', 'description', 'is_active', 'role_ids', 'user_ids'] as const;
+    const updateGroupFields = ['version', 'name', 'code', 'description', 'is_active', 'role_ids', 'user_ids'] as const;
 
     /**
      * GET /rbac/groups
@@ -49,7 +39,7 @@ export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: Ev
      */
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
                 const pagination = parsePagination(req.query);
                 const filter = parseFilter(req.query);
@@ -74,22 +64,12 @@ export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: Ev
      */
     router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
                 const groupId = parseId(req.params.id, 'groupId');
-                const group = await groupService.getById(t, req.user!.id, groupId);
-                if (!group) {
-                    const error = new Error(`Group not found: ${groupId}`);
-                    (error as any).code = 'GROUP_NOT_FOUND';
-                    (error as any).status = 404;
-                    throw error;
-                }
-                return group;
+                return groupService.getById(t, req.user!.id, groupId);
             });
             sendSuccess(res, result);
         } catch (error) {
-            if (error.code === 'GROUP_NOT_FOUND') {
-                return sendError(res, 404, error.message, 'GROUP_NOT_FOUND');
-            }
             next(error);
         }
     });
@@ -100,9 +80,10 @@ export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: Ev
      */
     router.post('/', requirePermission('SETTINGS', 'create', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
-                const group = await groupService.create(t, actingUserId, req.body, req.auditContext);
+                const payload = pickAllowedFields<CreateGroupRequestDto, keyof CreateGroupRequestDto>(req.body, createGroupFields);
+                const group = await groupService.create(t, actingUserId, payload as CreateGroupRequestDto, req.auditContext);
                 return group;
             });
             sendSuccess(res, result);
@@ -117,10 +98,11 @@ export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: Ev
      */
     router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
                 const groupId = parseId(req.params.id, 'groupId');
-                const group = await groupService.update(t, actingUserId, groupId, req.body, req.auditContext);
+                const payload = pickAllowedFields<UpdateGroupRequestDto, keyof UpdateGroupRequestDto>(req.body, updateGroupFields);
+                const group = await groupService.update(t, actingUserId, groupId, payload as UpdateGroupRequestDto, req.auditContext);
                 return group;
             });
             sendSuccess(res, result);
@@ -135,7 +117,7 @@ export function createGroupsRouter(db: IDatabase<unknown>, evaluationService: Ev
      */
     router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
                 const actingUserId = req.user!.id;
                 const groupId = parseId(req.params.id, 'groupId');
                 await groupService.delete(t, actingUserId, groupId, req.auditContext);

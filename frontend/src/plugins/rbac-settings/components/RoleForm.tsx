@@ -1,22 +1,23 @@
-import { useState, useEffect, useRef } from 'react';
-import { FormInput, FormSwitch, FormMultiSelect } from '../../../core/components/FormElements';
-import type { MultiSelectOption } from '../../../core/components/FormElements';
+import { forwardRef, useState, useEffect, useCallback, useImperativeHandle } from 'react';
+import { FormInput, FormSwitch, FormMultiSelect, FormSearchSelect } from '../../../core/components/FormElements';
+import type { MultiSelectOption, SearchSelectOption } from '../../../core/components/FormElements';
 import type { Role, CreateRoleDto, UpdateRoleDto } from '../../../core/types/role.types';
 import { rolesApi, profilesApi } from '../../../core/api/rbac.api';
 import { validateRequired, validateCode, scrollToFirstError, parseApiError } from '../../../core/utils';
+import type { RbacFormHandle } from './form.types';
+import { useAsyncSearchOptions } from './useAsyncSearchOptions';
+import './EntityForm.css';
 
 interface RoleFormProps {
     role?: Role | null;
-    initialParentId?: string | null; // Allow null here for strict typing
+    initialParentId?: string | null;
     onSuccess: () => void;
     onError: (error: string) => void;
     setLoading: (loading: boolean) => void;
 }
 
-export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading }: RoleFormProps) {
+export const RoleForm = forwardRef<RbacFormHandle, RoleFormProps>(function RoleForm({ role, initialParentId, onSuccess, onError, setLoading }, ref) {
     const isEditing = !!role;
-    // Add this inside RoleForm
-    const [roleSearchTimer, setRoleSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
     const [formData, setFormData] = useState({
         name: role?.name || '',
         code: role?.code || '',
@@ -25,30 +26,12 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
     });
 
     const [selectedProfiles, setSelectedProfiles] = useState<string[]>(
-        role?.profiles?.map(p => p.id) || []
+        role?.profiles?.map(profile => profile.id) || []
     );
-
-    const [profileOptions, setProfileOptions] = useState<MultiSelectOption[]>([]);
-    const [profileLoading, setProfileLoading] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
-
-    // 1. Initialize with initialParentId if available and not editing
     const [selectedParentRole, setSelectedParentRole] = useState<string>(
         role?.parent_role_id || initialParentId || ''
     );
-
-    const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
-    const [roleSearch, setRoleSearch] = useState('');
-    const [roleSearchLoading, setRoleSearchLoading] = useState(false);
-    const [isSearching, setIsSearching] = useState(false);
-    const [dropdownOpen, setDropdownOpen] = useState(false);
-
-    useEffect(() => {
-        loadProfiles('');
-        loadRoles(''); // Load roles immediately so we can resolve the initialParentId name
-    }, []);
-
-    // Keep form data in sync if 'role' prop changes (Edit mode)
     useEffect(() => {
         if (role) {
             setFormData({
@@ -57,54 +40,61 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
                 description: role.description || '',
                 is_active: role.is_active ?? true,
             });
-            setSelectedProfiles(role.profiles?.map(p => p.id) || []);
+            setSelectedProfiles(role.profiles?.map(profile => profile.id) || []);
         }
     }, [role]);
 
-    // 2. IMPORTANT: Keep Parent Role ID in sync with props
-    // This handles switching between "Edit Role A", "Add Child to B", and "Add Root Role"
     useEffect(() => {
         if (role) {
             setSelectedParentRole(role.parent_role_id || '');
         } else {
-            // In create mode, use the passed parent ID (from tree click) or reset
             setSelectedParentRole(initialParentId || '');
         }
     }, [role, initialParentId]);
 
+    const loadProfiles = useCallback(async (searchQuery: string) => {
+        const { data = [] } = await profilesApi.list({
+            limit: 100,
+            search: searchQuery || undefined,
+            is_active: true,
+        });
+        return data;
+    }, []);
 
-    const loadProfiles = async (searchQuery: string) => {
-        setProfileLoading(true);
-        try {
-            const response = await profilesApi.list({ limit: 100, search: searchQuery || undefined });
-            setProfileOptions(
-                (response.data || []).map(p => ({ value: p.id, label: p.name }))
-            );
-        } catch (err) {
-            console.error('Failed to load profiles', err);
-        } finally {
-            setProfileLoading(false);
-        }
-    };
+    const loadRoles = useCallback(async (searchQuery: string) => {
+        const { data = [] } = await rolesApi.list({
+            limit: 100,
+            search: searchQuery || undefined,
+            is_active: true,
+        });
+        return data.filter((availableRole) => availableRole.id !== role?.id);
+    }, [role?.id]);
 
-    const loadRoles = async (searchQuery: string) => {
-        setRoleSearchLoading(true);
-        try {
-            const response = await rolesApi.list({
-                limit: 100,
-                search: searchQuery || undefined,
-            });
+    const {
+        options: profileOptions,
+        loading: profileLoading,
+        loadOptions: loadProfileOptions,
+    } = useAsyncSearchOptions<{ id: string; name: string }, MultiSelectOption>({
+        loader: loadProfiles,
+        mapOption: (profile) => ({ value: profile.id, label: profile.name }),
+    });
 
-            // prevent self-parenting
-            setAvailableRoles(
-                (response.data || []).filter(r => r.id !== role?.id)
-            );
-        } catch (err) {
-            console.error('Failed to load roles', err);
-        } finally {
-            setRoleSearchLoading(false);
-        }
-    };
+    const {
+        options: parentRoleOptions,
+        loading: roleSearchLoading,
+        loadOptions: loadRoleOptions,
+    } = useAsyncSearchOptions<Role, SearchSelectOption>({
+        loader: loadRoles,
+        mapOption: (parentRole) => ({
+            value: parentRole.id,
+            label: parentRole.name,
+        }),
+    });
+
+    useEffect(() => {
+        void loadProfileOptions('');
+        void loadRoleOptions('');
+    }, [loadProfileOptions, loadRoleOptions]);
 
     const handleChange = (field: string, value: string | boolean) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -113,69 +103,7 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
         }
     };
 
-
-
-    const getParentRoleDisplayValue = () => {
-        if (isSearching) return roleSearch;
-
-        // Find the role in the loaded list
-        if (selectedParentRole) {
-            const parent = availableRoles.find(r => r.id === selectedParentRole);
-            return parent?.name || '';
-        }
-        return '';
-    };
-
-    const handleParentRoleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        setRoleSearch(value);
-        setIsSearching(true);
-
-        if (!value) {
-            setSelectedParentRole('');
-        }
-    };
-
-    const handleParentRoleSelect = (roleId: string) => {
-        setSelectedParentRole(roleId);
-        setRoleSearch('');
-        setIsSearching(false);
-        setDropdownOpen(false);
-    };
-
-    const handleParentRoleInputFocus = () => {
-        setDropdownOpen(true);
-    };
-
-    const handleParentRoleInputBlur = () => {
-        setTimeout(() => {
-            setDropdownOpen(false);
-            setIsSearching(false);
-            setRoleSearch('');
-        }, 200);
-    };
-
-    useEffect(() => {
-        // Clear any existing timer
-        if (roleSearchTimer) clearTimeout(roleSearchTimer);
-
-        // Only search if the user is actively searching (typing)
-        if (isSearching) {
-            const timer = setTimeout(() => {
-                loadRoles(roleSearch);
-            }, 300); // 300ms delay to wait for user to stop typing
-
-            setRoleSearchTimer(timer);
-
-            return () => {
-                if (timer) clearTimeout(timer);
-            };
-        }
-    }, [roleSearch, isSearching]);
-
-    // ---------------- VALIDATION ----------------
-
-    const validate = (): boolean => {
+    const validate = useCallback((): boolean => {
         const newErrors: Record<string, string> = {};
 
         const nameErr = validateRequired(formData.name.trim(), 'Name');
@@ -188,11 +116,9 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
-    };
+    }, [formData.code, formData.name, isEditing]);
 
-    // ---------------- SUBMIT ----------------
-
-    const handleSubmit = async () => {
+    const handleSubmit = useCallback(async () => {
         if (!validate()) {
             scrollToFirstError();
             return;
@@ -202,6 +128,7 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
 
         try {
             const finalParentRoleId = selectedParentRole === '' ? null : selectedParentRole;
+
             if (isEditing && role) {
                 const updateData: UpdateRoleDto = {
                     version: role.version,
@@ -219,7 +146,7 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
                     code: formData.code.trim(),
                     description: formData.description || undefined,
                     profile_ids: selectedProfiles,
-                    parent_role_id: finalParentRoleId || null,
+                    parent_role_id: finalParentRoleId || undefined,
                 };
 
                 await rolesApi.create(createData);
@@ -231,13 +158,16 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
         } finally {
             setLoading(false);
         }
-    };
+    }, [formData.code, formData.description, formData.is_active, formData.name, isEditing, onError, onSuccess, role, selectedParentRole, selectedProfiles, setLoading, validate]);
 
-    // ---------------- UI ----------------
+    useImperativeHandle(ref, () => ({
+        submit: () => {
+            void handleSubmit();
+        },
+    }), [handleSubmit]);
 
     return (
         <div className="entity-form">
-
             <FormInput
                 label="Role Name"
                 value={formData.name}
@@ -272,81 +202,28 @@ export function RoleForm({ role, initialParentId, onSuccess, onError, setLoading
                 onChange={checked => handleChange('is_active', checked)}
             />
 
-            {/* Parent Role Dropdown */}
-            <div className="form-field form-field--relative">
-                <label className="form-label">Parent Role</label>
+            <FormSearchSelect
+                label="Parent Role"
+                placeholder="Select a parent role... (Optional)"
+                value={selectedParentRole}
+                options={parentRoleOptions}
+                onChange={setSelectedParentRole}
+                onSearch={loadRoleOptions}
+                loading={roleSearchLoading}
+                allowClear
+                emptyMessage="No roles found"
+            />
 
-                <input
-                    type="text"
-                    placeholder="Select a parent role... (Optional)"
-                    value={getParentRoleDisplayValue()}
-                    onChange={handleParentRoleInputChange}
-                    onFocus={handleParentRoleInputFocus}
-                    onBlur={handleParentRoleInputBlur}
-                    className="form-input"
-                    autoComplete="off"
-                />
-
-                {dropdownOpen && (
-                    <div className="dropdown-options">
-                        {roleSearchLoading ? (
-                            <div className="dropdown-empty">
-                                Loading...
-                            </div>
-                        ) : (
-                            <>
-                                {availableRoles.map(r => {
-                                    const isSelected = r.id === selectedParentRole;
-                                    const optionClass = [
-                                        'dropdown-option',
-                                        isSelected ? 'dropdown-option--selected' : '',
-                                    ].filter(Boolean).join(' ');
-                                    return (
-                                        <div
-                                            key={r.id}
-                                            className={optionClass}
-                                            onMouseDown={e => {
-                                                e.preventDefault();
-                                                handleParentRoleSelect(r.id);
-                                            }}
-                                        >
-                                            {r.name} {isSelected && '✓'}
-                                        </div>
-                                    );
-                                })}
-
-                                {availableRoles.length === 0 && (
-                                    <div className="dropdown-empty">No roles found</div>
-                                )}
-                            </>
-                        )}
-                    </div>
-                )}
-            </div>
-
-
-            {/* Profiles selection */}
             <FormMultiSelect
                 label="Assign Profiles"
-                placeholder="Search profiles…"
+                placeholder="Search profiles..."
                 options={profileOptions}
                 value={selectedProfiles}
                 onChange={setSelectedProfiles}
-                onSearch={loadProfiles}
+                onSearch={loadProfileOptions}
                 loading={profileLoading}
                 emptyMessage="No profiles available"
             />
-
-            <button
-                type="button"
-                id="role-form-submit"
-                className="visually-hidden"
-                onClick={handleSubmit}
-            />
         </div>
     );
-}
-
-export function submitRoleForm() {
-    document.getElementById('role-form-submit')?.click();
-}
+});

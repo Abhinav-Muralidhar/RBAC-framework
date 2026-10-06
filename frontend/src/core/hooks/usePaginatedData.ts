@@ -1,123 +1,223 @@
 // core/hooks/usePaginatedData.ts
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { PaginatedResponse } from '../api/client';
+
+const LIMIT_OPTIONS = [10, 25, 50];
+
+function normalizeLimit(value: number | undefined | null): number {
+    if (!value) return LIMIT_OPTIONS[0];
+    return LIMIT_OPTIONS.includes(value) ? value : LIMIT_OPTIONS[0];
+}
+
+export type FilterValue = string | number | boolean | undefined;
 
 export interface PaginationParams {
     page?: number;
     limit?: number;
     search?: string;
-    [key: string]: any; // For filters
 }
 
 export interface UsePaginatedDataResult<T> {
     data: T[];
     isLoading: boolean;
+    isInitialLoading: boolean;
+    isPlaceholderData: boolean;
     error: string;
     page: number;
     totalPages: number;
     limit: number;
     total: number;
+    limitOptions: number[];
     searchQuery: string;
-    filters: Record<string, any>;
-    reload: () => void;
+    filters: Record<string, FilterValue>;
+    draftFilters: Record<string, FilterValue>;
+    reload: () => Promise<void>;
     setPage: (page: number) => void;
     setLimit: (limit: number) => void;
     setSearchQuery: (query: string) => void;
-    setFilters: (filters: Record<string, any>) => void;
+    setFilters: (filters: Record<string, FilterValue>) => void;
+    setDraftFilters: (filters: Record<string, FilterValue>) => void;
+    filterModal: {
+        isOpen: boolean;
+        open: () => void;
+        close: () => void;
+        submit: () => void;
+    };
+}
+
+export interface PaginatedSource<T> {
+    fetchFn: (params: PaginationParams & Record<string, FilterValue>) => Promise<PaginatedResponse<T>>;
+    sourceKey: string;
+}
+
+export function createPaginatedSource<T>(
+    sourceKey: string,
+    fetchFn: (params: PaginationParams & Record<string, FilterValue>) => Promise<PaginatedResponse<T>>
+): PaginatedSource<T> {
+    return { fetchFn, sourceKey };
 }
 
 export function usePaginatedData<T>(
-    fetchFn: (params: PaginationParams) => Promise<any>,
+    source: PaginatedSource<T> | ((params: PaginationParams & Record<string, FilterValue>) => Promise<PaginatedResponse<T>>),
     options: {
-        initialLimit?: number;
-        initialFilters?: Record<string, any>;
+        initialFilters?: Record<string, FilterValue>;
         debounceMs?: number;
+        sourceKey?: string;
     } = {}
 ): UsePaginatedDataResult<T> {
-    const { initialLimit = 20, initialFilters = {}, debounceMs = 500 } = options;
+    const { initialFilters = {}, debounceMs = 500, sourceKey } = options;
+    const fetchFn = typeof source === 'function' ? source : source.fetchFn;
+    const resolvedSourceKey = sourceKey ?? (typeof source === 'function' ? undefined : source.sourceKey);
+    const queryClient = useQueryClient();
 
-    const [data, setData] = useState<T[]>([]);
+    const limitOptions = [...LIMIT_OPTIONS];
+    const defaultLimit = LIMIT_OPTIONS[0];
+
     const [page, setPage] = useState(1);
-    const [limit, setLimit] = useState(initialLimit);
-    const [totalPages, setTotalPages] = useState(1);
-    const [total, setTotal] = useState(0);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState('');
-
+    const [limit, setLimitState] = useState(defaultLimit);
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [filters, setFilters] = useState<Record<string, any>>(initialFilters);
+    const [filters, setFilters] = useState<Record<string, FilterValue>>(initialFilters);
+    const [draftFilters, setDraftFilters] = useState<Record<string, FilterValue>>(initialFilters);
+    const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
-    // Track if search change should reset page
-    const isFirstRender = useRef(true);
+    const activeFilterEntries = useMemo(
+        () =>
+            Object.entries(filters)
+                .filter(([, value]) => value !== undefined)
+                .sort(([left], [right]) => left.localeCompare(right)),
+        [filters]
+    );
 
-    // Debounce search query
-    useEffect(() => {
-        if (isFirstRender.current) {
-            isFirstRender.current = false;
-            return;
-        }
-        const timer = setTimeout(() => {
-            setDebouncedSearch(searchQuery);
-            setPage(1); // Reset to page 1 on search change
-        }, debounceMs);
-        return () => clearTimeout(timer);
-    }, [searchQuery, debounceMs]);
+    const queryKeyBase = useMemo(
+        () => ['rbac', resolvedSourceKey ?? 'paginated'] as const,
+        [resolvedSourceKey]
+    );
 
-    const loadData = useCallback(async () => {
-        setIsLoading(true);
-        setError('');
-        try {
-            const params: PaginationParams = {
+    const queryKey = useMemo(
+        () => [...queryKeyBase, page, limit, debouncedSearch, activeFilterEntries] as const,
+        [queryKeyBase, page, limit, debouncedSearch, activeFilterEntries]
+    );
+
+    const query = useQuery<PaginatedResponse<T>, Error>({
+        queryKey,
+        queryFn: () =>
+            fetchFn({
                 page,
                 limit,
                 search: debouncedSearch || undefined,
-                ...filters
-            };
-            const response = await fetchFn(params);
+                ...filters,
+            }),
+        placeholderData: keepPreviousData,
+        staleTime: 30_000,
+        refetchOnWindowFocus: false,
+        retry: 1,
+    });
 
-            const { data: responseData = [], meta } = response;
-            const pagination = meta ?? {
-                page: 1,
-                limit,
-                total: responseData.length,
-                totalPages: 1,
-            };
-
-            setData(responseData);
-            setTotalPages(pagination.totalPages || 1);
-            setTotal(pagination.total || 0);
-            setPage(pagination.page ?? page);
-            setLimit(pagination.limit ?? limit);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load data');
-        } finally {
-            setIsLoading(false);
-        }
-    }, [fetchFn, page, limit, debouncedSearch, filters]);
+    const responseData = query.data?.data ?? [];
+    const pagination = query.data?.meta ?? {
+        page,
+        limit,
+        total: responseData.length,
+        totalPages: 1,
+    };
 
     useEffect(() => {
-        loadData();
-    }, [loadData]);
+        if (!query.data) {
+            return;
+        }
 
-    const handleSetFilters = useCallback((newFilters: Record<string, any>) => {
+        const nextPage = pagination.page + 1;
+        if (nextPage > pagination.totalPages) {
+            return;
+        }
+
+        void queryClient.prefetchQuery({
+            queryKey: [...queryKeyBase, nextPage, limit, debouncedSearch, activeFilterEntries] as const,
+            queryFn: () =>
+                fetchFn({
+                    page: nextPage,
+                    limit,
+                    search: debouncedSearch || undefined,
+                    ...filters,
+                }),
+            staleTime: 30_000,
+        });
+    }, [activeFilterEntries, debouncedSearch, fetchFn, limit, pagination.page, pagination.totalPages, query.data, queryClient, queryKeyBase, filters]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchQuery);
+            setPage(1);
+        }, debounceMs);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery, debounceMs]);
+
+    const handleSetFilters = useCallback((newFilters: Record<string, FilterValue>) => {
         setFilters(newFilters);
-        setPage(1); // Reset to page 1 on filter change
+        setPage(1);
     }, []);
 
+    const applyFilters = useCallback(() => {
+        setFilters(draftFilters);
+        setPage(1);
+    }, [draftFilters]);
+
+    const resetDraftFilters = useCallback(() => {
+        setDraftFilters(filters);
+    }, [filters]);
+
+    const openFilterModal = useCallback(() => {
+        resetDraftFilters();
+        setIsFilterModalOpen(true);
+    }, [resetDraftFilters]);
+
+    const closeFilterModal = useCallback(() => {
+        setIsFilterModalOpen(false);
+    }, []);
+
+    const submitFilterModal = useCallback(() => {
+        applyFilters();
+        setIsFilterModalOpen(false);
+    }, [applyFilters]);
+
+    const handleSetLimit = useCallback((nextLimit: number) => {
+        const normalized = normalizeLimit(nextLimit);
+        setLimitState(normalized);
+        setPage(1);
+    }, []);
+
+    const reload = useCallback(async () => {
+        await queryClient.invalidateQueries({ queryKey: queryKeyBase });
+    }, [queryClient, queryKeyBase]);
+
     return {
-        data,
-        isLoading,
-        error,
+        data: responseData,
+        isLoading: query.isFetching,
+        isInitialLoading: query.isPending,
+        isPlaceholderData: query.isPlaceholderData,
+        error: query.error?.message ?? '',
         page,
-        totalPages,
+        totalPages: pagination.totalPages || 1,
         limit,
-        total,
+        total: pagination.total || 0,
+        limitOptions,
         searchQuery,
         filters,
-        reload: loadData,
+        draftFilters,
+        reload,
         setPage,
-        setLimit,
+        setLimit: handleSetLimit,
         setSearchQuery,
-        setFilters: handleSetFilters
+        setFilters: handleSetFilters,
+        setDraftFilters,
+        filterModal: {
+            isOpen: isFilterModalOpen,
+            open: openFilterModal,
+            close: closeFilterModal,
+            submit: submitFilterModal
+        }
     };
 }

@@ -16,10 +16,7 @@ export interface LoginRequest {
     password: string;
 }
 
-export interface LoginResponse {
-    user: User;
-    message: string;
-}
+export type LoginResponse = User;
 
 export interface SessionResponse {
     id: string;
@@ -58,17 +55,11 @@ export const authApi = {
     /* ---------------- OTP ---------------- */
 
     sendOtp: async (email: string): Promise<void> => {
-        await apiClient.post('/auth/otp/send', { email });
+        await apiClient.post('/public/otp/send', { email });
     },
 
     verifyOtp: async (email: string, otp: string): Promise<void> => {
-        await apiClient.post('/auth/otp/verify', { email, otp });
-    },
-
-    /* ---------------- PASSWORD RESET FLOW ---------------- */
-
-    forgotPassword: async (email: string): Promise<void> => {
-        await apiClient.post('/auth/forgot-password', { email });
+        await apiClient.post('/public/otp/verify', { email, otp });
     },
 
     resetPassword: async (
@@ -76,32 +67,10 @@ export const authApi = {
         otp: string,
         newPassword: string
     ): Promise<void> => {
-        await apiClient.post('/auth/reset-password', {
+        await apiClient.post('/public/otp/password/reset', {
             email,
             otp,
             newPassword,
-        });
-    },
-
-    /* ---------------- PROFILE SECURITY ---------------- */
-
-    changePassword: async (
-        otp: string,
-        newPassword: string
-    ): Promise<void> => {
-        await apiClient.post('/auth/change-password', {
-            otp,
-            newPassword,
-        });
-    },
-
-    changeEmail: async (
-        otp: string,
-        newEmail: string
-    ): Promise<void> => {
-        await apiClient.post('/auth/change-email', {
-            otp,
-            newEmail,
         });
     },
 

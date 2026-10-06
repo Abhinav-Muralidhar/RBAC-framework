@@ -1,13 +1,11 @@
 /**
  * PermissionService
- * 
- * Business logic for permission management and profile-permission assignments.
- * 
- * Permission CRUD, profile-permission assignments, role-profile assignments
- * 
- * All mutating operations require RBAC enforcement.
+ *
+ * Business logic for permission CRUD, profile-permission assignments,
+ * and role-profile associations.
+ * All mutating operations are audit-logged.
  */
-import { TransactionTask } from '../utils/transaction.utils';
+import { TransactionTask } from '../../utils/transaction.utils';
 import { Permissions, PermissionAction } from '../models/permissions.model';
 import { Profiles } from '../models/profiles.model';
 import { PermissionEffect } from '../models/profile_permissions.model';
@@ -30,25 +28,41 @@ import {
     UpdatePermissionRequestDto
 } from '../dto/permission.dto';
 import { IAuditService } from './audit.service';
+import { assertRequiredString, assertOptionalString, assertInEnum } from '../../utils/validators';
 
 // Module code for RBAC operations
 const MODULE_CODE = 'SETTINGS';
 
 export interface IPermissionService {
+    /** Retrieve a single permission by ID. */
     getPermissionById(t: TransactionTask, actingUserId: string, permissionId: string): Promise<Permissions>;
+    /** Retrieve a permission by module code and action (e.g. SETTINGS:read). */
     getPermissionByModuleAction(t: TransactionTask, actingUserId: string, moduleCode: string, action: PermissionAction): Promise<Permissions>;
+    /** List all permissions belonging to a specific module. */
     listPermissionsByModule(t: TransactionTask, actingUserId: string, moduleCode: string): Promise<Permissions[]>;
-    listAllPermissions(t: TransactionTask, actingUserId: string, filters?: { module_id?: string; action?: PermissionAction; }): Promise<Permissions[]>;
+    /** List all permissions with optional filters (module, action, active status). */
+    listAllPermissions(t: TransactionTask, actingUserId: string, filters?: {
+        module_id?: string;
+        module_ids?: string[];
+        action?: PermissionAction;
+        actions?: PermissionAction[];
+        is_active?: boolean;
+    }): Promise<Permissions[]>;
+    /** Create a new permission for a module/action combination. */
     createPermission(t: TransactionTask, actingUserId: string, data: CreatePermissionRequestDto): Promise<Permissions>;
+    /** Update a permission's description or active status. */
     updatePermission(t: TransactionTask, actingUserId: string, permissionId: string, data: UpdatePermissionRequestDto): Promise<Permissions>;
+    /** Hard-delete a permission. */
     deletePermission(t: TransactionTask, actingUserId: string, permissionId: string): Promise<void>;
 
-    // Profile-Permission assignments (links between profiles and permissions)
+    /** Get all permissions assigned to a profile, each with its effect (allow/deny). */
     getProfilePermissions(t: TransactionTask, actingUserId: string, profileId: string): Promise<Array<{ permission: Permissions; effect: PermissionEffect }>>;
 
-    // Role-Profile assignments (links between roles and profiles)
+    /** Bulk-assign profiles to a role, replacing any existing assignments. */
     assignProfilesToRole(t: TransactionTask, actingUserId: string, profileIds: string[], roleId: string, auditCtx?: AuditContext): Promise<void>;
+    /** Remove a single profile from a role. */
     revokeProfileFromRole(t: TransactionTask, actingUserId: string, profileId: string, roleId: string, auditCtx?: AuditContext): Promise<void>;
+    /** Get all profiles currently assigned to a role. */
     getRoleProfiles(t: TransactionTask, actingUserId: string, roleId: string): Promise<Profiles[]>;
 }
 
@@ -64,6 +78,10 @@ export class PermissionService implements IPermissionService {
         private auditService: IAuditService,
     ) { }
 
+    /**
+     * Retrieve a single permission by its ID.
+     * @throws PermissionNotFoundError if permission does not exist.
+     */
     async getPermissionById(t: TransactionTask, actingUserId: string, permissionId: string): Promise<Permissions> {
 
         const permission = await this.permissionsRepository.findById(t, permissionId);
@@ -73,6 +91,12 @@ export class PermissionService implements IPermissionService {
         return permission;
     }
 
+    /**
+     * Retrieve a permission by module code + action (e.g. 'SETTINGS' + 'read').
+     * Resolves the module by code first, then finds the matching permission.
+     * @throws ModuleNotFoundError if module code is invalid.
+     * @throws PermissionNotFoundError if no permission exists for the module/action.
+     */
     async getPermissionByModuleAction(t: TransactionTask, actingUserId: string, moduleCode: string, action: PermissionAction): Promise<Permissions> {
         const module = await this.moduleRepository.findByCode(t, moduleCode);
         if (!module) {
@@ -87,6 +111,10 @@ export class PermissionService implements IPermissionService {
         return permission;
     }
 
+    /**
+     * List all permissions belonging to a specific module (resolved by code).
+     * @throws ModuleNotFoundError if module code is invalid.
+     */
     async listPermissionsByModule(t: TransactionTask, actingUserId: string, moduleCode: string): Promise<Permissions[]> {
 
         const module = await this.moduleRepository.findByCode(t, moduleCode);
@@ -94,15 +122,30 @@ export class PermissionService implements IPermissionService {
             throw new ModuleNotFoundError(moduleCode);
         }
 
-        const allPermissions = await this.permissionsRepository.findAll(t);
-        return allPermissions.filter(p => p.module_id === module.id);
+        return this.permissionsRepository.findAll(t, { module_id: module.id });
     }
 
-    async listAllPermissions(t: TransactionTask, actingUserId: string, filters?: { module_id?: string; action?: PermissionAction; }): Promise<Permissions[]> {
+    /** List all permissions with optional module/action/active filters. */
+    async listAllPermissions(t: TransactionTask, actingUserId: string, filters?: {
+        module_id?: string;
+        module_ids?: string[];
+        action?: PermissionAction;
+        actions?: PermissionAction[];
+        is_active?: boolean;
+    }): Promise<Permissions[]> {
         return this.permissionsRepository.findAll(t, filters);
     }
 
+    /**
+     * Create a new permission for a module/action pair.
+     * Validates the module exists and checks for duplicate module/action.
+     * @throws ModuleNotFoundError if the module is invalid.
+     * @throws DuplicateAssignmentError if the action already exists for this module.
+     */
     async createPermission(t: TransactionTask, actingUserId: string, data: CreatePermissionRequestDto): Promise<Permissions> {
+        assertRequiredString(data.module_id, 'Module ID');
+        assertInEnum(data.action, ['create', 'read', 'update', 'delete', 'export'], 'Action');
+        assertOptionalString(data.description, 'Description');
 
 
         const module = await this.moduleRepository.findById(t, data.module_id);
@@ -129,12 +172,17 @@ export class PermissionService implements IPermissionService {
         });
     }
 
+    /**
+     * Update a permission's description or active status.
+     * @throws PermissionNotFoundError if permission does not exist.
+     */
     async updatePermission(
         t: TransactionTask,
         actingUserId: string,
         permissionId: string,
         data: UpdatePermissionRequestDto
     ): Promise<Permissions> {
+        assertOptionalString(data.description, 'Description');
 
 
         const existing = await this.permissionsRepository.findById(t, permissionId);
@@ -152,6 +200,10 @@ export class PermissionService implements IPermissionService {
         return this.permissionsRepository.update(t, permissionId, da);
     }
 
+    /**
+     * Hard-delete a permission.
+     * @throws PermissionNotFoundError if permission does not exist.
+     */
     async deletePermission(t: TransactionTask, actingUserId: string, permissionId: string): Promise<void> {
         const existing = await this.permissionsRepository.findById(t, permissionId);
         if (!existing) {
@@ -170,15 +222,17 @@ export class PermissionService implements IPermissionService {
         const profilePermissions =
             await this.profilePermissionsRepository.findPermissionsByProfile(t, profileId);
 
-        const result: Array<{ permission: Permissions; effect: PermissionEffect }> = [];
+        if (profilePermissions.length === 0) return [];
 
+        const permIds = profilePermissions.map(pp => pp.permission_id);
+        const permissions = await this.permissionsRepository.findByIds(t, permIds);
+        const permMap = new Map(permissions.map(p => [p.id, p]));
+
+        const result: Array<{ permission: Permissions; effect: PermissionEffect }> = [];
         for (const pp of profilePermissions) {
-            const permission = await this.permissionsRepository.findById(
-                t,
-                pp.permission_id
-            );
+            const permission = permMap.get(pp.permission_id);
             if (permission) {
-                result.push({ permission, effect: pp.effect });
+                result.push({ permission: permission as unknown as Permissions, effect: pp.effect });
             }
         }
         return result;
@@ -188,6 +242,12 @@ export class PermissionService implements IPermissionService {
     // Role-Profile Assignments
     // ===================================
 
+    /**
+     * Bulk-assign profiles to a role.
+     * Validates that both the role and all profiles exist.
+     * @throws RoleNotFoundError if the role does not exist.
+     * @throws ProfileNotFoundError if any profile ID is invalid.
+     */
     async assignProfilesToRole(
         t: TransactionTask,
         actingUserId: string,
@@ -224,6 +284,11 @@ export class PermissionService implements IPermissionService {
         })
     }
 
+    /**
+     * Remove a single profile from a role.
+     * @throws ProfileNotFoundError if the profile does not exist.
+     * @throws RoleNotFoundError if the role does not exist.
+     */
     async revokeProfileFromRole(
         t: TransactionTask,
         actingUserId: string,
@@ -266,17 +331,10 @@ export class PermissionService implements IPermissionService {
         const roleProfiles =
             await this.roleProfilesRepository.findProfilesByRole(t, roleId);
 
-        const profiles: Profiles[] = [];
+        if (roleProfiles.length === 0) return [];
 
-        for (const rp of roleProfiles) {
-            const profile = await this.profilesRepository.findById(
-                t,
-                rp.profile_id
-            );
-            if (profile) {
-                profiles.push(profile);
-            }
-        }
+        const profileIds = roleProfiles.map(rp => rp.profile_id);
+        const profiles = await this.profilesRepository.findByIds(t, profileIds);
 
         return profiles;
     }

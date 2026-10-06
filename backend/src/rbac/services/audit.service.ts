@@ -1,29 +1,30 @@
 /**
  * AuditService
- * 
+ *
  * Business logic for audit logging with encryption at rest.
  * - Encrypts all fields before persistence
  * - Decrypts all fields when fetching
- * - Resolves user/role/module names via separate lookups after decryption
+ * - Resolves user/role/module names after decryption
  */
 
 import { AuditAction, AuditStatus } from '../models/audit_logs.model';
 import { IAuditLogsRepository } from '../repositories/audit_logs.repository';
-import { PaginatedResult, PaginationParams } from '../utils/pagination.utils';
+import { PaginatedResult, PaginationParams } from '../../utils/pagination.utils';
 import { IEvaluationService } from './evaluation.service';
-import { TransactionTask } from '../utils/transaction.utils';
+import { TransactionTask } from '../../utils/transaction.utils';
 import { IModuleRepository } from '../repositories/modules.repository';
 import { IUsersRepository } from '../repositories/users.repository';
 import { IRoleRepository } from '../repositories/roles.repository';
 import {
-    DecryptedAuditLogRow,
-    decryptAuditLogRow,
-} from '../utils/crypto.utils';
+    computeLogHmac,
+    decryptLogListRow,
+    decryptLogRow,
+    getLogHmacFilters,
+} from '../../utils/crypto.utils';
+import { DecryptedAuditLogListRow, DecryptedAuditLogRow } from '../types/repository.types';
+import { AuditLogSummaryDto, AuditLogResponseDto } from '../dto/audit_log.dto';
 
 export interface IAuditService {
-    /**
-     * Log an action (encrypts all fields before persistence)
-     */
     log(
         t: TransactionTask | undefined,
         data: {
@@ -42,36 +43,34 @@ export interface IAuditService {
         }
     ): Promise<void>;
 
-    /**
-     * Get audit log by ID (decrypts + resolves names)
-     */
     getById(
         t: TransactionTask | undefined,
         actingUserId: string,
         logId: string
     ): Promise<DecryptedAuditLogRow>;
 
-    /**
-     * Query audit logs (decrypts + resolves names, paginated)
-     */
     getAll(
         t: TransactionTask | undefined,
         actingUserId: string,
-        pagination?: Partial<PaginationParams>
-    ): Promise<PaginatedResult<DecryptedAuditLogRow>>;
+        pagination?: Partial<PaginationParams>,
+        filters?: { action?: string; entity_type?: string; user_id?: string; user_name?: string; search?: string }
+    ): Promise<PaginatedResult<AuditLogSummaryDto>>;
+
+    getAllDetailed(
+        t: TransactionTask | undefined,
+        actingUserId: string,
+        pagination?: Partial<PaginationParams>,
+        filters?: { action?: string; entity_type?: string; user_id?: string; user_name?: string; search?: string }
+    ): Promise<PaginatedResult<AuditLogResponseDto>>;
 }
 
-/**
- * AuditService Implementation
- */
 export class AuditService implements IAuditService {
-
     constructor(
         private readonly auditLogsRepository: IAuditLogsRepository,
-        private evaluationService: IEvaluationService,
-        private modulesRepository: IModuleRepository,
-        private usersRepository: IUsersRepository,
-        private rolesRepository: IRoleRepository,
+        private readonly evaluationService: IEvaluationService,
+        private readonly modulesRepository: IModuleRepository,
+        private readonly usersRepository: IUsersRepository,
+        private readonly rolesRepository: IRoleRepository,
     ) { }
 
     async log(
@@ -96,7 +95,6 @@ export class AuditService implements IAuditService {
             data.module_code as string
         );
 
-        // Build strict input — encryption happens in the repository layer
         const input = {
             action: data.action,
             module_id: module?.id ?? null,
@@ -124,81 +122,171 @@ export class AuditService implements IAuditService {
             throw new Error(`Audit log not found: ${logId}`);
         }
 
-        // Decrypt
-        const decrypted = decryptAuditLogRow(encryptedRow);
-
-        // Resolve names
-        await this.resolveNames(t, decrypted);
-
-        return decrypted;
+        const decrypted = decryptLogRow(encryptedRow);
+        // Hydrate null name fields
+        const hydrated = {
+            ...decrypted,
+            user_name: null,
+            user_email: null,
+            role_name: null,
+            module_name: null,
+            module_code: null,
+        };
+        await this.hydrateLogRows(t, [hydrated]);
+        return hydrated;
     }
 
     async getAll(
         t: TransactionTask | undefined,
         actingUserId: string,
-        pagination?: Partial<PaginationParams>
-    ): Promise<PaginatedResult<DecryptedAuditLogRow>> {
-        const result = await this.auditLogsRepository.findAll(t, pagination);
+        pagination?: Partial<PaginationParams>,
+        filters?: { action?: string; entity_type?: string; user_id?: string; user_name?: string; search?: string }
+    ): Promise<PaginatedResult<AuditLogSummaryDto>> {
+        const hmacFilters = getLogHmacFilters(filters as any);
 
-        // Decrypt all rows and resolve names
-        const decryptedRows: DecryptedAuditLogRow[] = [];
-        for (const encryptedRow of result.data) {
-            const decrypted = decryptAuditLogRow(encryptedRow);
-            await this.resolveNames(t, decrypted);
-            decryptedRows.push(decrypted);
+        if (filters?.search) {
+            const searchUserHmacs = await this.resolveUserHmacs(t, filters.search);
+            hmacFilters.search_user_hmacs = [...(hmacFilters.search_user_hmacs ?? []), ...searchUserHmacs];
         }
 
+        if (filters?.user_name) {
+            const userNameHmacs = await this.resolveUserHmacs(t, filters.user_name);
+            hmacFilters.search_user_hmacs = [...(hmacFilters.search_user_hmacs ?? []), ...userNameHmacs];
+        }
+
+        const result = await this.auditLogsRepository.findAll(t, pagination, hmacFilters);
+
+        const decrypted = result.data.map((encryptedRow) => {
+            const dec = decryptLogListRow(encryptedRow);
+            return {
+                ...dec,
+                user_name: null,
+                user_email: null,
+            };
+        });
+        await this.hydrateLogRows(t, decrypted);
+
         return {
-            data: decryptedRows,
+            data: decrypted.map((row) => ({
+                id: row.id,
+                action: row.action as AuditAction,
+                entity_type: row.entity_type,
+                entity_id: row.entity_id,
+                user_name: row.user_name,
+                user_email: row.user_email,
+                status: row.status as AuditStatus,
+                ip_address: row.ip_address,
+                created_at: row.created_at,
+            })),
             pagination: result.pagination,
         };
     }
 
-    /**
-     * Resolve user_name, user_email, role_name, module_name, module_code
-     * by looking up the decrypted IDs against their respective repositories.
-     * Mutates the row in place.
-     */
-    private async resolveNames(
+    async getAllDetailed(
         t: TransactionTask | undefined,
-        row: DecryptedAuditLogRow
+        actingUserId: string,
+        pagination?: Partial<PaginationParams>,
+        filters?: { action?: string; entity_type?: string; user_id?: string; user_name?: string; search?: string }
+    ): Promise<PaginatedResult<AuditLogResponseDto>> {
+        const hmacFilters = getLogHmacFilters(filters as any);
+
+        if (filters?.search) {
+            const searchUserHmacs = await this.resolveUserHmacs(t, filters.search);
+            hmacFilters.search_user_hmacs = [...(hmacFilters.search_user_hmacs ?? []), ...searchUserHmacs];
+        }
+
+        if (filters?.user_name) {
+            const userNameHmacs = await this.resolveUserHmacs(t, filters.user_name);
+            hmacFilters.search_user_hmacs = [...(hmacFilters.search_user_hmacs ?? []), ...userNameHmacs];
+        }
+
+        const result = await this.auditLogsRepository.findAllDetailed(t, pagination, hmacFilters);
+
+        const decrypted = result.data.map((encryptedRow) => {
+            const dec = decryptLogRow(encryptedRow);
+            return {
+                ...dec,
+                user_name: null,
+                user_email: null,
+                role_name: null,
+                module_name: null,
+                module_code: null,
+            };
+        });
+        await this.hydrateLogRows(t, decrypted);
+
+        return {
+            data: decrypted.map((row) => ({
+                id: row.id,
+                user_id: row.user_id,
+                user_name: row.user_name,
+                user_email: row.user_email,
+                role_id: row.role_id,
+                role_name: row.role_name,
+                action: row.action as AuditAction,
+                module_id: row.module_id ?? '',
+                module_name: row.module_name,
+                module_code: row.module_code,
+                entity_type: row.entity_type,
+                entity_id: row.entity_id ?? '',
+                old_values: row.old_values,
+                new_values: row.new_values,
+                ip_address: row.ip_address,
+                user_agent: row.user_agent,
+                status: row.status as AuditStatus,
+                created_at: row.created_at,
+            })),
+            pagination: result.pagination,
+        };
+    }
+
+    private async hydrateLogRows(
+        t: TransactionTask | undefined,
+        rows: Array<any>
     ): Promise<void> {
-        // Resolve user
-        if (row.user_id) {
-            try {
-                const user = await this.usersRepository.findById(t as any, row.user_id);
+        const userIds = [...new Set(rows.map((row) => row.user_id).filter((value): value is string => Boolean(value)))];
+        const roleIds = [...new Set(rows.map((row) => row.role_id).filter((value): value is string => Boolean(value)))];
+        const moduleIds = [...new Set(rows.map((row) => row.module_id).filter((value): value is string => Boolean(value)))];
+
+        const [users, roles, modules] = await Promise.all([
+            this.usersRepository.findByIds(t as any, userIds),
+            this.rolesRepository.findByIds(t, roleIds),
+            this.modulesRepository.findByIds(t, moduleIds)
+        ]);
+
+        const userMap = new Map(users.map((user) => [user.id, user] as const));
+        const roleMap = new Map(roles.map((role) => [role.id, role] as const));
+        const moduleMap = new Map(modules.map((module) => [module.id, module] as const));
+
+        for (const row of rows) {
+            if (row.user_id) {
+                const user = userMap.get(row.user_id);
                 if (user) {
                     row.user_name = [user.first_name, user.last_name].filter(Boolean).join(' ');
                     row.user_email = user.primary_email;
                 }
-            } catch {
-                // User may have been deleted — leave null
             }
-        }
 
-        // Resolve role
-        if (row.role_id) {
-            try {
-                const role = await this.rolesRepository.findById(t, row.role_id);
+            if (row.role_id) {
+                const role = roleMap.get(row.role_id);
                 if (role) {
                     row.role_name = role.name;
                 }
-            } catch {
-                // Role may have been deleted — leave null
             }
-        }
 
-        // Resolve module
-        if (row.module_id) {
-            try {
-                const mod = await this.modulesRepository.findById(t, row.module_id);
-                if (mod) {
-                    row.module_name = mod.name;
-                    row.module_code = mod.code;
+            if (row.module_id) {
+                const module = moduleMap.get(row.module_id);
+                if (module) {
+                    row.module_name = module.name;
+                    row.module_code = module.code;
                 }
-            } catch {
-                // Module may have been deleted — leave null
             }
         }
+    }
+
+    private async resolveUserHmacs(t: TransactionTask | undefined, search: string): Promise<string[]> {
+        const users = await this.usersRepository.findAllPaginated(t as any, { search }, { limit: 100 });
+        const hmacs = users.data.map((user) => computeLogHmac(user.id));
+        return hmacs.length > 0 ? hmacs : ['__NO_MATCH__'];
     }
 }

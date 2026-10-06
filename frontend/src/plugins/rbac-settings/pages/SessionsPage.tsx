@@ -6,7 +6,8 @@ import { format } from 'date-fns';
 import { useModal } from '../../../core/hooks';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { FormModal } from '../../../core/components/FormModal';
-import { usePaginatedData } from '../../../core/hooks/usePaginatedData';
+import { createPaginatedSource, usePaginatedData } from '../../../core/hooks/usePaginatedData';
+import { RbacPageSkeleton } from '../components/RbacPageSkeleton';
 import './SettingsPage.css';
 
 export function SessionsPage() {
@@ -21,15 +22,18 @@ export function SessionsPage() {
         error: listError,
         page,
         totalPages,
+        limit,
+        limitOptions,
         setPage,
         searchQuery,
         setSearchQuery,
         filters,
-        setFilters,
-        reload
-    } = usePaginatedData<Session>(sessionsApi.getAll, { initialLimit: 10 });
-
-    const [showFilterModal, setShowFilterModal] = useState(false);
+        draftFilters,
+        setDraftFilters,
+        filterModal,
+        reload,
+        setLimit
+    } = usePaginatedData<Session>(createPaginatedSource('sessions', sessionsApi.getAll));
 
     const handleRevoke = async () => {
         if (!revokeModal.data) return;
@@ -38,7 +42,7 @@ export function SessionsPage() {
             await sessionsApi.revoke(revokeModal.data.id);
             revokeModal.close();
             reload();
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Failed to revoke session:', err);
         } finally {
             setRevokeLoading(false);
@@ -52,7 +56,7 @@ export function SessionsPage() {
             await sessionsApi.revokeAllByUser(revokeAllModal.data.user_id);
             revokeAllModal.close();
             reload();
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Failed to revoke all sessions:', err);
         } finally {
             setRevokeLoading(false);
@@ -70,47 +74,46 @@ export function SessionsPage() {
 
     return (
         <div className="settings-page">
-            <header className="page-header">
-                <div>
-                    <h1>User Sessions</h1>
-                    <p>Manage active sessions and security</p>
-                </div>
-            </header>
-
-            <div className="page-toolbar">
-                <div className="search-box">
-                    <Search size={18} />
-                    <input
-                        type="text"
-                        placeholder="Search by username or IP..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
-                <button
-                    className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setShowFilterModal(true)}
-                >
-                    <Filter size={18} /> Filter
-                    {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
-                </button>
-            </div>
-
-            {listError && (
-                <div className="error-banner">
-                    {listError}
-                </div>
-            )}
-
-            {isLoading ? (
-                <div className="loading-state">Loading sessions...</div>
+            {isLoading && sessions.length === 0 ? (
+                <RbacPageSkeleton columns={7} rows={4} showActionButton={false} />
             ) : (
                 <>
+                    <header className="page-header">
+                        <div>
+                            <h1>User Sessions</h1>
+                            <p>Manage active sessions and security</p>
+                        </div>
+                    </header>
+
+                    <div className="page-toolbar">
+                        <div className="search-box">
+                            <Search size={18} />
+                            <input
+                                type="text"
+                                placeholder="Search by username or IP..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+                        <button
+                            className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={filterModal.open}
+                        >
+                            <Filter size={18} /> Filter
+                            {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
+                        </button>
+                    </div>
+
+                    {listError && (
+                        <div className="error-banner">
+                            {listError}
+                        </div>
+                    )}
+
                     <div className="data-table-wrapper">
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>Session ID</th>
                                     <th>User</th>
                                     <th>IP Address</th>
                                     <th>User Agent</th>
@@ -123,9 +126,7 @@ export function SessionsPage() {
                             <tbody>
                                 {sessions.map(session => (
                                     <tr key={session.id}>
-                                        <td data-label="Session ID">
-                                            <code>{session.id.slice(0, 8)}</code>
-                                        </td>
+
                                         <td data-label="User" title={session.user_id}>
                                             {session.username ?? session.user_id}
                                         </td>
@@ -159,7 +160,7 @@ export function SessionsPage() {
                                 ))}
                                 {sessions.length === 0 && (
                                     <tr>
-                                        <td colSpan={8} className="empty-state">No sessions found</td>
+                                        <td colSpan={7} className="empty-state">No sessions found</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -167,6 +168,18 @@ export function SessionsPage() {
                     </div>
 
                     <div className="pagination">
+                        <div className="page-size">
+                            <label className="form-label">Rows</label>
+                            <select
+                                className="form-control"
+                                value={limit}
+                                onChange={(e) => setLimit(Number(e.target.value))}
+                            >
+                                {limitOptions.map((option) => (
+                                    <option key={option} value={option}>{option}</option>
+                                ))}
+                            </select>
+                        </div>
                         <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
                         <span>Page {page} of {totalPages}</span>
                         <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
@@ -199,10 +212,10 @@ export function SessionsPage() {
 
             {/* Filter Modal Placeholder */}
             <FormModal
-                isOpen={showFilterModal}
+                isOpen={filterModal.isOpen}
                 title="Filter Sessions"
-                onSubmit={() => setShowFilterModal(false)}
-                onCancel={() => setShowFilterModal(false)}
+                onSubmit={filterModal.submit}
+                onCancel={filterModal.close}
                 size="sm"
             >
                 <div className="filter-form">
@@ -210,9 +223,9 @@ export function SessionsPage() {
                         <label className="form-label">Session Status</label>
                         <select
                             className="form-control"
-                            value={filters.isActive === undefined ? '' : filters.isActive.toString()}
-                            onChange={(e) => setFilters({
-                                ...filters,
+                            value={draftFilters.isActive === undefined ? '' : draftFilters.isActive.toString()}
+                            onChange={(e) => setDraftFilters({
+                                ...draftFilters,
                                 isActive: e.target.value === '' ? undefined : e.target.value === 'true'
                             })}
                         >
@@ -221,12 +234,11 @@ export function SessionsPage() {
                             <option value="false">Expired/Revoked Only</option>
                         </select>
                     </div>
-                    {Object.keys(filters).filter(k => filters[k] !== undefined).length > 0 && (
+                    {Object.keys(draftFilters).filter(k => draftFilters[k] !== undefined).length > 0 && (
                         <button
                             className="btn btn-text filter-clear"
                             onClick={() => {
-                                setFilters({});
-                                setShowFilterModal(false);
+                                setDraftFilters({});
                             }}
                         >
                             Clear All Filters

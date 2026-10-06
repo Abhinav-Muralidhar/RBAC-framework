@@ -34,6 +34,11 @@ export interface SharingRuleResponseDto {
     is_active: boolean;
     created_at: Date;
     created_by: string | null;
+    created_by_name: string | null;
+    updated_at: Date | null;
+    updated_by: string | null;
+    updated_by_name: string | null;
+    module_name: string | null;
 }
 
 export interface SharingRuleSummaryDto {

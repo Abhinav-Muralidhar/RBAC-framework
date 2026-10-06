@@ -15,7 +15,10 @@ exports.up = async function (knex) {
         table.string('from_email').notNullable();
         table.string('from_name').notNullable();
         table.string('reply_to_email').nullable();
+        table.timestamp('created_at').defaultTo(knex.fn.now()).notNullable();
+        table.bigInteger('created_by').unsigned().nullable().references('id').inTable('users').onDelete('SET NULL');
         table.timestamp('updated_at').nullable();
+        table.bigInteger('updated_by').unsigned().nullable().references('id').inTable('users').onDelete('SET NULL');
         table.integer('version').notNullable().defaultTo(1);
         table.index('name');
     })

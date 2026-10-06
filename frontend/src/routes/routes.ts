@@ -11,6 +11,7 @@ export const ROUTES = {
 
     // App routes
     DASHBOARD: '/dashboard',
+    PROFILE: '/profile',
     UNAUTHORIZED: '/unauthorized',
 
     // Settings (modal, not a route)
@@ -27,14 +28,14 @@ export const ROUTES = {
 
 // Settings sections for the modal
 export const SETTINGS_SECTIONS = {
+    ORGANIZATIONS: 'organizations',
     USERS: 'users',
-    SESSIONS: 'sessions',
     ROLES: 'roles',
     PROFILES: 'profiles',
     GROUPS: 'groups',
-    ORGANIZATIONS: 'organizations',
-    AUDIT_LOGS: 'audit-logs',
     SHARING_RULES: 'sharing-rules',
+    SESSIONS: 'sessions',
+    AUDIT_LOGS: 'audit-logs',
     SMTP: 'smtp',
 } as const;
 

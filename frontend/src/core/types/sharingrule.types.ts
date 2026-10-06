@@ -9,6 +9,11 @@ export type SharingRule = {
     created_at: string;
     created_by: number;
     name: string;
+    updated_at: string | null;
+    updated_by: string | null;
+    module_name: string | null;
+    created_by_name: string | null;
+    updated_by_name: string | null;
 };
 
 // For creating a new sharing rule

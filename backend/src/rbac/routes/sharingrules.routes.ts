@@ -13,39 +13,23 @@ import { SharingRuleService } from '../services/sharingRule.service';
 import { EvaluationService } from '../services/evaluation.service';
 import { AuditService } from '../services/audit.service';
 import { requirePermission } from '../middleware/requirePermission.middleware';
-import { parseId, parsePagination } from './_paramUtils';
-import { TransactionTask, withTransaction } from '../utils/transaction.utils';
-
-/* -------------------------------------------------------------------------- */
-/* Response helpers                                                            */
-/* -------------------------------------------------------------------------- */
-
-function sendSuccess<T>(res: Response, data: T, meta?: Record<string, unknown>) {
-    res.json({ data, error: null, meta: meta ?? {} });
-}
-
-function sendError(res: Response, status: number, message: string, code?: string) {
-    res.status(status).json({
-        data: null,
-        error: { message, code: code ?? 'ERROR' },
-        meta: {}
-    });
-}
+import { parseBooleanQuery, parseId, parsePagination, pickAllowedFields } from './_paramUtils';
+import { TransactionTask, withTransaction } from '../../utils/transaction.utils';
+import { UpdateSharingRuleRequestDto } from '../dto/sharing-rule.dto';
+import { sendSuccess } from './_response';
 
 /* -------------------------------------------------------------------------- */
 /* Filters                                                                     */
 /* -------------------------------------------------------------------------- */
 
-function parseFilter(query: any): { is_active?: boolean } {
-    const filter: { is_active?: boolean } = {};
-    if (query.is_active !== undefined) {
-        filter.is_active = query.is_active === 'true';
-    }
-    return filter;
+function parseFilter(query: Request['query']): { is_active?: boolean } {
+    const isActive = parseBooleanQuery(query, 'is_active');
+    return isActive === undefined ? {} : { is_active: isActive };
 }
 
 export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: AuditService, evaluationService: EvaluationService, sharingRuleService: SharingRuleService): Router {
     const router = Router();
+    const updateSharingRuleFields = ['version', 'rule_type', 'is_active'] as const;
 
     /* -------------------------------------------------------------------------- */
     /* GET /rbac/sharing-rules                                                     */
@@ -55,7 +39,7 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
         requirePermission('SETTINGS', 'read', evaluationService, auditService),
         async (req: Request, res: Response, next: NextFunction) => {
             try {
-                const result = await withTransaction(async (t: TransactionTask) => {
+                const result = await withTransaction(db, async (t: TransactionTask) => {
                     const actingUserId = req.user!.id;
                     const pagination = parsePagination(req.query);
                     const filters = parseFilter(req.query);
@@ -88,7 +72,7 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
         requirePermission('SETTINGS', 'read', evaluationService, auditService),
         async (req: Request, res: Response, next: NextFunction) => {
             try {
-                const result = await withTransaction(async (t: TransactionTask) => {
+                const result = await withTransaction(db, async (t: TransactionTask) => {
                     const ruleId = parseId(req.params.id, 'sharingRuleId');
                     const rule = await sharingRuleService.getById(t, req.user!.id, ruleId);
                     return rule;
@@ -109,14 +93,15 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
         requirePermission('SETTINGS', 'update', evaluationService, auditService),
         async (req: Request, res: Response, next: NextFunction) => {
             try {
-                const result = await withTransaction(async (t: TransactionTask) => {
+                const result = await withTransaction(db, async (t: TransactionTask) => {
                     const actingUserId = req.user!.id;
                     const ruleId = parseId(req.params.id, 'sharingRuleId');
+                    const payload = pickAllowedFields<UpdateSharingRuleRequestDto, keyof UpdateSharingRuleRequestDto>(req.body, updateSharingRuleFields);
 
                     const updated = await sharingRuleService.update(t,
                         actingUserId,
                         ruleId,
-                        req.body,
+                        payload as UpdateSharingRuleRequestDto,
                         req.auditContext
                     );
                     return updated;
@@ -136,7 +121,7 @@ export function createSharingRulesRouter(db: IDatabase<unknown>, auditService: A
         requirePermission('SETTINGS', 'delete', evaluationService, auditService),
         async (req: Request, res: Response, next: NextFunction) => {
             try {
-                const result = await withTransaction(async (t: TransactionTask) => {
+                const result = await withTransaction(db, async (t: TransactionTask) => {
                     const actingUserId = req.user!.id;
                     const ruleId = parseId(req.params.id, 'sharingRuleId');
                     await sharingRuleService.delete(t, actingUserId, ruleId, req.auditContext);

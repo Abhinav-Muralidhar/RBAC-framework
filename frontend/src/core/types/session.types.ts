@@ -6,7 +6,6 @@ export interface Session {
     id: string;
     user_id: string;
     username?: string | null;
-    session_token: string;
     ip_address: string;
     user_agent: string;
     login_at: Date;

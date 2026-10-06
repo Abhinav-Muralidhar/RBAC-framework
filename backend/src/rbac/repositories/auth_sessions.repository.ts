@@ -7,26 +7,42 @@ import {
   normalizePaginationParams,
   getPaginationOffset,
   buildPaginatedResult
-} from '../utils/pagination.utils';
+} from '../../utils/pagination.utils';
 
 export type TransactionTask = ITask<unknown>;
 
 export interface IAuthSessionsRepository {
+  /** Insert a new authentication session row. */
   create(t: TransactionTask | undefined, data: CreateAuthSessionInput): Promise<AuthSessions>;
+  /** Fetch a session by its primary ID. */
   findById(t: TransactionTask | undefined, sessionId: string): Promise<AuthSessions | null>;
+  /** Fetch a session by its unique token. */
   findBySessionToken(t: TransactionTask | undefined, sessionToken: string): Promise<AuthSessions | null>;
+  /** Fetch a valid active session by token in one query. */
+  findValidBySessionToken(t: TransactionTask | undefined, sessionToken: string): Promise<AuthSessions | null>;
+  /** Update session details (e.g. extension, logout timestamp). */
   update(t: TransactionTask | undefined, sessionId: string, data: AuthSessions): Promise<AuthSessions>;
-  delete(t: TransactionTask | undefined, sessionId: string, actingUserId: string): Promise<void>;
+  /** Hard-delete a session. */
+  delete(t: TransactionTask | undefined, sessionId: string): Promise<void>;
+  /** List all sessions (active and inactive) for a specific user with pagination. */
   findAllByUser(t: TransactionTask | undefined, userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
+  /** List only non-expired, non-logged-out sessions for a user with pagination. */
   findActiveByUser(t: TransactionTask | undefined, userId: string, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessions>>;
+  /** Count active sessions for a user. */
+  countActiveByUser(t: TransactionTask | undefined, userId: string): Promise<number>;
+  /** Revoke/delete all sessions for a specific user. */
   deleteAllByUser(t: TransactionTask | undefined, userId: string): Promise<void>;
+  /** List sessions system-wide with optional user/active/search filters and pagination. */
   findAll(t: TransactionTask | undefined, filters?: { userId?: string; isActive?: boolean; search?: string }, pagination?: Partial<PaginationParams>): Promise<PaginatedResult<AuthSessionWithUsername>>;
+  /** Batch delete sessions that have passed their expiration time. */
   deleteExpired(t: TransactionTask | undefined): Promise<void>;
+  /** Revoke a specific session for a user. */
   deleteOneForUser(t: TransactionTask | undefined, sessionId: string, userId: string, actingUserId: string): Promise<void>;
 }
 
 export class AuthSessionsRepository implements IAuthSessionsRepository {
   private tableName = 'auth_sessions';
+  private readonly baseColumns = 'id, user_id, session_token, expires_at, ip_address, user_agent, login_at, logout_at';
 
   constructor(private db: IDatabase<unknown>) { }
 
@@ -36,7 +52,7 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
 
   async findById(t: TransactionTask | undefined, sessionId: string): Promise<AuthSessions | null> {
     const rows = await this.getTask(t).any<AuthSessions>(
-      `SELECT * FROM ${this.tableName} WHERE id = $1`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE id = $1`,
       [sessionId]
     );
     return rows[0] ?? null;
@@ -44,10 +60,21 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
 
   async findBySessionToken(t: TransactionTask | undefined, sessionToken: string): Promise<AuthSessions | null> {
     const rows = await this.getTask(t).any<AuthSessions>(
-      `SELECT * FROM ${this.tableName} WHERE session_token = $1`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE session_token = $1`,
       [sessionToken]
     );
     return rows[0] ?? null;
+  }
+
+  async findValidBySessionToken(t: TransactionTask | undefined, sessionToken: string): Promise<AuthSessions | null> {
+    return this.getTask(t).oneOrNone<AuthSessions>(
+      `SELECT ${this.baseColumns}
+       FROM ${this.tableName}
+       WHERE session_token = $1
+         AND logout_at IS NULL
+         AND expires_at > NOW()`,
+      [sessionToken]
+    );
   }
 
   async create(t: TransactionTask | undefined, data: CreateAuthSessionInput): Promise<AuthSessions> {
@@ -85,12 +112,12 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     return row;
   }
 
-  async delete(t: TransactionTask | undefined, sessionId: string, actingUserId: string): Promise<void> {
+  async delete(t: TransactionTask | undefined, sessionId: string): Promise<void> {
     await this.getTask(t).none(
       `UPDATE ${this.tableName} 
        SET logout_at = NOW(), expires_at = NOW() 
        WHERE id = $1`,
-      [sessionId, actingUserId]
+      [sessionId]
     );
   }
 
@@ -132,7 +159,7 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     );
 
     const rows = await task.any<AuthSessions>(
-      `SELECT * FROM ${this.tableName}
+      `SELECT ${this.baseColumns} FROM ${this.tableName}
        WHERE user_id = $1
        ORDER BY login_at DESC, id DESC
        LIMIT $2 OFFSET $3`,
@@ -161,7 +188,7 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
     );
 
     const rows = await task.any<AuthSessions>(
-      `SELECT * FROM ${this.tableName}
+      `SELECT ${this.baseColumns} FROM ${this.tableName}
        WHERE user_id = $1
          AND logout_at IS NULL
          AND expires_at > NOW()
@@ -175,6 +202,18 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
       parseInt(totalRes.count ?? '0', 10),
       p
     );
+  }
+
+  async countActiveByUser(t: TransactionTask | undefined, userId: string): Promise<number> {
+    const result = await this.getTask(t).one<{ count: string }>(
+      `SELECT COUNT(*) FROM ${this.tableName}
+       WHERE user_id = $1
+         AND logout_at IS NULL
+         AND expires_at > NOW()`,
+      [userId]
+    );
+
+    return parseInt(result.count ?? '0', 10);
   }
 
   async findAll(
@@ -222,7 +261,7 @@ export class AuthSessionsRepository implements IAuthSessionsRepository {
 
     // Fetch with filters and pagination
     const rows = await task.any<AuthSessionWithUsername>(
-      `SELECT s.*, u.username FROM ${this.tableName} s
+      `SELECT s.id, s.user_id, s.expires_at, s.ip_address, s.user_agent, s.login_at, s.logout_at, u.username FROM ${this.tableName} s
        LEFT JOIN users u ON s.user_id = u.id
        ${whereClause}
        ORDER BY s.login_at DESC

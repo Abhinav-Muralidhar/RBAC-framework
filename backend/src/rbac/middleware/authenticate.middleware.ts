@@ -4,7 +4,7 @@
  * SINGLE SOURCE OF TRUTH for Request Context.
  * 
  * Responsibilities:
- * 1. Read 'sessionId' cookie (HTTP Only)
+ * 1. Read 'sessionToken' cookie (HTTP Only)
  * 2. Resolve Session via AuthSessionService (Global Lookup)
  * 3. Populate req.user = { id, sessionId }
  * 4. Fail Closed on any error
@@ -12,6 +12,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { IAuthSessionService } from '../services/authSession.service';
+import { unauthorized } from '../errors/api.errors';
 
 // Session TTL for sliding expiration (24 hours)
 const SESSION_EXTEND_MS = 24 * 60 * 60 * 1000;
@@ -28,22 +29,12 @@ export function createAuthenticateMiddleware(authSessionService: IAuthSessionSer
             const sessionToken = req.signedCookies['sessionToken'];
 
             if (!sessionToken || sessionToken === false) {
-                res.status(401).json({
-                    error: 'Unauthorized',
-                    message: 'Authentication required',
-                    code: 'AUTH_REQUIRED'
-                });
-                return;
+                return next(unauthorized('Authentication required', 'AUTH_REQUIRED'));
             }
             const session = await authSessionService.resolveSession(undefined, sessionToken);
 
             if (!session) {
-                res.status(401).json({
-                    error: 'Unauthorized',
-                    message: 'Invalid or expired session',
-                    code: 'INVALID_SESSION'
-                });
-                return;
+                return next(unauthorized('Invalid or expired session', 'INVALID_SESSION'));
             }
 
             req.user = {
@@ -64,11 +55,7 @@ export function createAuthenticateMiddleware(authSessionService: IAuthSessionSer
                 console.error('Authentication Failed:', error);
             }
 
-            res.status(401).json({
-                error: 'Unauthorized',
-                message: 'Invalid or expired session',
-                code: 'INVALID_SESSION'
-            });
+            return next(unauthorized('Invalid or expired session', 'INVALID_SESSION'));
         }
     };
 }
@@ -84,23 +71,13 @@ export function createRequireActiveSessionMiddleware(authSessionService: IAuthSe
         try {
             // Must have user from authenticate middleware
             if (!req.user?.sessionId) {
-                res.status(401).json({
-                    error: 'Unauthorized',
-                    message: 'No session context',
-                    code: 'NO_SESSION'
-                });
-                return;
+                return next(unauthorized('No session context', 'NO_SESSION'));
             }
 
             // Check if session is still active (not logged out, not expired)
             const isActive = await authSessionService.isValid(undefined, req.user.sessionId);
             if (!isActive) {
-                res.status(401).json({
-                    error: 'Session expired',
-                    message: 'Your session has expired. Please log in again.',
-                    code: 'SESSION_EXPIRED'
-                });
-                return;
+                return next(unauthorized('Your session has expired. Please log in again.', 'SESSION_EXPIRED'));
             }
 
             // Extend session expiry by 24 hours (sliding expiration)
@@ -111,11 +88,7 @@ export function createRequireActiveSessionMiddleware(authSessionService: IAuthSe
 
         } catch (error) {
             console.error('Session validation failed:', error);
-            res.status(401).json({
-                error: 'Unauthorized',
-                message: 'Session validation failed',
-                code: 'SESSION_CHECK_FAILED'
-            });
+            return next(unauthorized('Session validation failed', 'SESSION_CHECK_FAILED'));
         }
     };
 }

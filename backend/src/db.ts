@@ -1,19 +1,45 @@
 import pgPromise from 'pg-promise';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import { config } from './config';
 
 const pgp = pgPromise({ capSQL: true });
 
-export const db = pgp(
-    process.env.DATABASE_URL ?? {
-        host: process.env.DB_HOST ?? 'localhost',
-        port: Number(process.env.DB_PORT ?? 5432),
-        database: process.env.DB_NAME ?? 'rbac_db',
-        user: process.env.DB_USER ?? 'postgres',
-        password: process.env.DB_PASSWORD ?? 'postgres',
-        max: Number(process.env.DB_POOL_SIZE ?? 20),
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000
+const getDbConfig = () => {
+  if (config.db.url) {
+    let connectionString = config.db.url;
+    if (config.db.ssl && connectionString.includes('?')) {
+      // Strip query parameters to prevent pg from overriding our custom ssl config object
+      connectionString = connectionString.split('?')[0] || connectionString;
     }
-);
+
+    const connParams: any = {
+      connectionString,
+      max: config.db.poolSize,
+      idleTimeoutMillis: config.db.idleTimeoutMs,
+      connectionTimeoutMillis: config.db.connectionTimeoutMs,
+    };
+    if (config.db.ssl) {
+      connParams.ssl = { rejectUnauthorized: false };
+    }
+    return connParams;
+  }
+
+  const connParams: any = {
+    host: config.db.host,
+    port: config.db.port,
+    database: config.db.database,
+    user: config.db.user,
+    password: config.db.password,
+    max: config.db.poolSize,
+    idleTimeoutMillis: config.db.idleTimeoutMs,
+    connectionTimeoutMillis: config.db.connectionTimeoutMs,
+  };
+  if (config.db.ssl) {
+    connParams.ssl = { rejectUnauthorized: false };
+  }
+  return connParams;
+};
+
+// pg-promise handles the connection string or object.
+export const db = pgp(getDbConfig());
+
+

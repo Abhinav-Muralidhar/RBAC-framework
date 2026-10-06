@@ -6,12 +6,11 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { randomUUID } from 'node:crypto';
 
 export function injectAuditContext() {
     return (req: Request, _res: Response, next: NextFunction): void => {
         req.auditContext = {
-            request_id: randomUUID(),
+            request_id: req.requestId ?? 'unknown',
             user_id: req.user?.id ?? null,
             session_id: req.user?.sessionId ?? null,
             ip_address: req.ip ?? req.socket.remoteAddress ?? 'unknown',

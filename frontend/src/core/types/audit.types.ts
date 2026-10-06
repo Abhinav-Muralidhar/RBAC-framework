@@ -32,6 +32,7 @@ export interface AuditLog {
 
 export interface AuditLogListFilterDto {
     user_id?: string;
+    user_name?: string;
     action?: AuditAction;
     entity_type?: string;
     entity_id?: string;
@@ -51,7 +52,10 @@ export interface AuditLogSummaryDto {
     id: string;
     action: AuditAction;
     entity_type: string;
+    entity_id: string | null;
     user_name: string | null;
+    user_email: string | null;
     status: AuditStatus;
-    created_at: Date;
+    ip_address: string;
+    created_at: string;
 }

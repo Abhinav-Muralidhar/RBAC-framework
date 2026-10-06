@@ -3,16 +3,25 @@ import { Modules } from '../models/modules.model';
 import { CreateModuleInput } from '../types/repository.types';
 
 export interface IModuleRepository {
-  findAll(t?: ITask<unknown>): Promise<Modules[]>;
+  /** List all modules with optional code array or active status filters. */
+  findAll(t?: ITask<unknown>, filters?: { codes?: string[]; is_active?: boolean }): Promise<Modules[]>;
+  /** Fetch a single module by its unique system code. */
   findByCode(t: ITask<unknown> | undefined, code: string): Promise<Modules | null>;
+  /** Fetch a single module by its primary key. */
   findById(t: ITask<unknown> | undefined, id: string): Promise<Modules | null>;
+  /** Fetch multiple modules by primary key. */
+  findByIds(t: ITask<unknown> | undefined, ids: string[]): Promise<Modules[]>;
+  /** Insert a new module registration. */
   create(t: ITask<unknown> | undefined, input: CreateModuleInput): Promise<Modules>;
+  /** Update an existing module metadata. */
   update(t: ITask<unknown> | undefined, id: string, input: Modules): Promise<Modules>;
+  /** Soft-delete a module by marking it inactive. */
   delete(t: ITask<unknown> | undefined, id: string): Promise<void>;
 }
 
 export class ModuleRepository implements IModuleRepository {
   private tableName = 'modules';
+  private readonly baseColumns = 'id, name, code, description, is_active, sort_order';
 
   constructor(private db: IDatabase<unknown>) { }
 
@@ -29,8 +38,22 @@ export class ModuleRepository implements IModuleRepository {
     id: string
   ): Promise<Modules | null> {
     return (t ?? this.db).oneOrNone<Modules>(
-      `SELECT * FROM ${this.tableName} WHERE id = $1`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE id = $1`,
       [id]
+    );
+  }
+
+  async findByIds(
+    t: ITask<unknown> | undefined,
+    ids: string[]
+  ): Promise<Modules[]> {
+    if (!ids.length) {
+      return [];
+    }
+
+    return (t ?? this.db).any<Modules>(
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE id = ANY($1::bigint[])`,
+      [ids.map((id) => BigInt(id))]
     );
   }
 
@@ -39,15 +62,31 @@ export class ModuleRepository implements IModuleRepository {
     code: string
   ): Promise<Modules | null> {
     return (t ?? this.db).oneOrNone<Modules>(
-      `SELECT * FROM ${this.tableName} WHERE code = $1`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE code = $1`,
       [code]
     );
   }
 
-  async findAll(t?: ITask<unknown>): Promise<Modules[]> {
+  async findAll(t?: ITask<unknown>, filters?: { codes?: string[]; is_active?: boolean }): Promise<Modules[]> {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    let paramIdx = 1;
+
+    if (filters?.codes?.length) {
+      where.push(`code = ANY($${paramIdx++})`);
+      params.push(filters.codes);
+    }
+
+    if (filters?.is_active !== undefined) {
+      where.push(`is_active = $${paramIdx++}`);
+      params.push(filters.is_active);
+    }
+
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
     return this.query<Modules>(
-      `SELECT * FROM ${this.tableName}`,
-      [],
+      `SELECT ${this.baseColumns} FROM ${this.tableName} ${whereClause}`,
+      params,
       t
     );
   }

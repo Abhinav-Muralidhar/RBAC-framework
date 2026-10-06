@@ -17,6 +17,7 @@ export interface FormSelectProps extends Omit<SelectHTMLAttributes<HTMLSelectEle
     options: SelectOption[];
     error?: string;
     placeholder?: string;
+    className?: string;
 }
 
 export function FormSelect({
@@ -26,12 +27,13 @@ export function FormSelect({
     placeholder,
     required,
     id,
+    className,
     ...props
 }: FormSelectProps) {
     const selectId = id || `select-${label.toLowerCase().replace(/\s+/g, '-')}`;
 
     return (
-        <div className={`form-field ${error ? 'form-field--error' : ''}`}>
+        <div className={`form-field ${error ? 'form-field--error' : ''} ${className || ''}`.trim()}>
             <label htmlFor={selectId} className="form-label">
                 {label}
                 {required && <span className="form-required">*</span>}
@@ -43,7 +45,7 @@ export function FormSelect({
                 {...props}
             >
                 {placeholder && (
-                    <option value="" disabled>
+                    <option value="">
                         {placeholder}
                     </option>
                 )}

@@ -9,6 +9,7 @@ exports.up = async function (knex) {
         table.timestamp('assigned_at').defaultTo(knex.fn.now());
         table.bigInteger('assigned_by').unsigned().nullable().references('id').inTable('users').onDelete('SET NULL');
         table.primary(['role_id', 'profile_id']);
+        table.index(['profile_id']);
     })
 }
 exports.down = async function (knex) {

@@ -9,35 +9,28 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { RoleService } from '../services/role.service';
 import { EvaluationService } from '../services/evaluation.service';
 import { IAuditService } from '../services/audit.service';
-import { parseId, parsePagination } from './_paramUtils';
+import { getOptionalQuery, parseBooleanQuery, parseId, parsePagination, pickAllowedFields } from './_paramUtils';
 import { IDatabase } from 'pg-promise';
 import { requirePermission } from '../middleware/requirePermission.middleware';
-import { TransactionTask, withTransaction } from '../utils/transaction.utils';
+import { TransactionTask, withTransaction } from '../../utils/transaction.utils';
+import { CreateRoleRequestDto, UpdateRoleRequestDto } from '../dto/role.dto';
+import { sendSuccess } from './_response';
 
-/**
- * Standard response envelope
- */
-function sendSuccess<T>(res: Response, data: T, meta?: Record<string, unknown>) {
-    res.json({ data, error: null, meta: meta ?? {} });
-}
-
-function sendError(res: Response, status: number, message: string, code?: string) {
-    res.status(status).json({
-        data: null,
-        error: { message, code: code ?? 'ERROR' },
-        meta: {}
-    });
-}
-function filter(query: any): any {
-    const filters: any = {};
-    if (query.parent_role_id) filters.parent_role_id = query.parent_role_id;
-    if (query.is_active) filters.is_active = query.is_active;
-    if (query.search) filters.search = query.search;
+function filter(query: Request['query']): { parent_role_id?: string; is_active?: boolean; search?: string } {
+    const filters: { parent_role_id?: string; is_active?: boolean; search?: string } = {};
+    const parentRoleId = getOptionalQuery(query, 'parent_role_id');
+    const isActive = parseBooleanQuery(query, 'is_active');
+    const search = getOptionalQuery(query, 'search');
+    if (parentRoleId) filters.parent_role_id = parentRoleId;
+    if (isActive !== undefined) filters.is_active = isActive;
+    if (search) filters.search = search;
     return filters;
 }
 
 export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditService, evaluationService: EvaluationService, roleService: RoleService): Router {
     const router = Router();
+    const createRoleFields = ['name', 'code', 'description', 'parent_role_id', 'is_active', 'profile_ids'] as const;
+    const updateRoleFields = ['version', 'name', 'code', 'description', 'parent_role_id', 'is_active', 'profile_ids'] as const;
 
     /**
      * GET /rbac/roles
@@ -45,7 +38,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      */
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const pagination = parsePagination(req.query);
@@ -68,7 +61,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
 
     router.get('/tree', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req, res, next) => {
         try {
-            const tree = await withTransaction(async (t: TransactionTask) => {
+            const tree = await withTransaction(db, async (t: TransactionTask) => {
                 return roleService.getRoleTree(t, req.user!.id);
             });
             sendSuccess(res, tree);
@@ -83,16 +76,10 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      */
     router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
 
                 const roleId = parseId(req.params.id, 'roleId');
-                const role = await roleService.getById(t, req.user!.id, roleId);
-                if (!role) {
-                    const err = new Error('Role not found');
-                    (err as any).status = 404;
-                    throw err;
-                }
-                return role;
+                return roleService.getById(t, req.user!.id, roleId);
             });
             sendSuccess(res, result);
         } catch (error) {
@@ -106,10 +93,11 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      */
     router.post('/', requirePermission('SETTINGS', 'create', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
-                const role = await roleService.createRoleProfiles(t, actingUserId, req.body, req.auditContext);
+                const payload = pickAllowedFields<CreateRoleRequestDto, keyof CreateRoleRequestDto>(req.body, createRoleFields);
+                const role = await roleService.createRoleProfiles(t, actingUserId, payload as CreateRoleRequestDto, req.auditContext);
                 return role;
             });
             sendSuccess(res, result);
@@ -124,11 +112,12 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      */
     router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const roleId = parseId(req.params.id, 'roleId');
-                const role = await roleService.updateRoleProfiles(t, actingUserId, roleId, req.body, req.auditContext);
+                const payload = pickAllowedFields<UpdateRoleRequestDto, keyof UpdateRoleRequestDto>(req.body, updateRoleFields);
+                const role = await roleService.updateRoleProfiles(t, actingUserId, roleId, payload as UpdateRoleRequestDto, req.auditContext);
                 return role;
             });
             sendSuccess(res, result);
@@ -143,17 +132,13 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      */
     router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req, res, next) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            await withTransaction(db, async (t: TransactionTask) => {
                 const roleId = parseId(req.params.id, 'roleId');
                 await roleService.delete(t, req.user!.id, roleId, req.auditContext);
             });
             sendSuccess(res, { message: 'Role deleted successfully' });
         } catch (err: any) {
-            if (err.message === 'ROLE_HAS_ACTIVE_CHILDREN') {
-                sendError(res, 409, 'Role cannot be deleted: active children exist', 'ROLE_HAS_CHILDREN');
-            } else {
-                next(err);
-            }
+            next(err);
         }
     });
     /**
@@ -162,12 +147,12 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      */
     router.put('/:id/profiles', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const roleId = parseId(req.params.id, 'roleId');
-                const { profile_ids } = req.body;
-                await roleService.updateRoleProfiles(t, actingUserId, roleId, profile_ids ?? [], req.auditContext);
+                const payload = pickAllowedFields<UpdateRoleRequestDto, keyof UpdateRoleRequestDto>(req.body, ['version', 'profile_ids']);
+                await roleService.updateRoleProfiles(t, actingUserId, roleId, payload as UpdateRoleRequestDto, req.auditContext);
                 return { message: 'Role profiles updated successfully' };
             });
             sendSuccess(res, result);
@@ -182,7 +167,7 @@ export function createRolesRouter(db: IDatabase<unknown>, auditService: IAuditSe
      */
     router.delete('/:id/revoke/:userId', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await withTransaction(async (t: TransactionTask) => {
+            await withTransaction(db, async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const roleId = parseId(req.params.id, 'roleId');

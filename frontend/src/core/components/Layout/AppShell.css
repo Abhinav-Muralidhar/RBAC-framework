@@ -2,17 +2,21 @@
     display: flex;
     min-height: 100vh;
     min-height: 100dvh;
-    background: #f8fafc;
+    background: var(--color-surface);
 }
 
 .app-content {
     flex: 1;
     width: 100%;
     min-width: 0;
-    margin-left: 0;
-    padding: calc(var(--content-padding) + 3rem) var(--content-padding) var(--content-padding);
+    margin-left: var(--sidebar-width);
+    padding: calc(var(--content-padding) + 1.5rem) var(--content-padding) var(--content-padding);
     overflow-y: auto;
-    transition: padding 0.2s ease;
+    transition: all 0.2s ease;
+}
+
+.app-shell--collapsed .app-content {
+    margin-left: var(--sidebar-collapsed-width);
 }
 
 /* Sidebar no longer reserves layout space */
@@ -24,15 +28,15 @@
     justify-content: center;
     min-height: 100vh;
     min-height: 100dvh;
-    background: #f8fafc;
-    color: #64748b;
+    background: var(--color-surface);
+    color: var(--color-text-muted);
 }
 
 .spinner {
     width: 40px;
     height: 40px;
-    border: 3px solid #e2e8f0;
-    border-top-color: #3b82f6;
+    border: 3px solid var(--color-border);
+    border-top-color: var(--color-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
@@ -50,15 +54,15 @@
     position: fixed;
     top: 0.75rem;
     left: 0.75rem;
-    z-index: 300;
+    z-index: 150;
     width: 2.75rem;
     height: 2.75rem;
-    border: 1px solid #cbd5e1;
-    border-radius: 0.625rem;
-    background: #ffffff;
-    color: #0f172a;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-alt);
+    color: var(--color-text);
     cursor: pointer;
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+    box-shadow: 0 10px 20px hsl(var(--foreground) / 0.08);
 }
 
 .app-shell--sidebar-open .mobile-menu-btn {
@@ -75,7 +79,8 @@
         display: block;
     }
 
-    .app-content {
+    .app-content,
+    .app-shell--collapsed .app-content {
         margin-left: 0;
         min-height: 100vh;
         padding: calc(var(--content-padding) + 3rem) var(--content-padding) var(--content-padding);
@@ -85,9 +90,9 @@
         display: block;
         position: fixed;
         inset: 0;
-        z-index: 180;
+        z-index: 130;
         border: 0;
-        background: rgba(15, 23, 42, 0.45);
+        background: hsl(var(--foreground) / 0.45);
     }
 }
 

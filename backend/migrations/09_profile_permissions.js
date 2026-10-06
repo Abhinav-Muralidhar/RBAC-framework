@@ -8,6 +8,7 @@ exports.up = async function (knex) {
         table.bigInteger('permission_id').notNullable().references('id').inTable('permissions').onDelete('CASCADE');
         table.string('effect').checkIn(['allow', 'deny']).notNullable().defaultTo('deny');
         table.primary(['profile_id', 'permission_id']);
+        table.index(['permission_id']);
     })
 }
 

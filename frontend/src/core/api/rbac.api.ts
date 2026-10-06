@@ -1,6 +1,6 @@
 /**
  * RBAC API
- * 
+ *
  * API functions for Users, Roles, Profiles, Groups, Audit Logs, Sessions.
  */
 
@@ -9,10 +9,11 @@ import type { User, CreateUserDto, UpdateUserDto } from '../types/user.types';
 import type { Role, CreateRoleDto, UpdateRoleDto, RoleNode } from '../types/role.types';
 import type { Profile, CreateProfileDto, UpdateProfileDto, Permission } from '../types/profile.types';
 import type { Group, CreateGroupDto, UpdateGroupDto } from '../types/group.types';
-import type { AuditLog } from '../types/audit.types';
+import type { AuditLog, AuditLogSummaryDto } from '../types/audit.types';
 import type { Session } from '../types/session.types';
 import type { Organization, UpdateOrganizationDto, OrganizationBrandingDto } from '../types/organization.types';
-import type { SharingRule, CreateSharingRuleDto, UpdateSharingRuleDto } from '../types/sharingrule.types';
+import type { SharingRule, UpdateSharingRuleDto } from '../types/sharingrule.types';
+import type { SmtpConfig, CreateSmtpConfigDto, UpdateSmtpConfigDto } from '../types/smtp.types';
 
 export interface PaginationParams {
     page?: number;
@@ -22,13 +23,13 @@ export interface PaginationParams {
 
 // Helper to cast response to expected type since interceptor unwraps it
 // but typescript thinks it returns AxiosResponse
-const get = async <T>(url: string, params?: any): Promise<T> => {
+const get = async <T, P extends object = object>(url: string, params?: P): Promise<T> => {
     return apiClient.get(url, { params }) as Promise<T>;
 };
-const post = async <T>(url: string, data?: any): Promise<T> => {
+const post = async <T>(url: string, data?: unknown): Promise<T> => {
     return apiClient.post(url, data) as Promise<T>;
 };
-const patch = async <T>(url: string, data?: any): Promise<T> => {
+const patch = async <T>(url: string, data?: unknown): Promise<T> => {
     return apiClient.patch(url, data) as Promise<T>;
 };
 const del = async <T>(url: string): Promise<T> => {
@@ -41,7 +42,7 @@ const del = async <T>(url: string): Promise<T> => {
 // ============================================================================
 
 export const usersApi = {
-    list: async (params?: PaginationParams) => {
+    list: async (params?: PaginationParams & { status?: string }): Promise<PaginatedResponse<User>> => {
         return get<PaginatedResponse<User>>('/rbac/users', params);
     },
 
@@ -86,7 +87,7 @@ export const landingPagesApi = {
 // ============================================================================
 
 export const rolesApi = {
-    list: async (params?: PaginationParams) => {
+    list: async (params?: PaginationParams & { is_active?: boolean }) => {
         return get<PaginatedResponse<Role>>('/rbac/roles', params);
     },
 
@@ -114,10 +115,6 @@ export const rolesApi = {
         await del(`/rbac/roles/${id}`);
     },
 
-    assignToUser: async (roleId: string, userId: string): Promise<void> => {
-        await post(`/rbac/roles/${roleId}/assign/${userId}`);
-    },
-
     revokeFromUser: async (roleId: string, userId: string): Promise<void> => {
         await del(`/rbac/roles/${roleId}/revoke/${userId}`);
     },
@@ -128,7 +125,7 @@ export const rolesApi = {
 // ============================================================================
 
 export const profilesApi = {
-    list: async (params?: PaginationParams) => {
+    list: async (params?: PaginationParams & { is_active?: boolean }) => {
         return get<PaginatedResponse<Profile>>('/rbac/profiles', params);
     },
 
@@ -186,13 +183,20 @@ export const groupsApi = {
 // ============================================================================
 
 export const auditLogsApi = {
-    list: async (params?: PaginationParams) => {
-        return get<PaginatedResponse<AuditLog>>('/rbac/audit-logs', params);
+    list: async (params?: PaginationParams & { action?: string; entity_type?: string; entity_id?: string; user_name?: string; user_id?: string; status?: string }) => {
+        return get<PaginatedResponse<AuditLogSummaryDto>>('/rbac/audit-logs', params);
     },
 
     getById: async (id: string): Promise<AuditLog> => {
         const response = await get<ApiResponse<AuditLog>>(`/rbac/audit-logs/${id}`);
         return response.data;
+    },
+
+    exportPdf: async (params?: PaginationParams & { action?: string; entity_type?: string; entity_id?: string; user_name?: string; user_id?: string; status?: string }): Promise<Blob> => {
+        return apiClient.get('/rbac/audit-logs/export/pdf', {
+            params,
+            responseType: 'blob',
+        }) as unknown as Blob;
     },
 };
 
@@ -222,18 +226,14 @@ export const sessionsApi = {
 // SMTP Config
 // ============================================================================
 
-import type { SmtpConfig, CreateSmtpConfigDto, UpdateSmtpConfigDto } from '../types/smtp.types';
-
 export const smtpApi = {
     list: async (params?: PaginationParams) => {
         return get<PaginatedResponse<SmtpConfig>>('/rbac/smtpconfig', params);
     },
 
-    getById: async (id: string): Promise<SmtpConfig> => {
-        const response = await get<ApiResponse<SmtpConfig>>(`/rbac/smtpconfig/${id}`);
-        return response.data;
-    },
-
+    /**
+     * Get the active SMTP configuration.
+     */
     getActive: async (): Promise<SmtpConfig | null> => {
         try {
             const response = await get<ApiResponse<SmtpConfig>>('/rbac/smtpconfig/active');
@@ -243,8 +243,8 @@ export const smtpApi = {
         }
     },
 
-    create: async (data: CreateSmtpConfigDto): Promise<SmtpConfig> => {
-        const response = await post<ApiResponse<SmtpConfig>>('/rbac/smtpconfig', data);
+    getById: async (id: string): Promise<SmtpConfig> => {
+        const response = await get<ApiResponse<SmtpConfig>>(`/rbac/smtpconfig/${id}`);
         return response.data;
     },
 
@@ -253,49 +253,31 @@ export const smtpApi = {
         return response.data;
     },
 
-    delete: async (id: string): Promise<void> => {
-        await del(`/rbac/smtpconfig/${id}`);
-    },
-
-    test: async (data: CreateSmtpConfigDto): Promise<void> => {
+    test: async (data: CreateSmtpConfigDto | { id: string }): Promise<void> => {
         await post(`/rbac/email/test`, data);
     },
-    /*activate: async (id: string): Promise<void> => {
-        await post(`/rbac/smtpconfig/${id}/activate`);
-    },*/
 };
 
-
 // ============================================================================
-// OTP Tokens
+// Email
 // ============================================================================
-export const authApi = {
-    /**
-     * Triggers an OTP email to the user.
-     * Backend should handle rate limiting (e.g. max 5 attempts).
-     */
-    sendOtp: async (email: string): Promise<void> => {
-        // Adjust route based on your backend, e.g. '/auth/otp/send' or '/auth/challenge'
-        await post('/public/otp/send', { email });
-    },
 
-    /**
-     * Verifies the code entered by the user.
-     * Throws an error if invalid.
-     */
-    verifyOtp: async (email: string, otp: string): Promise<void> => {
-        // Adjust route based on your backend
-        await post('/public/otp/verify', { email, otp });
+export const emailApi = {
+    sendReport: async (data: {
+        subject: string;
+        html: string;
+        text?: string;
+        to?: string;
+        attachments?: Array<{
+            filename: string;
+            content: string;
+            contentType?: string;
+        }>;
+    }): Promise<void> => {
+        await post('/rbac/email/send-report', data);
     },
-
-    /**
-     * (Optional) If you want to handle the password update via Auth API 
-     * instead of Users API for stricter security checks.
-     */
-    resetPassword: async (email: string, otp: string, newPassword: string): Promise<void> => {
-        await post('/public/otp/password/reset', { email, otp, newPassword });
-    }
 };
+
 
 // ============================================================================
 // Organization
@@ -306,7 +288,7 @@ export const organizationApi = {
      * Get organization details (requires auth)
      */
     get: async (): Promise<Organization> => {
-        const response = await get<ApiResponse<Organization>>('/rbac/organizations');
+        const response = await get<ApiResponse<Organization>>('/rbac/organizations/active');
         return response.data;
     },
 
@@ -368,6 +350,7 @@ export const permissionsApi = {
         return response.data;
     },
 };
+
 // ============================================================================
 // Sharing Rules
 // ============================================================================
@@ -377,38 +360,27 @@ export const sharingRulesApi = {
      * List all sharing rules with optional pagination
      */
     list: async (params?: { page?: number; limit?: number; is_active?: boolean }) => {
-        const response = await apiClient.get<PaginatedResponse<SharingRule>>('/rbac/sharing-rules', { params });
-        return response.data;
+        return apiClient.get('/rbac/sharing-rules', { params }) as Promise<PaginatedResponse<SharingRule>>;
     },
 
     /**
      * Get a single sharing rule by ID
      */
     getById: async (id: number | string): Promise<SharingRule> => {
-        const response = await apiClient.get<ApiResponse<SharingRule>>(`/rbac/sharing-rules/${id}`);
-        return response.data.data;
-    },
-
-    /**
-     * Create a new sharing rule
-     */
-    create: async (data: CreateSharingRuleDto): Promise<SharingRule> => {
-        const response = await apiClient.post<ApiResponse<SharingRule>>('/rbac/sharing-rules', data);
-        return response.data.data;
+        return apiClient.get(`/rbac/sharing-rules/${id}`) as Promise<SharingRule>;
     },
 
     /**
      * Update an existing sharing rule
      */
     update: async (id: number | string, data: UpdateSharingRuleDto): Promise<SharingRule> => {
-        const response = await apiClient.patch<ApiResponse<SharingRule>>(`/rbac/sharing-rules/${id}`, data);
-        return response.data.data;
+        return apiClient.patch(`/rbac/sharing-rules/${id}`, data) as Promise<SharingRule>;
     },
 
     /**
      * Delete a sharing rule
      */
     delete: async (id: number | string): Promise<void> => {
-        await apiClient.delete(`/rbac/sharing-rules/${id}`);
+        await del(`/rbac/sharing-rules/${id}`);
     },
 };

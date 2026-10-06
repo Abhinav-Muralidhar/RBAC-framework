@@ -1,10 +1,15 @@
 import { IDatabase, ITask } from 'pg-promise';
 
 export interface IGroupRoleRepository {
+  /** Link a role to a group. */
   assignRole(t: ITask<unknown> | undefined, groupId: string, roleId: string, assignedBy?: string | null): Promise<void>;
+  /** Unlink a role from a group. */
   removeRole(t: ITask<unknown> | undefined, groupId: string, roleId: string): Promise<void>;
+  /** Atomically replace all roles associated with a group. */
   replaceRoles(t: ITask<unknown> | undefined, groupId: string, roleIds: string[], assignedBy?: string | null): Promise<void>;
+  /** List ID strings for all roles associated with a group. */
   findRolesByGroup(t: ITask<unknown> | undefined, groupId: string): Promise<string[]>;
+  /** List ID strings for all groups associated with a role. */
   findGroupsByRole(t: ITask<unknown> | undefined, roleId: string): Promise<string[]>;
 }
 

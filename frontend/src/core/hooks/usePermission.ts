@@ -6,7 +6,7 @@
  */
 
 import { useCallback, type FC, type ReactNode } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 
 export interface UsePermissionReturn {
     /** Check if user has permission for an action on a module */

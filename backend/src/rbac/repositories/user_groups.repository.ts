@@ -4,16 +4,23 @@ import { UserGroups } from '../models/user_groups.model';
 export type TransactionTask = ITask<unknown>;
 
 export interface IUserGroupsRepository {
+  /** Add a user to a group. */
   addMember(t: TransactionTask | undefined, userId: string, groupId: string, assignedBy?: string): Promise<void>;
+  /** Remove a user from a group. */
   removeMember(t: TransactionTask | undefined, userId: string, groupId: string): Promise<void>;
+  /** List all user membership records for a group. */
   findUsersByGroup(t: TransactionTask | undefined, groupId: string): Promise<UserGroups[]>;
+  /** List all group membership records for a user. */
   findGroupsByUser(t: TransactionTask | undefined, userId: string): Promise<UserGroups[]>;
+  /** Add multiple users to a group in bulk. */
   addMembers(t: TransactionTask | undefined, groupId: string, userIds: string[], assignedBy?: string): Promise<void>;
+  /** Atomically replace all members of a group. */
   replaceUsers(t: TransactionTask | undefined, groupId: string, userIds: string[], assignedBy?: string): Promise<void>;
 }
 
 export class UserGroupsRepository implements IUserGroupsRepository {
   private tableName = 'user_groups';
+  private readonly baseColumns = 'user_id, group_id, assigned_at, assigned_by';
 
   constructor(private db: IDatabase<unknown>) { }
 
@@ -61,7 +68,7 @@ export class UserGroupsRepository implements IUserGroupsRepository {
   ): Promise<UserGroups[]> {
     return this.query<UserGroups>(
       `
-      SELECT * FROM ${this.tableName}
+      SELECT ${this.baseColumns} FROM ${this.tableName}
       WHERE group_id = $1
       `,
       [groupId],
@@ -75,7 +82,7 @@ export class UserGroupsRepository implements IUserGroupsRepository {
   ): Promise<UserGroups[]> {
     return this.query<UserGroups>(
       `
-      SELECT * FROM ${this.tableName}
+      SELECT ${this.baseColumns} FROM ${this.tableName}
       WHERE user_id = $1
       `,
       [userId],

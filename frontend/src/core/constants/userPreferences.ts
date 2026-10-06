@@ -43,7 +43,7 @@ export const TIME_ZONE_OPTIONS = [
     { key: 'America/Los_Angeles', label: '(UTC-08:00) Pacific Time' },
     { key: 'America/Anchorage', label: '(UTC-09:00) Alaska' },
     { key: 'Pacific/Honolulu', label: '(UTC-10:00) Hawaii' },
-    { key: 'America/Sao_Paulo', label: '(UTC-03:00) São Paulo' },
+    { key: 'America/Sao_Paulo', label: '(UTC-03:00) Sao Paulo' },
     { key: 'America/Argentina/Buenos_Aires', label: '(UTC-03:00) Buenos Aires' },
     { key: 'America/Toronto', label: '(UTC-05:00) Toronto' },
     { key: 'America/Vancouver', label: '(UTC-08:00) Vancouver' },
@@ -78,31 +78,90 @@ export const TIME_ZONE_OPTIONS = [
 // ============================================================================
 
 export const CURRENCY_OPTIONS = [
-    { key: 'USD', label: 'USD — US Dollar ($)' },
-    { key: 'EUR', label: 'EUR — Euro (€)' },
-    { key: 'GBP', label: 'GBP — British Pound (£)' },
-    { key: 'INR', label: 'INR — Indian Rupee (₹)' },
-    { key: 'JPY', label: 'JPY — Japanese Yen (¥)' },
-    { key: 'CNY', label: 'CNY — Chinese Yuan (¥)' },
-    { key: 'CAD', label: 'CAD — Canadian Dollar (C$)' },
-    { key: 'AUD', label: 'AUD — Australian Dollar (A$)' },
-    { key: 'CHF', label: 'CHF — Swiss Franc (Fr)' },
-    { key: 'KRW', label: 'KRW — South Korean Won (₩)' },
-    { key: 'SGD', label: 'SGD — Singapore Dollar (S$)' },
-    { key: 'AED', label: 'AED — UAE Dirham (د.إ)' },
-    { key: 'SAR', label: 'SAR — Saudi Riyal (﷼)' },
-    { key: 'BRL', label: 'BRL — Brazilian Real (R$)' },
-    { key: 'MXN', label: 'MXN — Mexican Peso (MX$)' },
-    { key: 'ZAR', label: 'ZAR — South African Rand (R)' },
-    { key: 'RUB', label: 'RUB — Russian Ruble (₽)' },
-    { key: 'TRY', label: 'TRY — Turkish Lira (₺)' },
-    { key: 'SEK', label: 'SEK — Swedish Krona (kr)' },
-    { key: 'NOK', label: 'NOK — Norwegian Krone (kr)' },
-    { key: 'NZD', label: 'NZD — New Zealand Dollar (NZ$)' },
-    { key: 'PKR', label: 'PKR — Pakistani Rupee (₨)' },
-    { key: 'BDT', label: 'BDT — Bangladeshi Taka (৳)' },
-    { key: 'NGN', label: 'NGN — Nigerian Naira (₦)' },
-    { key: 'EGP', label: 'EGP — Egyptian Pound (E£)' },
+    { key: 'USD', label: 'USD - US Dollar (USD)' },
+    { key: 'EUR', label: 'EUR - Euro (EUR)' },
+    { key: 'GBP', label: 'GBP - British Pound (GBP)' },
+    { key: 'INR', label: 'INR - Indian Rupee (INR)' },
+    { key: 'JPY', label: 'JPY - Japanese Yen (JPY)' },
+    { key: 'CNY', label: 'CNY - Chinese Yuan (CNY)' },
+    { key: 'CAD', label: 'CAD - Canadian Dollar (CAD)' },
+    { key: 'AUD', label: 'AUD - Australian Dollar (AUD)' },
+    { key: 'CHF', label: 'CHF - Swiss Franc (CHF)' },
+    { key: 'KRW', label: 'KRW - South Korean Won (KRW)' },
+    { key: 'SGD', label: 'SGD - Singapore Dollar (SGD)' },
+    { key: 'AED', label: 'AED - UAE Dirham (AED)' },
+    { key: 'SAR', label: 'SAR - Saudi Riyal (SAR)' },
+    { key: 'BRL', label: 'BRL - Brazilian Real (BRL)' },
+    { key: 'MXN', label: 'MXN - Mexican Peso (MXN)' },
+    { key: 'ZAR', label: 'ZAR - South African Rand (ZAR)' },
+    { key: 'RUB', label: 'RUB - Russian Ruble (RUB)' },
+    { key: 'TRY', label: 'TRY - Turkish Lira (TRY)' },
+    { key: 'SEK', label: 'SEK - Swedish Krona (SEK)' },
+    { key: 'NOK', label: 'NOK - Norwegian Krone (NOK)' },
+    { key: 'NZD', label: 'NZD - New Zealand Dollar (NZD)' },
+    { key: 'PKR', label: 'PKR - Pakistani Rupee (PKR)' },
+    { key: 'BDT', label: 'BDT - Bangladeshi Taka (BDT)' },
+    { key: 'NGN', label: 'NGN - Nigerian Naira (NGN)' },
+    { key: 'EGP', label: 'EGP - Egyptian Pound (EGP)' },
+] as const;
+
+// ============================================================================
+// Phone Country Codes (common set)
+// ============================================================================
+
+export const PHONE_COUNTRY_CODE_OPTIONS = [
+    { key: '+1', label: '+1 (United States / Canada)' },
+    { key: '+44', label: '+44 (United Kingdom)' },
+    { key: '+61', label: '+61 (Australia)' },
+    { key: '+64', label: '+64 (New Zealand)' },
+    { key: '+49', label: '+49 (Germany)' },
+    { key: '+33', label: '+33 (France)' },
+    { key: '+39', label: '+39 (Italy)' },
+    { key: '+34', label: '+34 (Spain)' },
+    { key: '+81', label: '+81 (Japan)' },
+    { key: '+82', label: '+82 (South Korea)' },
+    { key: '+86', label: '+86 (China)' },
+    { key: '+91', label: '+91 (India)' },
+    { key: '+971', label: '+971 (UAE)' },
+    { key: '+966', label: '+966 (Saudi Arabia)' },
+    { key: '+55', label: '+55 (Brazil)' },
+    { key: '+52', label: '+52 (Mexico)' },
+    { key: '+27', label: '+27 (South Africa)' },
+    { key: '+7', label: '+7 (Russia)' },
+    { key: '+90', label: '+90 (Turkey)' },
+    { key: '+46', label: '+46 (Sweden)' },
+    { key: '+47', label: '+47 (Norway)' },
+    { key: '+65', label: '+65 (Singapore)' },
+    { key: '+92', label: '+92 (Pakistan)' },
+    { key: '+880', label: '+880 (Bangladesh)' },
+    { key: '+234', label: '+234 (Nigeria)' },
+    { key: '+20', label: '+20 (Egypt)' },
+] as const;
+
+// ============================================================================
+// Digit Grouping / Number Formats
+// ============================================================================
+
+export const DIGIT_GROUPING_OPTIONS = [
+    { key: '123,456,789', label: '123,456,789 (3-3-3)' },
+    { key: '12,34,56,789', label: '12,34,56,789 (Indian)' },
+    { key: '123 456 789', label: '123 456 789 (space)' },
+    { key: '123.456.789', label: '123.456.789 (dot)' },
+] as const;
+
+export const DECIMAL_SEPARATOR_OPTIONS = [
+    { key: '.', label: '. (dot)' },
+    { key: ',', label: ', (comma)' },
+] as const;
+
+export const DECIMAL_PRECISION_OPTIONS = [
+    { key: '0', label: '0' },
+    { key: '1', label: '1' },
+    { key: '2', label: '2' },
+    { key: '3', label: '3' },
+    { key: '4', label: '4' },
+    { key: '5', label: '5' },
+    { key: '6', label: '6' },
 ] as const;
 
 // ============================================================================

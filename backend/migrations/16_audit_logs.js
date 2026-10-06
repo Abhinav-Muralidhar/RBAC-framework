@@ -24,6 +24,13 @@ exports.up = async function (knex) {
         table.text('user_agent').notNullable();
         table.text('status').notNullable();
         table.text('created_at').notNullable();
+        table.text('hmac_entity_type').nullable();
+        table.text('hmac_action').nullable();
+        table.text('hmac_user_id').nullable();
+        table.index(['hmac_entity_type'], 'idx_audit_logs_hmac_entity_type');
+        table.index(['hmac_action'], 'idx_audit_logs_hmac_action');
+        table.index(['hmac_user_id'], 'idx_audit_logs_hmac_user_id');
+        table.index(['hmac_entity_type', 'hmac_action'], 'idx_audit_logs_hmac_entity_action');
     });
 };
 

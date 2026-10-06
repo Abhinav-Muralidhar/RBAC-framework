@@ -2,18 +2,27 @@ import { IDatabase, ITask } from 'pg-promise';
 import { RoleProfiles } from '../models/role_profiles.model';
 
 export interface IRoleProfilesRepository {
+  /** List all profile associations for a given role. */
   findProfilesByRole(t: ITask<unknown> | undefined, roleId: string): Promise<RoleProfiles[]>;
+  /** List all roles that have a specific profile assigned. */
   findRolesByProfile(t: ITask<unknown> | undefined, profileId: string): Promise<RoleProfiles[]>;
+  /** Check if a role is linked to a specific profile. */
   hasProfile(t: ITask<unknown> | undefined, roleId: string, profileId: string): Promise<boolean>;
+  /** Link a profile to a role. */
   assign(t: ITask<unknown> | undefined, roleId: string, profileId: string, assignedBy?: string): Promise<RoleProfiles>;
+  /** Unlink a profile from a role. */
   revoke(t: ITask<unknown> | undefined, roleId: string, profileId: string): Promise<void>;
+  /** Remove all profile associations for a role. */
   revokeAllByRole(t: ITask<unknown> | undefined, roleId: string): Promise<void>;
+  /** Atomically replace all profiles associated with a role. */
   assignAllByRole(t: ITask<unknown> | undefined, roleId: string, profileIds: string[], assignedBy?: string): Promise<void>;
+  /** List assignments filtered by an array of profile IDs. */
   findByIds(t: ITask<unknown> | undefined, ids: string[]): Promise<RoleProfiles[]>;
 }
 
 export class RoleProfilesRepository implements IRoleProfilesRepository {
   private tableName = 'role_profiles';
+  private readonly baseColumns = 'role_id, profile_id, assigned_at, assigned_by';
 
   constructor(private db: IDatabase<unknown>) { }
 
@@ -23,7 +32,7 @@ export class RoleProfilesRepository implements IRoleProfilesRepository {
 
   async findProfilesByRole(t: ITask<unknown> | undefined, roleId: string): Promise<RoleProfiles[]> {
     return this.query<RoleProfiles>(
-      `SELECT * FROM ${this.tableName} WHERE role_id = $1`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE role_id = $1`,
       [roleId],
       t
     );
@@ -31,7 +40,7 @@ export class RoleProfilesRepository implements IRoleProfilesRepository {
   async findByIds(t: ITask<unknown> | undefined, ids: string[]): Promise<RoleProfiles[]> {
     const numericIds = ids.map(id => BigInt(id));
     return this.query<RoleProfiles>(
-      `SELECT * FROM ${this.tableName} WHERE profile_id = ANY($1::bigint[])`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE profile_id = ANY($1::bigint[])`,
       [numericIds],
       t
     );
@@ -39,7 +48,7 @@ export class RoleProfilesRepository implements IRoleProfilesRepository {
 
   async findRolesByProfile(t: ITask<unknown> | undefined, profileId: string): Promise<RoleProfiles[]> {
     return this.query<RoleProfiles>(
-      `SELECT * FROM ${this.tableName} WHERE profile_id = $1`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE profile_id = $1`,
       [profileId],
       t
     );

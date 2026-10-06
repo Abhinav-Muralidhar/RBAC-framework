@@ -30,6 +30,7 @@ export interface FormMultiSelectProps {
     debounceMs?: number;
     /** Message shown when there are no results */
     emptyMessage?: string;
+    className?: string;
 }
 
 export function FormMultiSelect({
@@ -45,6 +46,7 @@ export function FormMultiSelect({
     id,
     debounceMs = 300,
     emptyMessage = 'No results found',
+    className,
 }: FormMultiSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -107,7 +109,7 @@ export function FormMultiSelect({
     };
 
     return (
-        <div className={`form-field ${error ? 'form-field--error' : ''}`} ref={wrapperRef}>
+        <div className={`form-field ${error ? 'form-field--error' : ''} ${className || ''}`.trim()} ref={wrapperRef}>
             <label htmlFor={selectId} className="form-label">
                 {label}
                 {required && <span className="form-required">*</span>}

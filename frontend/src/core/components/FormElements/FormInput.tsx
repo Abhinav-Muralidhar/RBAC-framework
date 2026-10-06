@@ -10,6 +10,7 @@ export interface FormInputProps extends Omit<InputHTMLAttributes<HTMLInputElemen
     label: string;
     error?: string;
     hint?: string;
+    className?: string;
 }
 
 export function FormInput({
@@ -18,12 +19,13 @@ export function FormInput({
     hint,
     required,
     id,
+    className,
     ...props
 }: FormInputProps) {
     const inputId = id || `input-${label.toLowerCase().replace(/\s+/g, '-')}`;
 
     return (
-        <div className={`form-field ${error ? 'form-field--error' : ''}`}>
+        <div className={`form-field ${error ? 'form-field--error' : ''} ${className || ''}`.trim()}>
             <label htmlFor={inputId} className="form-label">
                 {label}
                 {required && <span className="form-required">*</span>}

@@ -2,20 +2,31 @@ import { IDatabase, ITask } from 'pg-promise';
 import { ProfilePermissions, PermissionEffect } from '../models/profile_permissions.model';
 
 export interface IProfilePermissionsRepository {
+    /** List all permission assignments for a specific profile. */
     findPermissionsByProfile(t: ITask<unknown> | undefined, profileId: string): Promise<ProfilePermissions[]>;
+    /** List all profiles that have a specific permission assigned. */
     findProfilesByPermission(t: ITask<unknown> | undefined, permissionId: string): Promise<ProfilePermissions[]>;
+    /** Check if a specific permission is linked to a profile. */
     findAssignment(t: ITask<unknown> | undefined, profileId: string, permissionId: string): Promise<ProfilePermissions | null>;
+    /** Link a permission to a profile with a specified effect (allow/deny). */
     assign(t: ITask<unknown> | undefined, profileId: string, permissionId: string, effect: PermissionEffect): Promise<ProfilePermissions>;
+    /** Update the effect (allow/deny) of an existing permission assignment. */
     updateEffect(t: ITask<unknown> | undefined, profileId: string, permissionId: string, effect: PermissionEffect): Promise<ProfilePermissions>;
+    /** Unlink a specific permission from a profile. */
     revoke(t: ITask<unknown> | undefined, profileId: string, permissionId: string): Promise<void>;
+    /** Remove all permission assignments for a profile. */
     revokeAllByProfile(t: ITask<unknown> | undefined, profileId: string): Promise<void>;
+    /** Atomically replace all permissions for a profile. */
     replacePermissions(t: ITask<unknown> | undefined, profileId: string, permissionIds: string[]): Promise<void>;
+    /** Associate multiple permissions with a profile in bulk (default effect: allow). */
     batchAssign(t: ITask<unknown> | undefined, profileId: string, permissionIds: string[]): Promise<void>;
+    /** List only the ID strings of permissions assigned to a profile. */
     getPermissionIdsByProfile(t: ITask<unknown> | undefined, profileId: string): Promise<string[]>;
 }
 
 export class ProfilePermissionsRepository implements IProfilePermissionsRepository {
     private tableName = 'profile_permissions';
+    private readonly baseColumns = 'profile_id, permission_id, effect';
 
     constructor(private db: IDatabase<unknown>) { }
 
@@ -32,7 +43,7 @@ export class ProfilePermissionsRepository implements IProfilePermissionsReposito
         profileId: string
     ): Promise<ProfilePermissions[]> {
         return this.query<ProfilePermissions>(
-            `SELECT * FROM ${this.tableName} WHERE profile_id = $1`,
+            `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE profile_id = $1`,
             [profileId],
             t
         );
@@ -43,7 +54,7 @@ export class ProfilePermissionsRepository implements IProfilePermissionsReposito
         permissionId: string
     ): Promise<ProfilePermissions[]> {
         return this.query<ProfilePermissions>(
-            `SELECT * FROM ${this.tableName} WHERE permission_id = $1`,
+            `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE permission_id = $1`,
             [permissionId],
             t
         );
@@ -55,7 +66,7 @@ export class ProfilePermissionsRepository implements IProfilePermissionsReposito
         permissionId: string
     ): Promise<ProfilePermissions | null> {
         return (t ?? this.db).oneOrNone<ProfilePermissions>(
-            `SELECT * FROM ${this.tableName} WHERE profile_id = $1 AND permission_id = $2`,
+            `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE profile_id = $1 AND permission_id = $2`,
             [profileId, permissionId]
         );
     }

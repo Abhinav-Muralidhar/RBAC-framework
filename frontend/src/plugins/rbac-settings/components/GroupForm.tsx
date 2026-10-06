@@ -5,12 +5,15 @@
  * Uses FormMultiSelect for searchable roles/users selection.
  */
 
-import { useState, useEffect } from 'react';
+import { forwardRef, useCallback, useState, useEffect, useImperativeHandle } from 'react';
 import { FormInput, FormSwitch, FormMultiSelect } from '../../../core/components/FormElements';
 import type { MultiSelectOption } from '../../../core/components/FormElements';
 import type { Group, CreateGroupDto, UpdateGroupDto } from '../../../core/types/group.types';
 import { usersApi, groupsApi, rolesApi } from '../../../core/api/rbac.api';
 import { validateRequired, validateCode, scrollToFirstError, parseApiError } from '../../../core/utils';
+import type { RbacFormHandle } from './form.types';
+import { useAsyncSearchOptions } from './useAsyncSearchOptions';
+import './EntityForm.css';
 
 interface GroupFormProps {
     group?: Group | null;
@@ -19,7 +22,7 @@ interface GroupFormProps {
     setLoading: (loading: boolean) => void;
 }
 
-export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormProps) {
+export const GroupForm = forwardRef<RbacFormHandle, GroupFormProps>(function GroupForm({ group, onSuccess, onError, setLoading }, ref) {
     const isEditing = !!group;
 
     const [formData, setFormData] = useState({
@@ -37,21 +40,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
         group?.users?.map(u => u.id) || []
     );
 
-    const [roleOptions, setRoleOptions] = useState<MultiSelectOption[]>([]);
-    const [roleLoading, setRoleLoading] = useState(false);
-
-    const [userOptions, setUserOptions] = useState<MultiSelectOption[]>([]);
-    const [userLoading, setUserLoading] = useState(false);
-
     const [errors, setErrors] = useState<Record<string, string>>({});
-
-    // ---------------- LOAD DATA ----------------
-
-    // Initial load
-    useEffect(() => {
-        loadRoles('');
-        loadUsers('');
-    }, []);
 
     // Keep state in sync with props
     useEffect(() => {
@@ -67,33 +56,42 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
         }
     }, [group]);
 
-    const loadRoles = async (searchQuery: string) => {
-        setRoleLoading(true);
-        try {
-            const response = await rolesApi.list({ limit: 100, search: searchQuery || undefined });
-            setRoleOptions(
-                (response.data || []).map(r => ({ value: r.id, label: r.name }))
-            );
-        } catch (err) {
-            console.error('Failed to load roles', err);
-        } finally {
-            setRoleLoading(false);
-        }
-    };
+    const loadRoles = useCallback(async (searchQuery: string) => {
+        const { data = [] } = await rolesApi.list({
+            limit: 100,
+            search: searchQuery || undefined,
+            is_active: true,
+        });
+        return data;
+    }, []);
 
-    const loadUsers = async (searchQuery: string) => {
-        setUserLoading(true);
-        try {
-            const response = await usersApi.list({ limit: 100, search: searchQuery || undefined });
-            setUserOptions(
-                (response.data || []).map(u => ({ value: u.id, label: u.username }))
-            );
-        } catch (err) {
-            console.error('Failed to load users', err);
-        } finally {
-            setUserLoading(false);
-        }
-    };
+    const loadUsers = useCallback(async (searchQuery: string) => {
+        const { data = [] } = await usersApi.list({ limit: 100, search: searchQuery, status: 'active' });
+        return data;
+    }, []);
+
+    const {
+        options: roleOptions,
+        loading: roleLoading,
+        loadOptions: loadRoleOptions,
+    } = useAsyncSearchOptions<{ id: string; name: string }, MultiSelectOption>({
+        loader: loadRoles,
+        mapOption: (role) => ({ value: role.id, label: role.name }),
+    });
+
+    const {
+        options: userOptions,
+        loading: userLoading,
+        loadOptions: loadUserOptions,
+    } = useAsyncSearchOptions<{ id: string; username: string }, MultiSelectOption>({
+        loader: loadUsers,
+        mapOption: (nextUser) => ({ value: nextUser.id, label: nextUser.username }),
+    });
+
+    useEffect(() => {
+        void loadRoleOptions('');
+        void loadUserOptions('');
+    }, [loadRoleOptions, loadUserOptions]);
 
     // ---------------- HANDLERS ----------------
 
@@ -106,7 +104,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
 
     // ---------------- VALIDATION ----------------
 
-    const validate = (): boolean => {
+    const validate = useCallback((): boolean => {
         const newErrors: Record<string, string> = {};
 
         const nameErr = validateRequired(formData.name.trim(), 'Name');
@@ -119,11 +117,11 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
-    };
+    }, [formData.code, formData.name, isEditing]);
 
     // ---------------- SUBMIT ----------------
 
-    const handleSubmit = async () => {
+    const handleSubmit = useCallback(async () => {
         if (!validate()) {
             scrollToFirstError();
             return;
@@ -162,7 +160,13 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
         } finally {
             setLoading(false);
         }
-    };
+    }, [formData.code, formData.description, formData.is_active, formData.name, group, isEditing, onError, onSuccess, selectedRoles, selectedUsers, setLoading, validate]);
+
+    useImperativeHandle(ref, () => ({
+        submit: () => {
+            void handleSubmit();
+        },
+    }), [handleSubmit]);
 
     // ---------------- UI ----------------
 
@@ -209,7 +213,7 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
                 options={roleOptions}
                 value={selectedRoles}
                 onChange={setSelectedRoles}
-                onSearch={loadRoles}
+                onSearch={loadRoleOptions}
                 loading={roleLoading}
                 emptyMessage="No roles available"
             />
@@ -221,22 +225,10 @@ export function GroupForm({ group, onSuccess, onError, setLoading }: GroupFormPr
                 options={userOptions}
                 value={selectedUsers}
                 onChange={setSelectedUsers}
-                onSearch={loadUsers}
+                onSearch={loadUserOptions}
                 loading={userLoading}
                 emptyMessage="No users available"
             />
-
-            <button
-                type="button"
-                id="group-form-submit"
-                className="visually-hidden"
-                onClick={handleSubmit}
-            />
         </div>
     );
-}
-
-// Trigger submit from modal
-export function submitGroupForm() {
-    document.getElementById('group-form-submit')?.click();
-}
+});

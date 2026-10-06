@@ -4,33 +4,42 @@
  * Manage user groups using centralized hooks for pagination and CRUD.
  */
 
-import { useState, useMemo } from 'react';
+import { Suspense, lazy, useMemo, useRef } from 'react';
 import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import { groupsApi } from '../../../core/api/rbac.api';
 import type { Group } from '../../../core/types/group.types';
-import { usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
-import { useToast } from '../../../core/contexts/ToastContext';
+import { createPaginatedSource, usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
+import { useToast } from '../../../core/contexts/useToast';
 import { FormModal } from '../../../core/components/FormModal';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
-import { GroupForm, submitGroupForm } from '../components';
+import { RbacFormSkeleton, RbacPageSkeleton } from '../components/RbacPageSkeleton';
+import type { RbacFormHandle } from '../components';
 import './SettingsPage.css';
+
+const GroupForm = lazy(() => import('../components/GroupForm').then((module) => ({ default: module.GroupForm })));
 
 export function GroupsPage() {
     const toast = useToast();
+    const formRef = useRef<RbacFormHandle>(null);
     const {
         data: groups,
-        isLoading,
+        isInitialLoading,
         error: listError,
         searchQuery,
         setSearchQuery,
         page,
         totalPages,
+        limit,
+        limitOptions,
         setPage,
+        setLimit,
         reload,
         filters,
-        setFilters
-    } = usePaginatedData<Group>(groupsApi.list, { initialLimit: 100 });
+        draftFilters,
+        setDraftFilters,
+        filterModal
+    } = usePaginatedData<Group>(createPaginatedSource('groups', groupsApi.list));
 
     const {
         showFormModal,
@@ -55,7 +64,6 @@ export function GroupsPage() {
         toast,
     });
 
-    const [showFilterModal, setShowFilterModal] = useState(false);
     const detailsModal = useDetailsModal();
 
     const groupFields = useMemo<FieldConfig<Group>[]>(() => [
@@ -63,25 +71,21 @@ export function GroupsPage() {
         { label: 'Code', key: 'code' },
         { label: 'Description', key: 'description' },
         {
-            label: 'Status', key: 'is_active', render: (v: boolean) => (
+            label: 'Status', key: 'is_active', render: (v: unknown) => (
                 <span className={`status-badge status-${v ? 'active' : 'inactive'}`}>{v ? 'Active' : 'Inactive'}</span>
             )
         },
         { label: 'User Count', key: 'user_count' },
         {
-            label: 'Roles', key: 'roles', render: (v: any) => {
+            label: 'Roles', key: 'roles', render: (v: unknown) => {
                 if (!v || !Array.isArray(v) || v.length === 0) return '—';
-                return v.map((r: any) => r.name).join(', ');
+                return v.map((r: { name: string }) => r.name).join(', ');
             }
         },
-        {
-            label: 'Users', key: 'users', render: (v: any) => {
-                if (!v || !Array.isArray(v) || v.length === 0) return '—';
-                return v.map((u: any) => u.name).join(', ');
-            }
-        },
-        { label: 'Created At', key: 'created_at', render: (v: any) => v ? new Date(v).toLocaleString() : '—' },
+        { label: 'Created At', key: 'created_at', render: (v: unknown) => v ? new Date(v as string).toLocaleString() : '—' },
         { label: 'Created By', key: 'created_by_name' },
+        { label: 'Updated At', key: 'updated_at', render: (v: unknown) => v ? new Date(v as string).toLocaleString() : '—' },
+        { label: 'Updated By', key: 'updated_by_name' },
     ], []);
 
     const error = listError || crudError;
@@ -89,41 +93,41 @@ export function GroupsPage() {
 
     return (
         <div className="settings-page">
-            <header className="page-header">
-                <div>
-                    <h1>Groups</h1>
-                    <p>Manage user groups and their roles</p>
-                </div>
-                <button className="btn btn-primary" onClick={openCreate}>
-                    <Plus size={18} /> Add Group
-                </button>
-            </header>
-
-            <div className="page-toolbar">
-                <div className="search-box">
-                    <Search size={18} />
-                    <input
-                        type="text"
-                        placeholder="Search groups..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
-                <button
-                    className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setShowFilterModal(true)}
-                >
-                    <Filter size={18} /> Filter
-                    {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
-                </button>
-            </div>
-
-            {error && <div className="error-banner">{error}</div>}
-
-            {isLoading ? (
-                <div className="loading-state">Loading groups...</div>
+            {isInitialLoading ? (
+                <RbacPageSkeleton columns={5} rows={4} />
             ) : (
                 <>
+                    <header className="page-header">
+                        <div>
+                            <h1>Groups</h1>
+                            <p>Manage user groups and their roles</p>
+                        </div>
+                        <button className="btn btn-primary" onClick={openCreate}>
+                            <Plus size={18} /> Add Group
+                        </button>
+                    </header>
+
+                    <div className="page-toolbar">
+                        <div className="search-box">
+                            <Search size={18} />
+                            <input
+                                type="text"
+                                placeholder="Search groups..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+                        <button
+                            className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={filterModal.open}
+                        >
+                            <Filter size={18} /> Filter
+                            {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
+                        </button>
+                    </div>
+
+                    {error && <div className="error-banner">{error}</div>}
+
                     <div className="data-table-wrapper">
                         <table className="data-table">
                             <thead>
@@ -167,6 +171,18 @@ export function GroupsPage() {
                     </div>
 
                     <div className="pagination">
+                        <div className="page-size">
+                            <label className="form-label">Rows</label>
+                            <select
+                                className="form-control"
+                                value={limit}
+                                onChange={(e) => setLimit(Number(e.target.value))}
+                            >
+                                {limitOptions.map((option) => (
+                                    <option key={option} value={option}>{option}</option>
+                                ))}
+                            </select>
+                        </div>
                         <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
                         <span>Page {page} of {totalPages}</span>
                         <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
@@ -179,16 +195,19 @@ export function GroupsPage() {
                 isOpen={showFormModal}
                 title={editingItem ? 'Edit Group' : 'Add New Group'}
                 isLoading={false}
-                onSubmit={() => submitGroupForm()}
+                onSubmit={() => formRef.current?.submit()}
                 onCancel={closeForm}
                 size="md"
             >
-                <GroupForm
-                    group={editingItem}
-                    onSuccess={handleFormSuccess}
-                    onError={(err) => toast.error(err)}
-                    setLoading={() => { }}
-                />
+                <Suspense fallback={<RbacFormSkeleton />}>
+                    <GroupForm
+                        ref={formRef}
+                        group={editingItem}
+                        onSuccess={handleFormSuccess}
+                        onError={(err) => toast.error(err)}
+                        setLoading={() => { }}
+                    />
+                </Suspense>
             </FormModal>
 
             {/* Delete Confirmation */}
@@ -206,10 +225,10 @@ export function GroupsPage() {
 
             {/* Filter Modal Placeholder */}
             <FormModal
-                isOpen={showFilterModal}
+                isOpen={filterModal.isOpen}
                 title="Filter Groups"
-                onSubmit={() => setShowFilterModal(false)}
-                onCancel={() => setShowFilterModal(false)}
+                onSubmit={filterModal.submit}
+                onCancel={filterModal.close}
                 size="sm"
             >
                 <div className="filter-form">
@@ -217,9 +236,9 @@ export function GroupsPage() {
                         <label className="form-label">Status</label>
                         <select
                             className="form-control"
-                            value={filters.isActive === undefined ? '' : filters.isActive.toString()}
-                            onChange={(e) => setFilters({
-                                ...filters,
+                            value={draftFilters.isActive === undefined ? '' : draftFilters.isActive.toString()}
+                            onChange={(e) => setDraftFilters({
+                                ...draftFilters,
                                 isActive: e.target.value === '' ? undefined : e.target.value === 'true'
                             })}
                         >
@@ -228,12 +247,11 @@ export function GroupsPage() {
                             <option value="false">Inactive</option>
                         </select>
                     </div>
-                    {Object.keys(filters).length > 0 && (
+                    {Object.keys(draftFilters).length > 0 && (
                         <button
                             className="btn btn-text filter-clear"
                             onClick={() => {
-                                setFilters({});
-                                setShowFilterModal(false);
+                                setDraftFilters({});
                             }}
                         >
                             Clear All Filters

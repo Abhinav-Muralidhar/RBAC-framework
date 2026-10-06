@@ -22,6 +22,7 @@ import {
     InvalidModuleActionError,
     RBACInternalError
 } from '../errors/rbac.errors';
+import { badRequest, forbidden, internalError, unauthorized } from '../errors/api.errors';
 
 // Uses global Request type augmentation from types/express.d.ts
 // which adds user?: { id: string; sessionId?: string; }
@@ -44,22 +45,12 @@ export function requirePermission(
         try {
             // FAIL-CLOSED: Missing user
             if (!req.user) {
-                res.status(401).json({
-                    error: 'Unauthorized',
-                    message: 'Authentication required',
-                    code: 'AUTH_REQUIRED'
-                });
-                return;
+                return next(unauthorized('Authentication required', 'AUTH_REQUIRED'));
             }
 
             // FAIL-CLOSED: Missing user ID
             if (!req.user.id) {
-                res.status(401).json({
-                    error: 'Unauthorized',
-                    message: 'Invalid user context: missing user ID',
-                    code: 'INVALID_USER_CONTEXT'
-                });
-                return;
+                return next(unauthorized('Invalid user context: missing user ID', 'INVALID_USER_CONTEXT'));
             }
 
             const { id: userId } = req.user;
@@ -95,16 +86,10 @@ export function requirePermission(
                         }
                     }).catch(() => { });
 
-                    res.status(403).json({
-                        error: 'Forbidden',
-                        message: error.message,
-                        code: 'PERMISSION_DENIED',
-                        details: {
-                            moduleCode: error.moduleCode,
-                            action: error.action
-                        }
-                    });
-                    return;
+                    return next(forbidden(error.message, 'PERMISSION_DENIED', {
+                        moduleCode: error.moduleCode,
+                        action: error.action
+                    }));
                 }
 
                 if (error instanceof InvalidModuleActionError) {
@@ -120,12 +105,7 @@ export function requirePermission(
                         new_values: { reason: 'INVALID_MODULE_ACTION' }
                     }).catch(() => { });
 
-                    res.status(400).json({
-                        error: 'Bad Request',
-                        message: error.message,
-                        code: 'INVALID_MODULE_ACTION'
-                    });
-                    return;
+                    return next(badRequest(error.message, 'INVALID_MODULE_ACTION'));
                 }
 
                 if (error instanceof RBACInternalError) {
@@ -144,12 +124,7 @@ export function requirePermission(
                         new_values: { reason: 'RBAC_INTERNAL_ERROR' }
                     }).catch(() => { });
 
-                    res.status(500).json({
-                        error: 'Internal Server Error',
-                        message: 'Permission evaluation failed',
-                        code: 'RBAC_INTERNAL_ERROR'
-                    });
-                    return;
+                    return next(internalError('Permission evaluation failed', 'RBAC_INTERNAL_ERROR'));
                 }
 
                 // FAIL-CLOSED: Unknown error = deny access
@@ -167,12 +142,7 @@ export function requirePermission(
                     new_values: { reason: 'UNKNOWN_ERROR' }
                 }).catch(() => { });
 
-                res.status(500).json({
-                    error: 'Internal Server Error',
-                    message: 'Permission evaluation failed',
-                    code: 'UNKNOWN_ERROR'
-                });
-                return;
+                return next(internalError('Permission evaluation failed', 'UNKNOWN_ERROR'));
             }
 
         } catch (error) {
@@ -193,12 +163,7 @@ export function requirePermission(
                 }).catch(() => { });
             }
 
-            res.status(500).json({
-                error: 'Internal Server Error',
-                message: 'Permission check failed',
-                code: 'MIDDLEWARE_ERROR'
-            });
-            return;
+            return next(internalError('Permission check failed', 'MIDDLEWARE_ERROR'));
         }
     };
 }

@@ -5,21 +5,25 @@
  * Handles validation and submission for create/update operations.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { forwardRef, useState, useEffect, useRef, useImperativeHandle, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { FormInput, FormSelect } from '../../../core/components/FormElements';
-import type { OrganizationResponseDto } from '../../../core/types/organization.types';
+import type { Organization } from '../../../core/types/organization.types';
 import { organizationApi } from '../../../core/api/rbac.api';
-import { validateRequired, scrollToFirstError, parseApiError } from '../../../core/utils';
+import { validateRequired, validateDigitsLength, scrollToFirstError, parseApiError, validateExactLength, validateOptionalUrl, validatePhoneNumber } from '../../../core/utils';
+import type { RbacFormHandle } from './form.types';
+import './EntityForm.css';
 
 interface OrganizationFormProps {
-    organization?: OrganizationResponseDto | null;
-    onSuccess: (organization: OrganizationResponseDto) => void;
+    organization?: Organization | null;
+    onSuccess: (organization: Organization) => void;
     onError: (error: string) => void;
     setLoading: (loading: boolean) => void;
 }
 
-export function OrganizationForm({ organization, onSuccess, onError, setLoading }: OrganizationFormProps) {
+export const OrganizationForm = forwardRef<RbacFormHandle, OrganizationFormProps>(function OrganizationForm({ organization, onSuccess, onError, setLoading }, ref) {
     const isEditing = !!organization;
+    const queryClient = useQueryClient();
 
     const [formData, setFormData] = useState({
         company_name: organization?.company_name || '',
@@ -46,8 +50,9 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const ASSET_BASE_URL = API_BASE_URL.replace(/\/v1\/?$/, '');
     const currentLogoUrl = organization?.company_logo
-        ? `${API_BASE_URL}/${organization.company_logo}`
+        ? `${ASSET_BASE_URL}/${organization.company_logo}`
         : null;
 
     // Keep state in sync with props
@@ -95,22 +100,87 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
 
     // ---------------- VALIDATION ----------------
 
-    const validate = (): boolean => {
+    const validate = useCallback((): boolean => {
         const newErrors: Record<string, string> = {};
 
-        const nameErr = validateRequired(formData.company_name, 'Company Name');
+        const nameErr = validateRequired(formData.company_name.trim(), 'Company Name');
         if (nameErr) newErrors.company_name = nameErr;
 
-        const gstinErr = validateRequired(formData.gstin, 'GSTIN');
+        const addressErr = validateRequired(formData.address.trim(), 'Address');
+        if (addressErr) newErrors.address = addressErr;
+
+        const cityErr = validateRequired(formData.city.trim(), 'City');
+        if (cityErr) newErrors.city = cityErr;
+
+        const stateErr = validateRequired(formData.state.trim(), 'State');
+        if (stateErr) newErrors.state = stateErr;
+
+        const postalErr = validateRequired(formData.postal_code.trim(), 'Postal Code');
+        if (postalErr) newErrors.postal_code = postalErr;
+
+        const postalLenErr = validateDigitsLength(formData.postal_code.trim(), 6, 'Postal Code');
+        if (postalLenErr) newErrors.postal_code = postalLenErr;
+
+        const countryErr = validateRequired(formData.country.trim(), 'Country');
+        if (countryErr) newErrors.country = countryErr;
+
+        const countryCodeErr = validateRequired(formData.country_code.trim(), 'Country Code');
+        if (countryCodeErr) newErrors.country_code = countryCodeErr;
+
+        const gstinErr = validateRequired(formData.gstin.trim(), 'GSTIN');
         if (gstinErr) newErrors.gstin = gstinErr;
+
+        const gstinLenErr = validateExactLength(formData.gstin.trim(), 15, 'GSTIN');
+        if (gstinLenErr) newErrors.gstin = gstinLenErr;
+
+        const phoneLenErr = validateDigitsLength(formData.phone, 10, 'Phone');
+        if (phoneLenErr) newErrors.phone = phoneLenErr;
+
+        const faxErr = validatePhoneNumber(formData.fax, 'Fax');
+        if (faxErr) newErrors.fax = faxErr;
+
+        const websiteErr = validateOptionalUrl(formData.website, 'Website');
+        if (websiteErr) newErrors.website = websiteErr;
+
+        const facebookErr = validateOptionalUrl(formData.facebook, 'Facebook');
+        if (facebookErr) newErrors.facebook = facebookErr;
+
+        const twitterErr = validateOptionalUrl(formData.twitter, 'Twitter');
+        if (twitterErr) newErrors.twitter = twitterErr;
+
+        const linkedinErr = validateOptionalUrl(formData.linkedin, 'LinkedIn');
+        if (linkedinErr) newErrors.linkedin = linkedinErr;
+
+        if (formData.financial_year_start_month) {
+            const month = Number(formData.financial_year_start_month);
+            if (!Number.isInteger(month) || month < 1 || month > 12) {
+                newErrors.financial_year_start_month = 'Financial year start month must be between 1 and 12';
+            }
+        }
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
-    };
+    }, [
+        formData.address,
+        formData.city,
+        formData.country,
+        formData.country_code,
+        formData.facebook,
+        formData.fax,
+        formData.financial_year_start_month,
+        formData.gstin,
+        formData.linkedin,
+        formData.phone,
+        formData.postal_code,
+        formData.state,
+        formData.twitter,
+        formData.website,
+        formData.company_name,
+    ]);
 
     // ---------------- SUBMIT ----------------
 
-    const handleSubmit = async () => {
+    const handleSubmit = useCallback(async () => {
         if (!validate()) {
             scrollToFirstError();
             return;
@@ -119,12 +189,12 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
         setLoading(true);
 
         try {
-            let result: OrganizationResponseDto | undefined;
+            let result: Organization | undefined;
 
             if (isEditing && organization) {
                 const payload = {
                     version: organization.version,
-                    company_name: formData.company_name,
+                    company_name: formData.company_name.trim(),
                     address: formData.address || undefined,
                     city: formData.city || undefined,
                     state: formData.state || undefined,
@@ -140,11 +210,12 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
                     financial_year_start_month: formData.financial_year_start_month
                         ? parseInt(formData.financial_year_start_month)
                         : undefined,
-                    gstin: formData.gstin,
+                    gstin: formData.gstin.trim(),
                     is_active: formData.is_active,
                 };
 
                 result = await organizationApi.update(organization.id, payload, logoFile || undefined);
+                queryClient.invalidateQueries({ queryKey: ['branding'] });
             }
 
             if (result) {
@@ -155,7 +226,13 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
         } finally {
             setLoading(false);
         }
-    };
+    }, [formData, isEditing, logoFile, onError, onSuccess, organization, queryClient, setLoading, validate]);
+
+    useImperativeHandle(ref, () => ({
+        submit: () => {
+            void handleSubmit();
+        },
+    }), [handleSubmit]);
 
     // ---------------- UI ----------------
 
@@ -223,11 +300,15 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
                     label="Address"
                     value={formData.address}
                     onChange={e => handleChange('address', e.target.value)}
+                    error={errors.address}
+                    required
                 />
                 <FormInput
                     label="City"
                     value={formData.city}
                     onChange={e => handleChange('city', e.target.value)}
+                    error={errors.city}
+                    required
                 />
             </div>
 
@@ -236,11 +317,15 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
                     label="State"
                     value={formData.state}
                     onChange={e => handleChange('state', e.target.value)}
+                    error={errors.state}
+                    required
                 />
                 <FormInput
                     label="Postal Code"
                     value={formData.postal_code}
                     onChange={e => handleChange('postal_code', e.target.value)}
+                    error={errors.postal_code}
+                    required
                 />
             </div>
 
@@ -249,11 +334,15 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
                     label="Country"
                     value={formData.country}
                     onChange={e => handleChange('country', e.target.value)}
+                    error={errors.country}
+                    required
                 />
                 <FormInput
                     label="Country Code"
                     value={formData.country_code}
                     onChange={e => handleChange('country_code', e.target.value)}
+                    error={errors.country_code}
+                    required
                 />
             </div>
 
@@ -262,6 +351,7 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
                     label="Phone"
                     value={formData.phone || ''}
                     onChange={e => handleChange('phone', e.target.value)}
+                    error={errors.phone}
                 />
                 <FormInput
                     label="Fax"
@@ -305,6 +395,7 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
                     label="Financial Year Start Month"
                     value={formData.financial_year_start_month}
                     onChange={e => handleChange('financial_year_start_month', e.target.value)}
+                    error={errors.financial_year_start_month}
                     options={[
                         { value: '', label: 'Select Month' },
                         { value: '1', label: 'January' },
@@ -333,18 +424,6 @@ export function OrganizationForm({ organization, onSuccess, onError, setLoading 
                 />*/}
             </div>
 
-            {/* Hidden submit button */}
-            <button
-                type="button"
-                id="organization-form-submit"
-                className="visually-hidden"
-                onClick={handleSubmit}
-            />
         </div>
     );
-}
-
-/** Trigger submit from FormModal */
-export function submitOrganizationForm() {
-    document.getElementById('organization-form-submit')?.click();
-}
+});

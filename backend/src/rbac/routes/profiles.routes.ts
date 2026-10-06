@@ -9,35 +9,28 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { ProfileService } from '../services/profile.service';
 import { EvaluationService } from '../services/evaluation.service';
 import { IAuditService } from '../services/audit.service';
-import { parseId, parsePagination } from './_paramUtils';
+import { getOptionalQuery, parseBooleanQuery, parseId, parsePagination, pickAllowedFields } from './_paramUtils';
 import { IDatabase } from 'pg-promise';
 import { requirePermission } from '../middleware/requirePermission.middleware';
-import { withTransaction, TransactionTask } from '../utils/transaction.utils';
-/**
- * Standard response envelope
- */
-function sendSuccess<T>(res: Response, data: T, meta?: Record<string, unknown>) {
-    res.json({ data, error: null, meta: meta ?? {} });
-}
-
-function sendError(res: Response, status: number, message: string, code?: string) {
-    res.status(status).json({
-        data: null,
-        error: { message, code: code ?? 'ERROR' },
-        meta: {}
-    });
-}
-function parseFilter(query: any): any {
-    const filter: any = {};
-    if (query.is_active) filter.is_active = query.is_active;
-    if (query.code) filter.code = query.code;
-    if (query.search) filter.search = query.search;
+import { withTransaction, TransactionTask } from '../../utils/transaction.utils';
+import { CreateProfileRequestDto, UpdateProfileRequestDto } from '../dto/profile.dto';
+import { sendSuccess } from './_response';
+function parseFilter(query: Request['query']): { is_active?: boolean; code?: string; search?: string } {
+    const filter: { is_active?: boolean; code?: string; search?: string } = {};
+    const isActive = parseBooleanQuery(query, 'is_active');
+    const code = getOptionalQuery(query, 'code');
+    const search = getOptionalQuery(query, 'search');
+    if (isActive !== undefined) filter.is_active = isActive;
+    if (code) filter.code = code;
+    if (search) filter.search = search;
     return filter;
 }
 
 
 export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAuditService, evaluationService: EvaluationService, profileService: ProfileService): Router {
     const router = Router();
+    const createProfileFields = ['name', 'code', 'description', 'is_active', 'permission_ids'] as const;
+    const updateProfileFields = ['version', 'name', 'code', 'description', 'is_active', 'permission_ids'] as const;
 
     /**
      * GET /rbac/profiles
@@ -45,7 +38,7 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      */
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const pagination = parsePagination(req.query);
@@ -70,7 +63,7 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      */
     router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
 
                 const profileId = parseId(req.params.id, 'profileId');
                 const profile = await profileService.getById(t, req.user!.id, profileId);
@@ -93,10 +86,11 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      */
     router.post('/', requirePermission('SETTINGS', 'create', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
-                const profile = await profileService.create(t, actingUserId, req.body, req.auditContext);
+                const payload = pickAllowedFields<CreateProfileRequestDto, keyof CreateProfileRequestDto>(req.body, createProfileFields);
+                const profile = await profileService.create(t, actingUserId, payload as CreateProfileRequestDto, req.auditContext);
                 return profile;
             });
             sendSuccess(res, result);
@@ -111,11 +105,12 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      */
     router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const profileId = parseId(req.params.id, 'profileId');
-                const profile = await profileService.update(t, actingUserId, profileId, req.body, req.auditContext);
+                const payload = pickAllowedFields<UpdateProfileRequestDto, keyof UpdateProfileRequestDto>(req.body, updateProfileFields);
+                const profile = await profileService.update(t, actingUserId, profileId, payload as UpdateProfileRequestDto, req.auditContext);
                 return profile;
             });
             sendSuccess(res, result);
@@ -130,7 +125,7 @@ export function createProfilesRouter(db: IDatabase<unknown>, auditService: IAudi
      */
     router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
 
                 const actingUserId = req.user!.id;
                 const profileId = parseId(req.params.id, 'profileId');

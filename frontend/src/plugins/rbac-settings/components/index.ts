@@ -1,6 +1,8 @@
-export { UserForm, submitUserForm } from './UserForm';
-export { RoleForm, submitRoleForm } from './RoleForm';
-export { GroupForm, submitGroupForm } from './GroupForm';
-export { SmtpForm, submitSmtpForm } from './SmtpForm';
-export { OrganizationForm, submitOrganizationForm } from './OrganizationForm';
+export { UserForm } from './UserForm';
+export { RoleForm } from './RoleForm';
+export { GroupForm } from './GroupForm';
+export { SmtpForm } from './SmtpForm';
+export { OrganizationForm } from './OrganizationForm';
+export { ProfileForm } from './ProfileForm';
+export type { RbacFormHandle } from './form.types';
 import './EntityForm.css';

@@ -7,48 +7,34 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import { IDatabase } from 'pg-promise';
-import { SmtpConfigRepository } from '../repositories/smtp_config.repository';
 import { SmtpConfigService } from '../services/smtpConfig.service';
 import { AuditService } from '../services/audit.service';
-import { parsePagination, getRequiredParam } from './_paramUtils';
-import { SmtpConfigCreate } from '../dto/smtp_config.dto';
-import { PermissionsRepository } from '../repositories/permissions.repository';
+import { getOptionalQuery, parseBooleanQuery, parsePagination, getRequiredParam, pickAllowedFields } from './_paramUtils';
+import { SmtpConfigUpdate } from '../dto/smtp_config.dto';
 import { EvaluationService } from '../services/evaluation.service';
 import { requirePermission } from '../middleware/requirePermission.middleware';
-import { TransactionTask, withTransaction } from '../utils/transaction.utils';
-
-/**
- * Standard response envelope
- */
-function sendSuccess<T>(res: Response, data: T, meta?: Record<string, unknown>) {
-    res.json({ data, error: null, meta: meta ?? {} });
-}
-
-function sendError(res: Response, status: number, message: string, code?: string) {
-    res.status(status).json({
-        data: null,
-        error: { message, code: code ?? 'ERROR' },
-        meta: {}
-    });
-}
+import { TransactionTask, withTransaction } from '../../utils/transaction.utils';
+import { sendSuccess } from './_response';
 
 /**
  * Parse filters from query parameters
  */
-function parseFilters(query: any): { isActive?: boolean; search?: string } {
+function parseFilters(query: Request['query']): { isActive?: boolean; search?: string } {
     const filters: { isActive?: boolean; search?: string } = {};
-    if (query.is_active === 'true') filters.isActive = true;
-    if (query.is_active === 'false') filters.isActive = false;
-    if (query.search) filters.search = query.search;
+    const isActive = parseBooleanQuery(query, 'is_active');
+    const search = getOptionalQuery(query, 'search');
+    if (isActive !== undefined) filters.isActive = isActive;
+    if (search) filters.search = search;
     return filters;
 }
 
 export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditService, evaluationService: EvaluationService, smtpService: SmtpConfigService): Router {
     const router = Router();
+    const updateSmtpFields = ['version', 'name', 'host', 'port', 'username', 'password', 'encryption', 'from_email', 'from_name', 'reply_to_email', 'is_active'] as const;
     // --- List all SMTP configs ---
     router.get('/', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
                 const filters = parseFilters(req.query);
                 const pagination = parsePagination(req.query);
                 const result = await smtpService.listAll(t, filters, pagination);
@@ -65,10 +51,26 @@ export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditServ
         }
     });
 
-    // --- Get SMTP config by ID ---
-    router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    /**
+     * GET /rbac/smtpconfig/active
+     * Fetches the currently active SMTP configuration.
+     */
+    router.get('/active', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
+                const config = await smtpService.getActiveReadModel(t);
+                return config;
+            });
+            sendSuccess(res, result);
+        } catch (error) {
+            next(error);
+        }
+    });
+
+    // --- Get SMTP config by ID ---
+    router.get('/:id', requirePermission('SETTINGS', 'read', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
                 const id = getRequiredParam(req.params, 'id');
                 const config = await smtpService.getById(t, id);
                 return config;
@@ -80,9 +82,10 @@ export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditServ
     });
 
     // --- Create a new SMTP config ---
+    /*
     router.post('/', requirePermission('SETTINGS', 'create', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
                 const data = req.body as SmtpConfigCreate;
                 const actingUserId = req.user!.id;
                 const config = await smtpService.create(t, data, actingUserId, req.auditContext);
@@ -93,15 +96,16 @@ export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditServ
             next(error);
         }
     });
+    */
 
     // --- Update an existing SMTP config ---
     router.patch('/:id', requirePermission('SETTINGS', 'update', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
                 const id = getRequiredParam(req.params, 'id');
-                const data = req.body;
+                const data = pickAllowedFields<SmtpConfigUpdate, keyof SmtpConfigUpdate>(req.body, updateSmtpFields);
                 const actingUserId = req.user!.id;
-                const updated = await smtpService.update(t, id, data, actingUserId, req.auditContext);
+                const updated = await smtpService.update(t, id, data as SmtpConfigUpdate, actingUserId, req.auditContext);
                 return updated;
             });
             sendSuccess(res, result);
@@ -111,9 +115,10 @@ export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditServ
     });
 
     // Delete an SMTP config
+    /*
     router.delete('/:id', requirePermission('SETTINGS', 'delete', evaluationService, auditService), async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
+            const result = await withTransaction(db, async (t: TransactionTask) => {
                 const id = getRequiredParam(req.params, 'id');
                 const actingUserId = req.user!.id;
                 await smtpService.delete(t, id, actingUserId, req.auditContext);
@@ -124,6 +129,7 @@ export function createSmtpRouter(db: IDatabase<unknown>, auditService: AuditServ
             next(error);
         }
     });
+    */
 
     return router;
 }

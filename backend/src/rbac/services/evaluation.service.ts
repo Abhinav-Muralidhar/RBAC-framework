@@ -19,7 +19,7 @@ import {
     PermissionDeniedError,
 } from '../errors/rbac.errors';
 import { PermissionAction } from '../models/permissions.model';
-import { TransactionTask } from '../utils/transaction.utils';
+import { TransactionTask } from '../../utils/transaction.utils';
 export interface IEvaluationService {
     /**
      * Evaluate if user has permission for module/action
@@ -46,7 +46,8 @@ export interface IEvaluationService {
     enforcePermission(
         userId: string,
         moduleCode: string,
-        action: string
+        action: string,
+        t?: TransactionTask
     ): Promise<void>;
 }
 
@@ -153,12 +154,9 @@ export class EvaluationService implements IEvaluationService {
         userId: string,
         requests: Array<{ moduleCode: string; action: string }>
     ): Promise<PermissionDecision[]> {
-        const results: PermissionDecision[] = [];
-        for (const req of requests) {
-            const decision = await this.evaluate(t, userId, req.moduleCode, req.action);
-            results.push(decision);
-        }
-        return results;
+        return Promise.all(
+            requests.map(req => this.evaluate(t, userId, req.moduleCode, req.action))
+        );
     }
 
     /**
@@ -168,9 +166,10 @@ export class EvaluationService implements IEvaluationService {
     async enforcePermission(
         userId: string,
         moduleCode: string,
-        action: string
+        action: string,
+        t?: TransactionTask
     ): Promise<void> {
-        const decision = await this.evaluate(undefined, userId, moduleCode, action);
+        const decision = await this.evaluate(t, userId, moduleCode, action);
 
         if (!decision.granted) {
             throw new PermissionDeniedError(userId, moduleCode, action);

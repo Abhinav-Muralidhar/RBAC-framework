@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { forwardRef, useState, useEffect, useCallback, useImperativeHandle, useMemo } from 'react';
 import { FormInput, FormSwitch } from '../../../core/components/FormElements';
 import type { Profile, CreateProfileDto, UpdateProfileDto, Permission } from '../../../core/types/profile.types';
 import { profilesApi, permissionsApi } from '../../../core/api/rbac.api';
 import { validateRequired, validateCode, scrollToFirstError, parseApiError } from '../../../core/utils';
+import type { RbacFormHandle } from './form.types';
+import './EntityForm.css';
 
 interface ProfileFormProps {
     profile?: Profile | null;
@@ -11,7 +13,12 @@ interface ProfileFormProps {
     setLoading: (loading: boolean) => void;
 }
 
-export function ProfileForm({ profile, onSuccess, onError, setLoading }: ProfileFormProps) {
+interface ModulePermissionGroup {
+    moduleName: string;
+    permissions: Permission[];
+ }
+
+export const ProfileForm = forwardRef<RbacFormHandle, ProfileFormProps>(function ProfileForm({ profile, onSuccess, onError, setLoading }, ref) {
     const isEditing = !!profile;
 
     const [formData, setFormData] = useState({
@@ -26,12 +33,6 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
     const [selectedPermissionIds, setSelectedPermissionIds] = useState<string[]>(profile?.permissions?.map(p => p.id) ?? []);
     const [loadingPermissions, setLoadingPermissions] = useState(true); // Loading state for permissions
 
-    // Define a mapping for module_id to module_name
-    const moduleMapping: Record<string, string> = {
-        "1": "Settings",
-        "2": "Dashboard",
-    };
-
     // Toggle selected permission
     const togglePermission = (id: string) => {
         setSelectedPermissionIds(prev =>
@@ -41,29 +42,69 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
         );
     };
 
-    // Group permissions by module_name (based on module_id)
-    const groupedPermissions = permissions.reduce<Record<string, Permission[]>>(
-        (acc, p) => {
-            const moduleName = moduleMapping[p.module_id] || 'Unknown'; // Use module mapping to find module name
-            acc[moduleName] ||= [];
-            acc[moduleName].push(p);
-            return acc;
-        },
-        {}
-    );
+    // Group permissions by module_name
+    const groupedPermissions = useMemo<ModulePermissionGroup[]>(() => {
+        const groups: Record<string, Permission[]> = {};
+        permissions.forEach((permission) => {
+            const moduleName = permission.module_name || 'Unknown';
+            if (!groups[moduleName]) {
+                groups[moduleName] = [];
+            }
+            groups[moduleName].push(permission);
+        });
+
+        const actionOrder = ['create', 'read', 'update', 'delete', 'export'];
+        Object.values(groups).forEach((group) => {
+            group.sort((a, b) => {
+                const idxA = actionOrder.indexOf(a.action);
+                const idxB = actionOrder.indexOf(b.action);
+                if (idxA === -1 || idxB === -1) {
+                    return a.action.localeCompare(b.action);
+                }
+                return idxA - idxB;
+            });
+        });
+
+        const moduleOrder = ['Settings', 'Dashboard', 'Users', 'Roles', 'Profiles', 'Groups', 'Organizations', 'Sessions', 'Audit Logs', 'SMTP'];
+        const moduleEntries = Object.entries(groups).map(([moduleName, perms]) => ({
+            moduleName,
+            permissions: perms,
+        }));
+
+        return moduleEntries.sort((a, b) => {
+            const indexA = moduleOrder.indexOf(a.moduleName);
+            const indexB = moduleOrder.indexOf(b.moduleName);
+            if (indexA === -1 && indexB === -1) {
+                return a.moduleName.localeCompare(b.moduleName);
+            }
+            if (indexA === -1) return 1;
+            if (indexB === -1) return -1;
+            return indexA - indexB;
+        });
+    }, [permissions]);
+
+    const formatPermissionLabel = (value: string) => {
+        return value
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (char) => char.toUpperCase());
+    };
 
     // Load all permissions on mount
-    useEffect(() => {
+    const loadPermissions = useCallback(() => {
         permissionsApi.list()
             .then(permissions => {
                 setPermissions(permissions);
-                setLoadingPermissions(false);  // Permissions are now loaded
+                setLoadingPermissions(false);
             })
             .catch(() => {
                 onError('Failed to load permissions');
-                setLoadingPermissions(false);  // Even on error, stop loading
+                setLoadingPermissions(false);
             });
-    }, []);
+    }, [onError]);
+
+    useEffect(() => {
+        loadPermissions();
+    }, [loadPermissions]);
 
     // Keep state in sync with props
     useEffect(() => {
@@ -85,7 +126,7 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
     };
 
     // ---------------- VALIDATION ----------------
-    const validate = (): boolean => {
+    const validate = useCallback((): boolean => {
         const newErrors: Record<string, string> = {};
         const nameErr = validateRequired(formData.name.trim(), 'Name');
         if (nameErr) newErrors.name = nameErr;
@@ -97,10 +138,10 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
-    };
+    }, [formData.code, formData.name, isEditing]);
 
     // ---------------- SUBMIT ----------------
-    const handleSubmit = async () => {
+    const handleSubmit = useCallback(async () => {
         if (!validate()) {
             scrollToFirstError();
             return;
@@ -134,7 +175,13 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
         } finally {
             setLoading(false);
         }
-    };
+    }, [formData.code, formData.description, formData.is_active, formData.name, isEditing, onError, onSuccess, profile, selectedPermissionIds, setLoading, validate]);
+
+    useImperativeHandle(ref, () => ({
+        submit: () => {
+            void handleSubmit();
+        },
+    }), [handleSubmit]);
 
     // ---------------- UI ----------------
     if (loadingPermissions) {
@@ -180,33 +227,38 @@ export function ProfileForm({ profile, onSuccess, onError, setLoading }: Profile
 
             <div className="form-field">
                 <label className="form-label">Permissions</label>
-                {Object.entries(groupedPermissions).map(([module, perms]) => (
-                    <div key={module} className="permission-group">
-                        <strong>{module}</strong>
-                        {perms.map(p => (
-                            <label key={p.id} className="permission-item">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedPermissionIds.includes(p.id)}
-                                    onChange={() => togglePermission(p.id)}
-                                />
-                                {p.action}
-                            </label>
-                        ))}
-                    </div>
-                ))}
+                <div className="permission-section">
+                    {groupedPermissions.map(({ moduleName, permissions: perms }) => {
+                        const selectedCount = perms.filter(p => selectedPermissionIds.includes(p.id)).length;
+                        return (
+                            <div key={moduleName} className="permission-group">
+                                <div className="permission-group-header">
+                                    <span className="permission-group-title">{moduleName}</span>
+                                    <span className="permission-group-count">
+                                        {selectedCount}/{perms.length} selected
+                                    </span>
+                                </div>
+                                <div className="permission-grid">
+                                    {perms.map(p => {
+                                        const isChecked = selectedPermissionIds.includes(p.id);
+                                        return (
+                                            <label key={p.id} className={`permission-item${isChecked ? ' is-checked' : ''}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => togglePermission(p.id)}
+                                                />
+                                                <span className="permission-label">{formatPermissionLabel(p.action)}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
 
-            <button
-                type="button"
-                id="profile-form-submit"
-                className="visually-hidden"
-                onClick={handleSubmit}
-            />
         </div>
     );
-}
-
-export function submitProfileForm() {
-    document.getElementById('profile-form-submit')?.click();
-}
+});

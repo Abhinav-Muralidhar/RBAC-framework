@@ -1,9 +1,9 @@
-export { UsersPage } from './UsersPage';
-export { RolesPage } from './RolesPage';
-export { ProfilesPage } from './ProfilesPage';
-export { GroupsPage } from './GroupsPage';
-export { AuditLogsPage } from './AuditLogsPage';
-export { SharingRules } from './SharingRules';
-export { OrganizationPage } from './OrganizationsPage';
-export { SessionsPage } from './SessionsPage';
-export { SmtpPage } from './SmtpPage';
+export * from './UsersPage';
+export * from './RolesPage';
+export * from './ProfilesPage';
+export * from './GroupsPage';
+export * from './OrganizationsPage';
+export * from './SharingRules';
+export * from './SmtpPage';
+export * from './AuditLogsPage';
+export * from './SessionsPage';

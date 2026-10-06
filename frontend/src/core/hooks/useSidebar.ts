@@ -4,69 +4,22 @@
  * Sidebar collapse/responsive logic with localStorage persistence.
  */
 
-import { useState, useEffect, useCallback } from 'react';
-
-const MOBILE_BREAKPOINT = 768;
+import { useState, useCallback } from 'react';
 
 export interface UseSidebarReturn {
     isCollapsed: boolean;
-    isMobile: boolean;
-    isMobileOpen: boolean;
     toggle: () => void;
-    toggleMobile: () => void;
-    closeMobile: () => void;
     collapse: () => void;
     expand: () => void;
 }
 
 export function useSidebar(): UseSidebarReturn {
     const [isCollapsed, setIsCollapsed] = useState(() => {
-        if (typeof window === 'undefined') return false;
-        return window.innerWidth < MOBILE_BREAKPOINT;
+        if (typeof window === 'undefined') return true;
+        return true;
     });
-    const [isMobile, setIsMobile] = useState(() =>
-        typeof window !== 'undefined' && window.innerWidth < MOBILE_BREAKPOINT
-    );
-    const [isMobileOpen, setIsMobileOpen] = useState(false);
-
-    // Handle window resize for mobile detection
-    useEffect(() => {
-        const handleResize = () => {
-            const mobile = window.innerWidth < MOBILE_BREAKPOINT;
-            setIsMobile(mobile);
-            // Auto-collapse on mobile
-            if (mobile) {
-                setIsCollapsed(true);
-            }
-            if (!mobile) {
-                setIsCollapsed(false);
-            }
-            if (!mobile) {
-                setIsMobileOpen(false);
-            }
-        };
-
-        window.addEventListener('resize', handleResize);
-        // Initial check
-        handleResize();
-
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
-
     const toggle = useCallback(() => {
-        if (isMobile) {
-            setIsMobileOpen(prev => !prev);
-            return;
-        }
         setIsCollapsed(prev => !prev);
-    }, [isMobile]);
-
-    const toggleMobile = useCallback(() => {
-        setIsMobileOpen(prev => !prev);
-    }, []);
-
-    const closeMobile = useCallback(() => {
-        setIsMobileOpen(false);
     }, []);
 
     const collapse = useCallback(() => {
@@ -79,11 +32,7 @@ export function useSidebar(): UseSidebarReturn {
 
     return {
         isCollapsed,
-        isMobile,
-        isMobileOpen,
         toggle,
-        toggleMobile,
-        closeMobile,
         collapse,
         expand,
     };

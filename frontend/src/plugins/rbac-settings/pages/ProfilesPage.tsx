@@ -4,33 +4,42 @@
  * Manage permission profiles using centralized hooks for pagination and CRUD.
  */
 
-import { useState, useMemo } from 'react';
+import { Suspense, lazy, useMemo, useRef } from 'react';
 import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import { profilesApi } from '../../../core/api/rbac.api';
 import type { Profile } from '../../../core/types/profile.types';
-import { usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
-import { useToast } from '../../../core/contexts/ToastContext';
+import { createPaginatedSource, usePaginatedData, useCrud, useDetailsModal } from '../../../core/hooks';
+import { useToast } from '../../../core/contexts/useToast';
 import { FormModal } from '../../../core/components/FormModal';
 import { ConfirmModal } from '../../../core/components/ConfirmModal';
 import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
-import { ProfileForm, submitProfileForm } from '../components/ProfileForm';
+import { RbacFormSkeleton, RbacPageSkeleton } from '../components/RbacPageSkeleton';
+import type { RbacFormHandle } from '../components';
 import './SettingsPage.css';
+
+const ProfileForm = lazy(() => import('../components/ProfileForm').then((module) => ({ default: module.ProfileForm })));
 
 export function ProfilesPage() {
     const toast = useToast();
+    const formRef = useRef<RbacFormHandle>(null);
     const {
         data: profiles,
-        isLoading,
+        isInitialLoading,
         error: listError,
         searchQuery,
         setSearchQuery,
         page,
         totalPages,
+        limit,
+        limitOptions,
         setPage,
+        setLimit,
         reload,
         filters,
-        setFilters
-    } = usePaginatedData<Profile>(profilesApi.list, { initialLimit: 100 });
+        draftFilters,
+        setDraftFilters,
+        filterModal
+    } = usePaginatedData<Profile>(createPaginatedSource('profiles', profilesApi.list));
 
     const {
         showFormModal,
@@ -55,7 +64,6 @@ export function ProfilesPage() {
         toast,
     });
 
-    const [showFilterModal, setShowFilterModal] = useState(false);
     const detailsModal = useDetailsModal();
 
     const profileFields = useMemo<FieldConfig<Profile>[]>(() => [
@@ -63,60 +71,62 @@ export function ProfilesPage() {
         { label: 'Code', key: 'code' },
         { label: 'Description', key: 'description' },
         {
-            label: 'Status', key: 'is_active', render: (v: boolean) => (
+            label: 'Status', key: 'is_active', render: (v: unknown) => (
                 <span className={`status-badge status-${v ? 'active' : 'inactive'}`}>{v ? 'Active' : 'Inactive'}</span>
             )
         },
         { label: 'Role Count', key: 'role_count' },
         {
-            label: 'Permissions', key: 'permissions', render: (v: any) => {
+            label: 'Permissions', key: 'permissions', render: (v: unknown) => {
                 if (!v || !Array.isArray(v) || v.length === 0) return '—';
-                return v.map((p: any) => `${p.module_name}: ${p.action} (${p.effect})`).join(', ');
+                return v.map((p: { module_name: string; action: string; effect: string }) => `${p.module_name}: ${p.action} (${p.effect})`).join(', ');
             }
         },
-        { label: 'Created At', key: 'created_at', render: (v: any) => v ? new Date(v).toLocaleString() : '—' },
+        { label: 'Created At', key: 'created_at', render: (v: unknown) => v ? new Date(v as string).toLocaleString() : '—' },
         { label: 'Created By', key: 'created_by_name' },
+        { label: 'Updated At', key: 'updated_at', render: (v: unknown) => v ? new Date(v as string).toLocaleString() : '—' },
+        { label: 'Updated By', key: 'updated_by_name' },
     ], []);
 
     const error = listError || crudError;
 
     return (
         <div className="settings-page">
-            <header className="page-header">
-                <div>
-                    <h1>Profiles</h1>
-                    <p>Manage permission profiles</p>
-                </div>
-                <button className="btn btn-primary" onClick={openCreate}>
-                    <Plus size={18} /> Add Profile
-                </button>
-            </header>
-
-            <div className="page-toolbar">
-                <div className="search-box">
-                    <Search size={18} />
-                    <input
-                        type="text"
-                        placeholder="Search profiles..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
-                <button
-                    className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setShowFilterModal(true)}
-                >
-                    <Filter size={18} /> Filter
-                    {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
-                </button>
-            </div>
-
-            {error && <div className="error-banner">{error}</div>}
-
-            {isLoading ? (
-                <div className="loading-state">Loading profiles...</div>
+            {isInitialLoading ? (
+                <RbacPageSkeleton columns={5} rows={4} />
             ) : (
                 <>
+                    <header className="page-header">
+                        <div>
+                            <h1>Profiles</h1>
+                            <p>Manage permission profiles</p>
+                        </div>
+                        <button className="btn btn-primary" onClick={openCreate}>
+                            <Plus size={18} /> Add Profile
+                        </button>
+                    </header>
+
+                    <div className="page-toolbar">
+                        <div className="search-box">
+                            <Search size={18} />
+                            <input
+                                type="text"
+                                placeholder="Search profiles..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+                        <button
+                            className={`btn ${Object.keys(filters).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={filterModal.open}
+                        >
+                            <Filter size={18} /> Filter
+                            {Object.keys(filters).length > 0 && <span className="badge">{Object.keys(filters).length}</span>}
+                        </button>
+                    </div>
+
+                    {error && <div className="error-banner">{error}</div>}
+
                     <div className="data-table-wrapper">
                         <table className="data-table">
                             <thead>
@@ -160,6 +170,18 @@ export function ProfilesPage() {
                     </div>
 
                     <div className="pagination">
+                        <div className="page-size">
+                            <label className="form-label">Rows</label>
+                            <select
+                                className="form-control"
+                                value={limit}
+                                onChange={(e) => setLimit(Number(e.target.value))}
+                            >
+                                {limitOptions.map((option) => (
+                                    <option key={option} value={option}>{option}</option>
+                                ))}
+                            </select>
+                        </div>
                         <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
                         <span>Page {page} of {totalPages}</span>
                         <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
@@ -172,16 +194,19 @@ export function ProfilesPage() {
                 isOpen={showFormModal}
                 title={editingItem ? 'Edit Profile' : 'Add New Profile'}
                 isLoading={false}
-                onSubmit={() => submitProfileForm()}
+                onSubmit={() => formRef.current?.submit()}
                 onCancel={closeForm}
                 size="md"
             >
-                <ProfileForm
-                    profile={editingItem}
-                    onSuccess={handleFormSuccess}
-                    onError={(err) => toast.error(err)}
-                    setLoading={() => { }}
-                />
+                <Suspense fallback={<RbacFormSkeleton />}>
+                    <ProfileForm
+                        ref={formRef}
+                        profile={editingItem}
+                        onSuccess={handleFormSuccess}
+                        onError={(err) => toast.error(err)}
+                        setLoading={() => { }}
+                    />
+                </Suspense>
             </FormModal>
 
             {/* Delete Confirmation */}
@@ -199,10 +224,10 @@ export function ProfilesPage() {
 
             {/* Filter Modal Placeholder */}
             <FormModal
-                isOpen={showFilterModal}
+                isOpen={filterModal.isOpen}
                 title="Filter Profiles"
-                onSubmit={() => setShowFilterModal(false)}
-                onCancel={() => setShowFilterModal(false)}
+                onSubmit={filterModal.submit}
+                onCancel={filterModal.close}
                 size="sm"
             >
                 <div className="filter-form">
@@ -210,9 +235,9 @@ export function ProfilesPage() {
                         <label className="form-label">Status</label>
                         <select
                             className="form-control"
-                            value={filters.is_active === undefined ? '' : filters.is_active.toString()}
-                            onChange={(e) => setFilters({
-                                ...filters,
+                            value={draftFilters.is_active === undefined ? '' : draftFilters.is_active.toString()}
+                            onChange={(e) => setDraftFilters({
+                                ...draftFilters,
                                 is_active: e.target.value === '' ? undefined : e.target.value === 'true'
                             })}
                         >
@@ -221,12 +246,11 @@ export function ProfilesPage() {
                             <option value="false">Inactive</option>
                         </select>
                     </div>
-                    {Object.keys(filters).length > 0 && (
+                    {Object.keys(draftFilters).length > 0 && (
                         <button
                             className="btn btn-text filter-clear"
                             onClick={() => {
-                                setFilters({});
-                                setShowFilterModal(false);
+                                setDraftFilters({});
                             }}
                         >
                             Clear All Filters

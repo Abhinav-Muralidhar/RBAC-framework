@@ -1,19 +1,28 @@
 import { IDatabase, ITask } from 'pg-promise';
 import { OtpTokens } from '../models/otp_tokens.model';
 import { CreateOtpTokenInput } from '../types/repository.types';
-import { TransactionTask } from '../utils/transaction.utils';
+import { TransactionTask } from '../../utils/transaction.utils';
 
 export interface IOtpTokenRepository {
+  /** Store a new OTP challenge hash for a recipient. */
   create(input: CreateOtpTokenInput, t: TransactionTask): Promise<OtpTokens>;
+  /** Retrieve the most recent non-expired OTP entry for a recipient. */
   findLatestBySentTo(sentTo: string, t: TransactionTask): Promise<OtpTokens | null>;
+  /** Increment the failed attempt counter for a specific OTP record. */
   incrementAttempts(id: string, t: TransactionTask): Promise<void>;
+  /** Batch delete all OTP records that have passed their expiry timestamp. */
   deleteExpired(t: TransactionTask): Promise<void>;
+  /** Revoke any pending OTPs for a specific user. */
   delete(userId: string, t: TransactionTask): Promise<void>;
+  /** Delete a specific OTP token by primary key. */
+  deleteById(id: string, t: TransactionTask): Promise<void>;
+  /** Count the number of OTPs generated for a user within a rolling time window. */
   countRecentOtps(userId: string, minutesWindow: number, t: TransactionTask): Promise<number>;
 }
 
 export class OtpTokenRepository implements IOtpTokenRepository {
   private tableName = 'otp_tokens';
+  private readonly baseColumns = 'id, user_id, otp_hash, expires_at, attempt_count, sent_to, ip_address, user_agent, created_at';
 
   constructor(private db: IDatabase<unknown>) { }
 
@@ -60,7 +69,7 @@ export class OtpTokenRepository implements IOtpTokenRepository {
   async findLatestBySentTo(sentTo: string, t: TransactionTask): Promise<OtpTokens | null> {
     const res = await this.query<OtpTokens>(
       t,
-      `SELECT * FROM ${this.tableName}
+      `SELECT ${this.baseColumns} FROM ${this.tableName}
      WHERE sent_to = $1 AND expires_at > NOW()
      ORDER BY created_at DESC
      LIMIT 1`,
@@ -92,6 +101,14 @@ export class OtpTokenRepository implements IOtpTokenRepository {
       `DELETE FROM ${this.tableName}
      WHERE user_id = $1`,
       [userId]
+    );
+  }
+
+  async deleteById(id: string, t: TransactionTask): Promise<void> {
+    await t.none(
+      `DELETE FROM ${this.tableName}
+     WHERE id = $1`,
+      [id]
     );
   }
 }

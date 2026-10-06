@@ -1,20 +1,28 @@
 import { IDatabase } from 'pg-promise';
-import { TransactionTask } from '../utils/transaction.utils';
+import { TransactionTask } from '../../utils/transaction.utils';
 import { SmtpConfig } from '../models/smtp_config.model';
 import { CreateSmtpConfigInput } from '../types/repository.types';
-import { buildPaginatedResult, getPaginationOffset, normalizePaginationParams, PaginatedResult, PaginationParams } from '../utils/pagination.utils';
+import { buildPaginatedResult, getPaginationOffset, normalizePaginationParams, PaginatedResult, PaginationParams } from '../../utils/pagination.utils';
 import { ConcurrentModificationError } from '../errors/rbac.errors';
 
 export interface ISmtpConfigRepository {
+  /** Insert a new SMTP configuration row. */
   create(t: TransactionTask, input: CreateSmtpConfigInput): Promise<SmtpConfig>;
+  /** Update an existing SMTP configuration row. */
   update(t: TransactionTask, id: string, input: SmtpConfig): Promise<SmtpConfig>;
+  /** Fetch a single SMTP configuration by primary key. */
   findById(t: TransactionTask, id: string): Promise<SmtpConfig | null>;
+  /** Fetch SMTP config with JOINed creator and updater names. */
+  findByIdWithDetails(t: TransactionTask, id: string): Promise<(SmtpConfig & { created_by_name: string | null; updated_by_name: string | null }) | null>;
+  /** List all SMTP configurations with optional active filter and pagination. */
   findAll(t: TransactionTask, filters?: { isActive?: boolean }, paginationParams?: PaginationParams): Promise<PaginatedResult<SmtpConfig>>;
+  /** Hard-delete an SMTP configuration. */
   delete(t: TransactionTask, id: string): Promise<void>;
 }
 
 export class SmtpConfigRepository implements ISmtpConfigRepository {
   private tableName = 'smtp_config';
+  private readonly baseColumns = 'id, version, name, host, port, username, password, encryption, from_email, from_name, reply_to_email, is_active, created_at, created_by, updated_at, updated_by';
 
   constructor(private db: IDatabase<unknown>) { }
 
@@ -33,7 +41,29 @@ export class SmtpConfigRepository implements ISmtpConfigRepository {
   async findById(t: TransactionTask, id: string): Promise<SmtpConfig | null> {
     const res = await this.query<SmtpConfig>(
       t,
-      `SELECT * FROM ${this.tableName} WHERE id = $1`,
+      `SELECT ${this.baseColumns} FROM ${this.tableName} WHERE id = $1`,
+      [id]
+    );
+    return res[0] ?? null;
+  }
+
+  async findByIdWithDetails(t: TransactionTask, id: string): Promise<(SmtpConfig & { created_by_name: string | null; updated_by_name: string | null }) | null> {
+    const cols = this.baseColumns.split(', ').map(c => `s.${c}`).join(', ');
+    const res = await this.query<SmtpConfig & { created_by_name: string | null; updated_by_name: string | null }>(
+      t,
+      `SELECT ${cols},
+         CASE
+           WHEN c.id IS NOT NULL THEN c.username
+           ELSE NULL
+         END AS created_by_name,
+         CASE
+           WHEN ub.id IS NOT NULL THEN ub.username
+           ELSE NULL
+         END AS updated_by_name
+       FROM ${this.tableName} s
+       LEFT JOIN users c ON s.created_by = c.id
+       LEFT JOIN users ub ON s.updated_by = ub.id
+       WHERE s.id = $1`,
       [id]
     );
     return res[0] ?? null;
@@ -74,7 +104,7 @@ export class SmtpConfigRepository implements ISmtpConfigRepository {
 
     // Fetch items with filters and pagination
     const items = await t.any<SmtpConfig>(
-      `SELECT *
+      `SELECT ${this.baseColumns}
        FROM ${this.tableName} 
        ${whereClause}
        ORDER BY id DESC
@@ -88,8 +118,8 @@ export class SmtpConfigRepository implements ISmtpConfigRepository {
   async create(t: TransactionTask, input: CreateSmtpConfigInput): Promise<SmtpConfig> {
     const res = await t.one<SmtpConfig>(
       `INSERT INTO ${this.tableName}
-       (name, host, port, username, password, encryption, from_email, from_name, is_active, reply_to_email)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, false), $10)
+       (name, host, port, username, password, encryption, from_email, from_name, is_active, reply_to_email, created_by,updated_by,updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, false), $10, $11,$12,NOW())
        RETURNING *`,
       [
         input.name,
@@ -101,7 +131,9 @@ export class SmtpConfigRepository implements ISmtpConfigRepository {
         input.from_email,
         input.from_name,
         input.is_active ?? null,
-        input.reply_to_email ?? null
+        input.reply_to_email ?? null,
+        input.created_by ?? null,
+        input.created_by ?? null
       ]
     );
 
@@ -122,8 +154,9 @@ export class SmtpConfigRepository implements ISmtpConfigRepository {
            is_active = $9,
            reply_to_email = $10,
            updated_at = NOW(),
+           updated_by = $11,
            version = version + 1
-       WHERE id = $11 AND version = $12
+       WHERE id = $12 AND version = $13
        RETURNING *`,
       [
         input.name,
@@ -136,6 +169,7 @@ export class SmtpConfigRepository implements ISmtpConfigRepository {
         input.from_name,
         input.is_active,
         input.reply_to_email,
+        input.updated_by,
         id,
         input.version
       ]

@@ -4,11 +4,11 @@
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../core/contexts/AuthContext';
+import { useAuth } from '../core/contexts/useAuth';
 import { Users, Shield, Key, FolderTree } from 'lucide-react';
 import { SETTINGS_SECTIONS, ROUTES } from '../routes/routes';
 import './DashboardPage.css';
-import { useAdminSettings } from '../core/contexts/AdminSettingsContext';
+import { useAdminSettings } from '../core/contexts/useAdminSettings';
 
 export function DashboardPage() {
     const navigate = useNavigate();
@@ -61,7 +61,7 @@ export function DashboardPage() {
                 </div>
                 <div className="info-card">
                     <h3>Groups</h3>
-                    <p>{user?.groups?.map(g => g.name).join(', ') || 'No group assigned'}</p>
+                    <p>{user?.groups?.map((g: { name: string }) => g.name).join(', ') || 'No group assigned'}</p>
                 </div>
                 <div className="info-card">
                     <h3>Last Login</h3>

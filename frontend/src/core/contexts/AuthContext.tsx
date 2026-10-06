@@ -5,31 +5,14 @@
  * All permission checks are done server-side - this is just for UI optimization.
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { authApi } from '../api/auth.api';
 import type { User } from '../types/user.types';
-
-interface Permission {
-    module: string;
-    action: string;
-    effect: 'allow' | 'deny';
-}
-
-interface AuthContextValue {
-    user: User | null;
-    isLoading: boolean;
-    isAuthenticated: boolean;
-    permissions: Permission[];
-    login: (username: string, password: string) => Promise<User>;
-    logout: () => Promise<void>;
-    refreshUser: () => Promise<void>;
-    // UI helper - actual enforcement is server-side
-    hasPermission: (module: string, action: string) => boolean;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
+import { AuthContext, type Permission } from './auth-context';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+    const queryClient = useQueryClient();
     const [user, setUser] = useState<User | null>(null);
     const [permissions, setPermissions] = useState<Permission[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -88,8 +71,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } finally {
             setUser(null);
             setPermissions([]);
+            await queryClient.cancelQueries();
+            queryClient.clear();
         }
-    }, []);
+    }, [queryClient]);
 
     // UI helper only - server validates all requests
     const hasPermission = useCallback((module: string, action: string): boolean => {
@@ -114,12 +99,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             {children}
         </AuthContext.Provider>
     );
-}
-
-export function useAuth() {
-    const context = useContext(AuthContext);
-    if (!context) {
-        throw new Error('useAuth must be used within an AuthProvider');
-    }
-    return context;
 }

@@ -16,6 +16,9 @@ export interface Role {
     child_role_count?: number;
     created_by: string | null;
     created_by_name: string | null;
+    updated_at: string | null;
+    updated_by: string | null;
+    updated_by_name: string | null;
 }
 
 export interface RoleSummaryDto {

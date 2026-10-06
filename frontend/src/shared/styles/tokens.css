@@ -1,0 +1,147 @@
+@layer base {
+  :root {
+    --background: 210 33% 98%;
+    --foreground: 221 39% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 221 39% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 221 39% 11%;
+    --primary: 204 92% 45%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 194 65% 96%;
+    --secondary-foreground: 221 39% 15%;
+    --muted: 210 29% 94%;
+    --muted-foreground: 215 16% 42%;
+    --accent: 197 63% 94%;
+    --accent-foreground: 222 47% 18%;
+    --destructive: 0 79% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 28% 88%;
+    --input: 214 28% 88%;
+    --ring: 199 89% 48%;
+    --chart-1: 204 92% 45%;
+    --chart-2: 169 74% 38%;
+    --chart-3: 226 71% 52%;
+    --chart-4: 39 92% 56%;
+    --chart-5: 355 78% 58%;
+    --radius: 1rem;
+    --sidebar-background: 218 42% 13%;
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-primary: 196 94% 67%;
+    --sidebar-primary-foreground: 221 39% 11%;
+    --sidebar-accent: 217 33% 20%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 215 28% 24%;
+    --sidebar-ring: 191 91% 59%;
+
+    --color-text: hsl(var(--foreground));
+    --color-text-muted: hsl(var(--muted-foreground));
+    --color-surface: hsl(var(--background));
+    --color-surface-alt: hsl(var(--card));
+    --color-border: hsl(var(--border));
+    --color-input: hsl(var(--input));
+    --color-primary: hsl(var(--primary));
+    --color-primary-foreground: hsl(var(--primary-foreground));
+    --color-accent: hsl(var(--accent));
+    --color-accent-foreground: hsl(var(--accent-foreground));
+    --color-danger: hsl(var(--destructive));
+    --color-danger-foreground: hsl(var(--destructive-foreground));
+
+    --radius-sm: calc(var(--radius) - 2px);
+    --radius-md: var(--radius);
+    --radius-lg: calc(var(--radius) + 4px);
+    --radius-xl: calc(var(--radius) + 10px);
+
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.5rem;
+    --space-6: 2rem;
+
+    --font-sans: 'Manrope', 'Segoe UI', sans-serif;
+    --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-base: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.25rem;
+
+    --surface-glass: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 252, 255, 0.88) 100%);
+    --surface-strong: rgba(255, 255, 255, 0.82);
+    --surface-muted: rgba(241, 245, 249, 0.82);
+    --page-gradient:
+      radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 30%),
+      radial-gradient(circle at 85% 12%, rgba(20, 184, 166, 0.12), transparent 24%),
+      linear-gradient(180deg, #f8fbff 0%, #edf4fb 48%, #e7eff8 100%);
+    --shell-glow:
+      radial-gradient(circle at 15% 0%, rgba(14, 165, 233, 0.16), transparent 28%),
+      radial-gradient(circle at 82% 18%, rgba(45, 212, 191, 0.12), transparent 22%);
+    --gradient-brand: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 52%, #14b8a6 100%);
+    --outline-soft: rgba(148, 163, 184, 0.18);
+    --shadow-soft: 0 24px 60px rgba(15, 23, 42, 0.08);
+    --shadow-strong: 0 28px 80px rgba(15, 23, 42, 0.16);
+  }
+
+  .dark {
+    --background: 221 39% 11%;
+    --foreground: 210 40% 98%;
+    --card: 222 31% 14%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 31% 14%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 196 94% 67%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 217 33% 20%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 18%;
+    --muted-foreground: 214 20% 71%;
+    --accent: 217 33% 20%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 72% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 216 28% 23%;
+    --input: 216 28% 23%;
+    --ring: 191 91% 59%;
+    --chart-1: 196 94% 67%;
+    --chart-2: 169 74% 48%;
+    --chart-3: 226 84% 66%;
+    --chart-4: 39 92% 64%;
+    --chart-5: 355 80% 66%;
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 196 94% 67%;
+    --sidebar-primary-foreground: 222 47% 11%;
+    --sidebar-accent: 217 33% 20%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 216 28% 23%;
+    --sidebar-ring: 191 91% 59%;
+
+    --color-text: hsl(var(--foreground));
+    --color-text-muted: hsl(var(--muted-foreground));
+    --color-surface: hsl(var(--background));
+    --color-surface-alt: hsl(var(--card));
+    --color-border: hsl(var(--border));
+    --color-input: hsl(var(--input));
+    --color-primary: hsl(var(--primary));
+    --color-primary-foreground: hsl(var(--primary-foreground));
+    --color-accent: hsl(var(--accent));
+    --color-accent-foreground: hsl(var(--accent-foreground));
+    --color-danger: hsl(var(--destructive));
+    --color-danger-foreground: hsl(var(--destructive-foreground));
+
+    --surface-glass: linear-gradient(180deg, rgba(16, 23, 42, 0.94) 0%, rgba(15, 23, 42, 0.88) 100%);
+    --surface-strong: rgba(15, 23, 42, 0.8);
+    --surface-muted: rgba(30, 41, 59, 0.78);
+    --page-gradient:
+      radial-gradient(circle at top left, rgba(14, 165, 233, 0.18), transparent 30%),
+      radial-gradient(circle at 85% 12%, rgba(45, 212, 191, 0.12), transparent 24%),
+      linear-gradient(180deg, #0f172a 0%, #101827 48%, #111c2c 100%);
+    --shell-glow:
+      radial-gradient(circle at 12% 0%, rgba(56, 189, 248, 0.16), transparent 28%),
+      radial-gradient(circle at 82% 18%, rgba(45, 212, 191, 0.12), transparent 22%);
+    --outline-soft: rgba(148, 163, 184, 0.16);
+    --shadow-soft: 0 24px 60px rgba(2, 6, 23, 0.28);
+    --shadow-strong: 0 32px 90px rgba(2, 6, 23, 0.4);
+  }
+}

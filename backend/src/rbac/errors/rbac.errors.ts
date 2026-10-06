@@ -42,7 +42,7 @@ export class PermissionDeniedError extends RBACError {
         public readonly action: string,
     ) {
         super(
-            `Permission denied: User ${userId} cannot perform '${action}' on module '${moduleCode}'`
+            `Permission denied: You do not have permission to perform '${action}' on module '${moduleCode}'`
         );
     }
 }
@@ -142,6 +142,15 @@ export class RoleNotFoundError extends RBACError {
         public readonly roleId: string
     ) {
         super(`Role not found: ${roleId}`);
+    }
+}
+
+export class RoleHasActiveChildrenError extends RBACError {
+    public readonly code = 'ROLE_HAS_CHILDREN';
+    constructor(
+        public readonly roleId: string
+    ) {
+        super(`Role ${roleId} cannot be deleted: active child roles exist`);
     }
 }
 
@@ -274,5 +283,20 @@ export class ConcurrentSessionLimitError extends RBACInternalError {
 export class SessionNotFoundError extends RBACInternalError {
     constructor(sessionId: string) {
         super(`Session not found: ${sessionId}`);
+    }
+}
+
+/**
+ * ValidationError
+ *
+ * Thrown when input data fails validation constraints
+ * (e.g. max limits, format requirements, business rule violations).
+ */
+export class ValidationError extends RBACError {
+    constructor(
+        public readonly field: string,
+        public readonly reason: string
+    ) {
+        super(`Validation failed for '${field}': ${reason}`);
     }
 }

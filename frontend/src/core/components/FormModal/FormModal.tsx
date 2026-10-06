@@ -6,6 +6,7 @@
 
 import { useEffect, useCallback, type ReactNode, type FormEvent } from 'react';
 import { X } from 'lucide-react';
+import { lockBodyScroll } from '../../../shared/lib/bodyScrollLock';
 import './FormModal.css';
 
 export interface FormModalProps {
@@ -13,6 +14,7 @@ export interface FormModalProps {
     title: string;
     children: ReactNode;
     isLoading?: boolean;
+    loadingLabel?: string;
     submitLabel?: string;
     cancelLabel?: string;
     size?: 'sm' | 'md' | 'lg';
@@ -25,6 +27,7 @@ export function FormModal({
     title,
     children,
     isLoading = false,
+    loadingLabel = 'Saving...',
     submitLabel = 'Save',
     cancelLabel = 'Cancel',
     size = 'md',
@@ -39,13 +42,16 @@ export function FormModal({
     }, [onCancel, isLoading]);
 
     useEffect(() => {
-        if (isOpen) {
-            document.addEventListener('keydown', handleKeyDown);
-            document.body.style.overflow = 'hidden';
+        if (!isOpen) {
+            return;
         }
+
+        document.addEventListener('keydown', handleKeyDown);
+        const unlockBodyScroll = lockBodyScroll();
+
         return () => {
             document.removeEventListener('keydown', handleKeyDown);
-            document.body.style.overflow = '';
+            unlockBodyScroll();
         };
     }, [isOpen, handleKeyDown]);
 
@@ -79,30 +85,45 @@ export function FormModal({
                 </header>
 
                 {/* Form */}
-                <form onSubmit={handleFormSubmit}>
-                    <div className="form-modal__body">
-                        {children}
-                    </div>
+                <div className="form-modal__shell">
+                    {isLoading && (
+                        <div className="form-modal__loading" aria-live="polite" aria-busy="true">
+                            <div className="form-modal__loading-card">
+                                <div className="ui-skeleton h-3 w-20" />
+                                <div className="ui-skeleton h-10 w-full" />
+                                <div className="ui-skeleton h-10 w-5/6" />
+                                <div className="text-sm font-semibold text-slate-700">
+                                    Loading...
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
-                    {/* Footer */}
-                    <footer className="form-modal__footer">
-                        <button
-                            type="button"
-                            className="btn btn-secondary"
-                            onClick={onCancel}
-                            disabled={isLoading}
-                        >
-                            {cancelLabel}
-                        </button>
-                        <button
-                            type="submit"
-                            className="btn btn-primary"
-                            disabled={isLoading}
-                        >
-                            {isLoading ? 'Saving...' : submitLabel}
-                        </button>
-                    </footer>
-                </form>
+                    <form onSubmit={handleFormSubmit}>
+                        <div className="form-modal__body">
+                            {children}
+                        </div>
+
+                        {/* Footer */}
+                        <footer className="form-modal__footer">
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={onCancel}
+                                disabled={isLoading}
+                            >
+                                {cancelLabel}
+                            </button>
+                            <button
+                                type="submit"
+                                className="btn btn-primary"
+                                disabled={isLoading}
+                            >
+                                {isLoading ? loadingLabel : submitLabel}
+                            </button>
+                        </footer>
+                    </form>
+                </div>
             </div>
         </div>
     );

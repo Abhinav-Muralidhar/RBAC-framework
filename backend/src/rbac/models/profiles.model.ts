@@ -11,4 +11,5 @@ export interface Profiles {
   created_at: Date;
   created_by?: string | null;
   updated_at?: Date | null;
+  updated_by?: string | null;
 }

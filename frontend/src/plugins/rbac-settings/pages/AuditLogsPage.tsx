@@ -2,17 +2,36 @@
  * Audit Logs Page
  *
  * View system audit trail (all data decrypted server-side).
- * Filtering removed — all fields are encrypted at rest.
  */
 
-import { useMemo } from 'react';
-import type { AuditLog } from '../../../core/types/audit.types';
+import { useMemo, useState } from 'react';
+import { Download, Filter, Search } from 'lucide-react';
+import type { AuditLog, AuditLogSummaryDto } from '../../../core/types/audit.types';
 import { auditLogsApi } from '../../../core/api/rbac.api';
-import { usePaginatedData, useDetailsModal } from '../../../core/hooks';
+import type { PaginationParams } from '../../../core/hooks/usePaginatedData';
+import { createPaginatedSource, usePaginatedData, useDetailsModal } from '../../../core/hooks';
 import { DetailsModal, type FieldConfig } from '../../../core/components/DetailModal';
+import { FormModal } from '../../../core/components/FormModal';
+import { RbacPageSkeleton } from '../components/RbacPageSkeleton';
 import './SettingsPage.css';
 
 export function AuditLogsPage() {
+    const [isExporting, setIsExporting] = useState(false);
+    const actionOptions = ['create', 'update', 'delete', 'export'];
+    const entityTypeOptions = [
+        'organization',
+        'user',
+        'role',
+        'profile',
+        'group',
+        'module',
+        'permission',
+        'session',
+        'smtp_config',
+        'sharing_rule',
+        'otp'
+    ];
+
     // Function to get the color based on the status
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -30,22 +49,31 @@ export function AuditLogsPage() {
         error,
         page,
         totalPages,
+        limit,
+        limitOptions,
+        filters,
+        draftFilters,
+        setDraftFilters,
+        filterModal,
         setPage,
-    } = usePaginatedData<AuditLog>(auditLogsApi.list, { initialLimit: 20 });
+        setLimit,
+        searchQuery,
+        setSearchQuery,
+    } = usePaginatedData<AuditLogSummaryDto>(createPaginatedSource('auditLogs', auditLogsApi.list));
 
     const detailsModal = useDetailsModal();
 
     const auditFields = useMemo<FieldConfig<AuditLog>[]>(() => [
-        { label: 'Timestamp', key: 'created_at', render: (v: any) => v ? new Date(v).toLocaleString() : '—' },
+        { label: 'Timestamp', key: 'created_at', render: (v: unknown) => (typeof v === 'string' || v instanceof Date) ? new Date(v as string).toLocaleString() : '—' },
         { label: 'User ID', key: 'user_id' },
-        { label: 'Username', key: 'user_name' },
+        { label: 'User Name', key: 'user_name' },
         { label: 'Action', key: 'action' },
         { label: 'Entity', key: 'entity_type' },
         { label: 'Entity ID', key: 'entity_id' },
         { label: 'Module', key: 'module_name' },
         {
-            label: 'Status', key: 'status', render: (v: string) => (
-                <span className={`status-badge status-${v?.toLowerCase()}`}>{v}</span>
+            label: 'Status', key: 'status', render: (v: unknown) => (
+                <span className={`status-badge status-${(v as string)?.toLowerCase()}`}>{v as string}</span>
             )
         },
         { label: 'IP Address', key: 'ip_address' },
@@ -54,21 +82,70 @@ export function AuditLogsPage() {
         { label: 'New Values', key: 'new_values' },
     ], []);
 
+    const handleExport = async () => {
+        try {
+            setIsExporting(true);
+            const blob = await auditLogsApi.exportPdf({
+                ...(filters.action ? { action: filters.action as string } : {}),
+                ...(filters.entity_type ? { entity_type: filters.entity_type as string } : {}),
+                ...(filters.user_name ? { user_name: filters.user_name as string } : {}),
+            } as PaginationParams & Record<string, string>);
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `audit-logs-page-${page}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (exportError) {
+            console.error(exportError);
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     return (
         <div className="settings-page">
-            <header className="page-header">
-                <div>
-                    <h1>Audit Logs</h1>
-                    <p>View system activity and changes</p>
-                </div>
-            </header>
-
-            {error && <div className="error-message">{error}</div>}
-
-            {isLoading ? (
-                <div className="loading-state">Loading audit logs...</div>
+            {isLoading && logs.length === 0 ? (
+                <RbacPageSkeleton columns={6} rows={4} />
             ) : (
                 <>
+                    <header className="page-header">
+                        <div>
+                            <h1>System Audit Logs</h1>
+                            <p>View system activity and changes</p>
+                        </div>
+                    </header>
+
+                    <div className="page-toolbar">
+                        <div className="search-box">
+                            <Search size={18} />
+                            <input
+                                type="text"
+                                placeholder="Search logs..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+                        <button
+                            className={`btn ${Object.keys(filters).filter(k => filters[k] !== undefined).length > 0 ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={filterModal.open}
+                        >
+                            <Filter size={18} /> Filter
+                            {Object.keys(filters).filter(k => filters[k] !== undefined).length > 0 && (
+                                <span className="badge">{Object.keys(filters).filter(k => filters[k] !== undefined).length}</span>
+                            )}
+                        </button>
+                        <button className="btn btn-secondary" onClick={handleExport} disabled={isExporting || isLoading}>
+                            <Download size={18} />
+                            {isExporting ? 'Exporting...' : 'Export PDF'}
+                        </button>
+                    </div>
+
+                    {error && <div className="error-message">{error}</div>}
+
                     <div className="data-table-wrapper">
                         <table className="data-table">
                             <thead>
@@ -114,8 +191,19 @@ export function AuditLogsPage() {
                         </table>
                     </div>
 
-                    {/* Pagination Controls */}
                     <div className="pagination">
+                        <div className="page-size">
+                            <label className="form-label">Rows</label>
+                            <select
+                                className="form-control"
+                                value={limit}
+                                onChange={(e) => setLimit(Number(e.target.value))}
+                            >
+                                {limitOptions.map((option) => (
+                                    <option key={option} value={option}>{option}</option>
+                                ))}
+                            </select>
+                        </div>
                         <button
                             disabled={page <= 1}
                             onClick={() => setPage(page - 1)}
@@ -137,16 +225,78 @@ export function AuditLogsPage() {
                 </>
             )}
 
-            {/* Details Modal */}
             <DetailsModal<AuditLog>
                 isOpen={detailsModal.isOpen}
-                title="Audit Log Details"
+                title="System Audit Log Details"
                 entityId={detailsModal.selectedId}
                 fetchFn={auditLogsApi.getById}
                 fields={auditFields}
                 onClose={detailsModal.close}
                 size="lg"
             />
+
+            <FormModal
+                isOpen={filterModal.isOpen}
+                title="Filter System Audit Logs"
+                onSubmit={filterModal.submit}
+                onCancel={filterModal.close}
+                size="sm"
+            >
+                <div className="filter-form">
+                    <div className="form-field">
+                        <label className="form-label">Action</label>
+                        <select
+                            className="form-control"
+                            value={(draftFilters.action as string) || ''}
+                            onChange={(e) => setDraftFilters({ ...draftFilters, action: e.target.value || undefined })}
+                        >
+                            <option value="">All Actions</option>
+                            {actionOptions.map((action) => (
+                                <option key={action} value={action}>
+                                    {action}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="form-field">
+                        <label className="form-label">Entity Type</label>
+                        <select
+                            className="form-control"
+                            value={(draftFilters.entity_type as string) || ''}
+                            onChange={(e) => setDraftFilters({ ...draftFilters, entity_type: e.target.value || undefined })}
+                        >
+                            <option value="">All Entity Types</option>
+                            {entityTypeOptions.map((entityType) => (
+                                <option key={entityType} value={entityType}>
+                                    {entityType}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="form-field">
+                        <label className="form-label">User Name</label>
+                        <input
+                            className="form-control"
+                            value={(draftFilters.user_name as string) || ''}
+                            onChange={(e) => setDraftFilters({ ...draftFilters, user_name: e.target.value || undefined })}
+                            placeholder="Search by user name"
+                        />
+                    </div>
+
+                    {Object.keys(draftFilters).filter(k => draftFilters[k] !== undefined).length > 0 && (
+                        <button
+                            className="btn btn-text filter-clear"
+                            onClick={() => {
+                                setDraftFilters({});
+                            }}
+                        >
+                            Clear All Filters
+                        </button>
+                    )}
+                </div>
+            </FormModal>
         </div>
     );
 }

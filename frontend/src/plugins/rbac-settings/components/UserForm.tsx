@@ -5,8 +5,8 @@
  * Uses centralized validators for password and email.
  */
 
-import { useState, useEffect } from 'react';
-import { FormInput, FormSwitch } from '../../../core/components/FormElements';
+import { forwardRef, useState, useEffect, useCallback, useImperativeHandle } from 'react';
+import { FormInput, FormSwitch, FormSelect, FormSearchSelect } from '../../../core/components/FormElements';
 import type { User, CreateUserDto, UpdateUserDto } from '../../../core/types/user.types';
 import type { Role } from '../../../core/types/role.types';
 import { usersApi, rolesApi, landingPagesApi, type LandingPageOption } from '../../../core/api/rbac.api';
@@ -16,15 +16,27 @@ import {
     CURRENCY_OPTIONS,
     SYMBOL_PLACEMENT_OPTIONS,
     TRAILING_ZERO_OPTIONS,
+    DIGIT_GROUPING_OPTIONS,
+    DECIMAL_SEPARATOR_OPTIONS,
+    DECIMAL_PRECISION_OPTIONS,
+    PHONE_COUNTRY_CODE_OPTIONS,
 } from '../../../core/constants/userPreferences';
 import {
     validateEmail,
+    validateOptionalEmail,
     validatePassword,
     validateRequired,
     validateUsername,
+    validatePhoneNumber,
+    validatePhoneCountryCode,
+    validateInOptions,
+    validateDecimalPrecision,
     scrollToFirstError,
     parseApiError
 } from '../../../core/utils';
+import type { RbacFormHandle } from './form.types';
+import { useAsyncSearchOptions } from './useAsyncSearchOptions';
+import './EntityForm.css';
 
 interface UserFormProps {
     user?: User | null;
@@ -33,7 +45,7 @@ interface UserFormProps {
     setLoading: (loading: boolean) => void;
 }
 
-export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps) {
+export const UserForm = forwardRef<RbacFormHandle, UserFormProps>(function UserForm({ user, onSuccess, onError, setLoading }, ref) {
     const isEditing = !!user;
 
     const [formData, setFormData] = useState({
@@ -87,26 +99,19 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
 
     // Role dropdown
     const [selectedRole, setSelectedRole] = useState<string>(user?.rolesid || '');
-    const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
-    const [roleSearch, setRoleSearch] = useState('');
-    const [roleSearchLoading, setRoleSearchLoading] = useState(false);
-    const [isSearchingRoles, setIsSearchingRoles] = useState(false);
-    const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
-    const [roleSearchTimer, setRoleSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
-
     // Reports-to user dropdown
     const [reportsToUserId, setReportsToUserId] = useState<string>(user?.reports_to_user_id || '');
-    const [availableUsers, setAvailableUsers] = useState<User[]>([]);
-    const [userSearch, setUserSearch] = useState('');
-    const [userSearchLoading, setUserSearchLoading] = useState(false);
-    const [isSearchingUsers, setIsSearchingUsers] = useState(false);
-    const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-    const [userSearchTimer, setUserSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
     // Landing pages
     const [landingPages, setLandingPages] = useState<LandingPageOption[]>([]);
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const phoneCountryCodes = PHONE_COUNTRY_CODE_OPTIONS.map(o => o.key) as string[];
+    const currentPhoneCode = formData.phone_country_code;
+    const phoneCountryOptions = currentPhoneCode && !phoneCountryCodes.includes(currentPhoneCode)
+        ? [{ key: currentPhoneCode, label: `${currentPhoneCode} (Current)` }, ...PHONE_COUNTRY_CODE_OPTIONS]
+        : PHONE_COUNTRY_CODE_OPTIONS;
 
     // =================== EFFECTS ===================
 
@@ -115,28 +120,47 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
         landingPagesApi.list().then(setLandingPages).catch(() => { });
     }, []);
 
-    // Load roles (debounced search)
-    useEffect(() => {
-        if (roleSearchTimer) clearTimeout(roleSearchTimer);
-        if (isSearchingRoles) {
-            const timer = setTimeout(() => loadRoles(roleSearch), 300);
-            setRoleSearchTimer(timer);
-            return () => { if (timer) clearTimeout(timer); };
-        }
-    }, [roleSearch, isSearchingRoles]);
-
-    // Load users for reports-to (debounced search)
-    useEffect(() => {
-        if (userSearchTimer) clearTimeout(userSearchTimer);
-        if (isSearchingUsers) {
-            const timer = setTimeout(() => loadUsers(userSearch), 300);
-            setUserSearchTimer(timer);
-            return () => { if (timer) clearTimeout(timer); };
-        }
-    }, [userSearch, isSearchingUsers]);
-
     // Initial loads
-    useEffect(() => { loadRoles(''); loadUsers(''); }, []);
+    const loadRoles = useCallback(async (searchQuery: string) => {
+        const response = await rolesApi.list({
+            limit: 100,
+            search: searchQuery || undefined,
+            is_active: true,
+        });
+        return response.data || [];
+    }, []);
+
+    const loadUsers = useCallback(async (searchQuery: string) => {
+        const response = await usersApi.list({ limit: 100, search: searchQuery || undefined });
+        return (response.data || []).filter(u => !user || u.id !== user.id);
+    }, [user]);
+
+    const {
+        options: roleOptions,
+        loading: roleSearchLoading,
+        loadOptions: loadRoleOptions,
+    } = useAsyncSearchOptions<Role, { value: string; label: string; disabled?: boolean }>({
+        loader: loadRoles,
+        mapOption: (roleOption) => ({
+            value: roleOption.id,
+            label: `${roleOption.name}${roleOption.id === user?.rolesid ? ' (Current)' : ''}`,
+            disabled: roleOption.id === user?.rolesid,
+        }),
+    });
+
+    const {
+        options: reportsToOptions,
+        loading: userSearchLoading,
+        loadOptions: loadUserOptions,
+    } = useAsyncSearchOptions<User, { value: string; label: string }>({
+        loader: loadUsers,
+        mapOption: (availableUser) => ({
+            value: availableUser.id,
+            label: `${availableUser.first_name || ''} ${availableUser.last_name || ''} (${availableUser.primary_email})`.trim(),
+        }),
+    });
+
+    useEffect(() => { void loadRoleOptions(''); void loadUserOptions(''); }, [loadRoleOptions, loadUserOptions]);
 
     // Keep state in sync with props
     useEffect(() => {
@@ -181,34 +205,6 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
         }
     }, [user]);
 
-    // =================== LOADERS ===================
-
-    const loadRoles = async (searchQuery: string) => {
-        setRoleSearchLoading(true);
-        try {
-            const response = await rolesApi.list({ limit: 100, search: searchQuery || undefined });
-            setAvailableRoles(response.data || []);
-        } catch (err) {
-            console.error('Failed to load roles', err);
-        } finally {
-            setRoleSearchLoading(false);
-        }
-    };
-
-    const loadUsers = async (searchQuery: string) => {
-        setUserSearchLoading(true);
-        try {
-            const response = await usersApi.list({ limit: 100, search: searchQuery || undefined });
-            // Exclude the current user being edited
-            const users = (response.data || []).filter(u => !user || u.id !== user.id);
-            setAvailableUsers(users);
-        } catch (err) {
-            console.error('Failed to load users', err);
-        } finally {
-            setUserSearchLoading(false);
-        }
-    };
-
     // =================== HANDLERS ===================
 
     const handleChange = (field: string, value: string | boolean) => {
@@ -218,55 +214,9 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
         }
     };
 
-    // --- Role dropdown ---
-    const getRoleDisplayValue = () => {
-        if (isSearchingRoles) return roleSearch;
-        if (selectedRole) {
-            const role = availableRoles.find(r => r.id === selectedRole);
-            return role?.name || '';
-        }
-        return '';
-    };
-
-    const handleRoleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setRoleSearch(e.target.value);
-        setIsSearchingRoles(true);
-        if (!e.target.value) setSelectedRole('');
-    };
-
-    const handleRoleSelect = (roleId: string) => {
-        setSelectedRole(roleId);
-        setRoleSearch('');
-        setIsSearchingRoles(false);
-        setRoleDropdownOpen(false);
-    };
-
-    // --- Reports-to dropdown ---
-    const getReportsToDisplayValue = () => {
-        if (isSearchingUsers) return userSearch;
-        if (reportsToUserId) {
-            const u = availableUsers.find(u => u.id === reportsToUserId);
-            return u ? `${u.first_name || ''} ${u.last_name} (${u.primary_email})`.trim() : '';
-        }
-        return '';
-    };
-
-    const handleUserInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setUserSearch(e.target.value);
-        setIsSearchingUsers(true);
-        if (!e.target.value) setReportsToUserId('');
-    };
-
-    const handleUserSelect = (userId: string) => {
-        setReportsToUserId(userId);
-        setUserSearch('');
-        setIsSearchingUsers(false);
-        setUserDropdownOpen(false);
-    };
-
     // =================== VALIDATION ===================
 
-    const validate = (): boolean => {
+    const validate = useCallback((): boolean => {
         const newErrors: Record<string, string> = {};
 
         if (!isEditing) {
@@ -280,6 +230,89 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
         const lastNameErr = validateRequired(formData.last_name, 'Last name');
         if (lastNameErr) newErrors.last_name = lastNameErr;
 
+        const secondaryEmailErr = validateOptionalEmail(formData.secondary_email, 'Secondary email');
+        if (secondaryEmailErr) newErrors.secondary_email = secondaryEmailErr;
+
+        const otherEmailErr = validateOptionalEmail(formData.other_email, 'Other email');
+        if (otherEmailErr) newErrors.other_email = otherEmailErr;
+
+        const officePhoneErr = validatePhoneNumber(formData.office_phone, 'Office phone');
+        if (officePhoneErr) newErrors.office_phone = officePhoneErr;
+
+        const mobilePhoneErr = validatePhoneNumber(formData.mobile_phone, 'Mobile phone');
+        if (mobilePhoneErr) newErrors.mobile_phone = mobilePhoneErr;
+
+        const homePhoneErr = validatePhoneNumber(formData.home_phone, 'Home phone');
+        if (homePhoneErr) newErrors.home_phone = homePhoneErr;
+
+        const secondaryPhoneErr = validatePhoneNumber(formData.secondary_phone, 'Secondary phone');
+        if (secondaryPhoneErr) newErrors.secondary_phone = secondaryPhoneErr;
+
+        const faxErr = validatePhoneNumber(formData.fax, 'Fax');
+        if (faxErr) newErrors.fax = faxErr;
+
+        const phoneCountryErr = validatePhoneCountryCode(formData.phone_country_code);
+        if (phoneCountryErr) newErrors.phone_country_code = phoneCountryErr;
+
+        const nameFormatErr = validateInOptions(
+            formData.name_format,
+            NAME_FORMAT_OPTIONS.map(o => o.key),
+            'Name format'
+        );
+        if (nameFormatErr) newErrors.name_format = nameFormatErr;
+
+        if (formData.default_landing_page) {
+            const landingKeys = landingPages.map(lp => lp.key);
+            if (!landingKeys.includes(formData.default_landing_page)) {
+                newErrors.default_landing_page = 'Default landing page is invalid';
+            }
+        }
+
+        const timeZoneErr = validateInOptions(
+            formData.time_zone,
+            TIME_ZONE_OPTIONS.map(o => o.key),
+            'Time zone'
+        );
+        if (timeZoneErr) newErrors.time_zone = timeZoneErr;
+
+        const currencyErr = validateInOptions(
+            formData.preferred_currency,
+            CURRENCY_OPTIONS.map(o => o.key),
+            'Preferred currency'
+        );
+        if (currencyErr) newErrors.preferred_currency = currencyErr;
+
+        const groupingErr = validateInOptions(
+            formData.digit_grouping_pattern,
+            DIGIT_GROUPING_OPTIONS.map(o => o.key),
+            'Digit grouping pattern'
+        );
+        if (groupingErr) newErrors.digit_grouping_pattern = groupingErr;
+
+        const decimalSeparatorErr = validateInOptions(
+            formData.decimal_separator,
+            DECIMAL_SEPARATOR_OPTIONS.map(o => o.key),
+            'Decimal separator'
+        );
+        if (decimalSeparatorErr) newErrors.decimal_separator = decimalSeparatorErr;
+
+        const decimalPrecisionErr = validateDecimalPrecision(formData.decimal_precision);
+        if (decimalPrecisionErr) newErrors.decimal_precision = decimalPrecisionErr;
+
+        const symbolPlacementErr = validateInOptions(
+            formData.symbol_placement,
+            SYMBOL_PLACEMENT_OPTIONS.map(o => o.key),
+            'Symbol placement'
+        );
+        if (symbolPlacementErr) newErrors.symbol_placement = symbolPlacementErr;
+
+        const trailingZeroErr = validateInOptions(
+            formData.trailing_zero_handling,
+            TRAILING_ZERO_OPTIONS.map(o => o.key),
+            'Trailing zero handling'
+        );
+        if (trailingZeroErr) newErrors.trailing_zero_handling = trailingZeroErr;
+
         if (!isEditing) {
             const passwordErr = validatePassword(formData.password);
             if (passwordErr) newErrors.password = passwordErr;
@@ -288,13 +321,17 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             if (passwordErr) newErrors.password = passwordErr;
         }
 
+        if (!selectedRole) {
+            newErrors.rolesid = 'Role is required';
+        }
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
-    };
+    }, [formData, isEditing, landingPages, selectedRole]);
 
     // =================== SUBMIT ===================
 
-    const handleSubmit = async () => {
+    const handleSubmit = useCallback(async () => {
         if (!validate()) {
             scrollToFirstError();
             return;
@@ -330,7 +367,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                 preferred_currency: formData.preferred_currency || undefined,
                 digit_grouping_pattern: formData.digit_grouping_pattern || undefined,
                 decimal_separator: formData.decimal_separator || undefined,
-                decimal_precision: formData.decimal_precision ? parseInt(formData.decimal_precision, 10) : undefined,
+                decimal_precision: formData.decimal_precision === '' ? undefined : parseInt(formData.decimal_precision, 10),
                 symbol_placement: (formData.symbol_placement as 'before' | 'after') || undefined,
                 trailing_zero_handling: (formData.trailing_zero_handling as 'show' | 'hide') || undefined,
                 aggregation_format: formData.aggregation_format || undefined,
@@ -364,7 +401,13 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
         } finally {
             setLoading(false);
         }
-    };
+    }, [formData, isEditing, onError, onSuccess, reportsToUserId, selectedRole, setLoading, user, validate]);
+
+    useImperativeHandle(ref, () => ({
+        submit: () => {
+            void handleSubmit();
+        },
+    }), [handleSubmit]);
 
     // =================== RENDER ===================
 
@@ -398,7 +441,7 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
                     label="Active"
                     checked={formData.status === 'active'}
                     onChange={checked => handleChange('status', checked ? 'active' : 'inactive')}
-                    hint="Inactive profiles cannot be assigned"
+                    hint="Inactive users cannot log in but their data remains intact"
                 />
                 <FormInput
                     label={isEditing ? 'New Password (optional)' : 'Password'}
@@ -424,20 +467,78 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             {/* === Contact === */}
             <h3 className="form-section-title">Contact Details</h3>
             <div className="form-row">
-                <FormInput label="Secondary Email" type="email" value={formData.secondary_email} onChange={e => handleChange('secondary_email', e.target.value)} />
-                <FormInput label="Other Email" type="email" value={formData.other_email} onChange={e => handleChange('other_email', e.target.value)} />
+                <FormInput
+                    label="Secondary Email"
+                    type="email"
+                    value={formData.secondary_email}
+                    onChange={e => handleChange('secondary_email', e.target.value)}
+                    error={errors.secondary_email}
+                />
+                <FormInput
+                    label="Other Email"
+                    type="email"
+                    value={formData.other_email}
+                    onChange={e => handleChange('other_email', e.target.value)}
+                    error={errors.other_email}
+                />
             </div>
             <div className="form-row">
-                <FormInput label="Office Phone" value={formData.office_phone} onChange={e => handleChange('office_phone', e.target.value)} />
-                <FormInput label="Mobile Phone" value={formData.mobile_phone} onChange={e => handleChange('mobile_phone', e.target.value)} />
+                <FormInput
+                    label="Office Phone"
+                    type="tel"
+                    inputMode="tel"
+                    value={formData.office_phone}
+                    onChange={e => handleChange('office_phone', e.target.value)}
+                    error={errors.office_phone}
+                    hint="Digits only, include country code if needed"
+                />
+                <FormInput
+                    label="Mobile Phone"
+                    type="tel"
+                    inputMode="tel"
+                    value={formData.mobile_phone}
+                    onChange={e => handleChange('mobile_phone', e.target.value)}
+                    error={errors.mobile_phone}
+                    hint="Digits only, include country code if needed"
+                />
             </div>
             <div className="form-row">
-                <FormInput label="Home Phone" value={formData.home_phone} onChange={e => handleChange('home_phone', e.target.value)} />
-                <FormInput label="Secondary Phone" value={formData.secondary_phone} onChange={e => handleChange('secondary_phone', e.target.value)} />
+                <FormInput
+                    label="Home Phone"
+                    type="tel"
+                    inputMode="tel"
+                    value={formData.home_phone}
+                    onChange={e => handleChange('home_phone', e.target.value)}
+                    error={errors.home_phone}
+                    hint="Digits only, include country code if needed"
+                />
+                <FormInput
+                    label="Secondary Phone"
+                    type="tel"
+                    inputMode="tel"
+                    value={formData.secondary_phone}
+                    onChange={e => handleChange('secondary_phone', e.target.value)}
+                    error={errors.secondary_phone}
+                    hint="Digits only, include country code if needed"
+                />
             </div>
             <div className="form-row">
-                <FormInput label="Fax" value={formData.fax} onChange={e => handleChange('fax', e.target.value)} />
-                <FormInput label="Phone Country Code" value={formData.phone_country_code} onChange={e => handleChange('phone_country_code', e.target.value)} hint="e.g. +91, +1" />
+                <FormInput
+                    label="Fax"
+                    type="tel"
+                    inputMode="tel"
+                    value={formData.fax}
+                    onChange={e => handleChange('fax', e.target.value)}
+                    error={errors.fax}
+                />
+                <FormSelect
+                    label="Phone Country Code"
+                    value={formData.phone_country_code}
+                    onChange={e => handleChange('phone_country_code', e.target.value)}
+                    options={phoneCountryOptions.map(option => ({ value: option.key, label: option.label }))}
+                    placeholder="Not Set"
+                    error={errors.phone_country_code}
+                />
             </div>
 
             {/* === Address === */}
@@ -456,51 +557,36 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             <h3 className="form-section-title">Preferences</h3>
             <div className="form-row">
                 {/* Default Landing Page dropdown */}
-                <div className="form-field">
-                    <label className="form-label">Default Landing Page</label>
-                    <select
-                        value={formData.default_landing_page}
-                        onChange={e => handleChange('default_landing_page', e.target.value)}
-                        className="form-select"
-                    >
-                        <option value="">— None (Dashboard) —</option>
-                        {landingPages.map(lp => (
-                            <option key={lp.key} value={lp.key}>{lp.label}</option>
-                        ))}
-                    </select>
-                </div>
+                <FormSelect
+                    label="Default Landing Page"
+                    value={formData.default_landing_page}
+                    onChange={e => handleChange('default_landing_page', e.target.value)}
+                    options={landingPages.map(option => ({ value: option.key, label: option.label }))}
+                    placeholder="None (Dashboard)"
+                    error={errors.default_landing_page}
+                />
 
                 {/* Name Format dropdown */}
-                <div className="form-field">
-                    <label className="form-label">Name Format</label>
-                    <select
-                        value={formData.name_format}
-                        onChange={e => handleChange('name_format', e.target.value)}
-                        className="form-select"
-                    >
-                        <option value="">— Not Set —</option>
-                        {NAME_FORMAT_OPTIONS.map(o => (
-                            <option key={o.key} value={o.key}>{o.label}</option>
-                        ))}
-                    </select>
-                </div>
+                <FormSelect
+                    label="Name Format"
+                    value={formData.name_format}
+                    onChange={e => handleChange('name_format', e.target.value)}
+                    options={NAME_FORMAT_OPTIONS.map(option => ({ value: option.key, label: option.label }))}
+                    placeholder="Not Set"
+                    error={errors.name_format}
+                />
             </div>
 
             <div className="form-row">
                 {/* Time Zone dropdown */}
-                <div className="form-field">
-                    <label className="form-label">Time Zone</label>
-                    <select
-                        value={formData.time_zone}
-                        onChange={e => handleChange('time_zone', e.target.value)}
-                        className="form-select"
-                    >
-                        <option value="">— Not Set —</option>
-                        {TIME_ZONE_OPTIONS.map(o => (
-                            <option key={o.key} value={o.key}>{o.label}</option>
-                        ))}
-                    </select>
-                </div>
+                <FormSelect
+                    label="Time Zone"
+                    value={formData.time_zone}
+                    onChange={e => handleChange('time_zone', e.target.value)}
+                    options={TIME_ZONE_OPTIONS.map(option => ({ value: option.key, label: option.label }))}
+                    placeholder="Not Set"
+                    error={errors.time_zone}
+                />
                 <FormSwitch
                     label="Full Screen Preview"
                     checked={formData.full_screen_preview}
@@ -513,55 +599,60 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             <h3 className="form-section-title">Currency & Number Settings</h3>
             <div className="form-row">
                 {/* Currency dropdown */}
-                <div className="form-field">
-                    <label className="form-label">Preferred Currency</label>
-                    <select
-                        value={formData.preferred_currency}
-                        onChange={e => handleChange('preferred_currency', e.target.value)}
-                        className="form-select"
-                    >
-                        <option value="">— Not Set —</option>
-                        {CURRENCY_OPTIONS.map(o => (
-                            <option key={o.key} value={o.key}>{o.label}</option>
-                        ))}
-                    </select>
-                </div>
-                <FormInput label="Digit Grouping Pattern" value={formData.digit_grouping_pattern} onChange={e => handleChange('digit_grouping_pattern', e.target.value)} hint="e.g. 123,456,789" />
+                <FormSelect
+                    label="Preferred Currency"
+                    value={formData.preferred_currency}
+                    onChange={e => handleChange('preferred_currency', e.target.value)}
+                    options={CURRENCY_OPTIONS.map(option => ({ value: option.key, label: option.label }))}
+                    placeholder="Not Set"
+                    error={errors.preferred_currency}
+                />
+                <FormSelect
+                    label="Digit Grouping Pattern"
+                    value={formData.digit_grouping_pattern}
+                    onChange={e => handleChange('digit_grouping_pattern', e.target.value)}
+                    options={DIGIT_GROUPING_OPTIONS.map(option => ({ value: option.key, label: option.label }))}
+                    placeholder="Not Set"
+                    error={errors.digit_grouping_pattern}
+                />
             </div>
             <div className="form-row">
-                <FormInput label="Decimal Separator" value={formData.decimal_separator} onChange={e => handleChange('decimal_separator', e.target.value)} hint="e.g. . or ," />
-                <FormInput label="Decimal Precision" value={formData.decimal_precision} onChange={e => handleChange('decimal_precision', e.target.value)} hint="Number of decimal places" />
+                <FormSelect
+                    label="Decimal Separator"
+                    value={formData.decimal_separator}
+                    onChange={e => handleChange('decimal_separator', e.target.value)}
+                    options={DECIMAL_SEPARATOR_OPTIONS.map(option => ({ value: option.key, label: option.label }))}
+                    placeholder="Not Set"
+                    error={errors.decimal_separator}
+                />
+                <FormSelect
+                    label="Decimal Precision"
+                    value={formData.decimal_precision}
+                    onChange={e => handleChange('decimal_precision', e.target.value)}
+                    options={DECIMAL_PRECISION_OPTIONS.map(option => ({ value: option.key, label: option.label }))}
+                    placeholder="Not Set"
+                    error={errors.decimal_precision}
+                />
             </div>
             <div className="form-row">
                 {/* Symbol Placement dropdown */}
-                <div className="form-field">
-                    <label className="form-label">Symbol Placement</label>
-                    <select
-                        value={formData.symbol_placement}
-                        onChange={e => handleChange('symbol_placement', e.target.value)}
-                        className="form-select"
-                    >
-                        <option value="">— Not Set —</option>
-                        {SYMBOL_PLACEMENT_OPTIONS.map(o => (
-                            <option key={o.key} value={o.key}>{o.label}</option>
-                        ))}
-                    </select>
-                </div>
+                <FormSelect
+                    label="Symbol Placement"
+                    value={formData.symbol_placement}
+                    onChange={e => handleChange('symbol_placement', e.target.value)}
+                    options={SYMBOL_PLACEMENT_OPTIONS.map(option => ({ value: option.key, label: option.label }))}
+                    placeholder="Not Set"
+                    error={errors.symbol_placement}
+                />
 
-                {/* Trailing Zero dropdown */}
-                <div className="form-field">
-                    <label className="form-label">Trailing Zeros</label>
-                    <select
-                        value={formData.trailing_zero_handling}
-                        onChange={e => handleChange('trailing_zero_handling', e.target.value)}
-                        className="form-select"
-                    >
-                        <option value="">— Not Set —</option>
-                        {TRAILING_ZERO_OPTIONS.map(o => (
-                            <option key={o.key} value={o.key}>{o.label}</option>
-                        ))}
-                    </select>
-                </div>
+                <FormSelect
+                    label="Trailing Zeros"
+                    value={formData.trailing_zero_handling}
+                    onChange={e => handleChange('trailing_zero_handling', e.target.value)}
+                    options={TRAILING_ZERO_OPTIONS.map(option => ({ value: option.key, label: option.label }))}
+                    placeholder="Not Set"
+                    error={errors.trailing_zero_handling}
+                />
             </div>
 
             {/* === Other === */}
@@ -572,117 +663,33 @@ export function UserForm({ user, onSuccess, onError, setLoading }: UserFormProps
             {/* === Role Dropdown === */}
             <h3 className="form-section-title">Assignment</h3>
 
-            <div className="form-field form-field--relative">
-                <label className="form-label">Assign Role</label>
-                <input
-                    type="text"
-                    placeholder="Search and select a role..."
-                    value={getRoleDisplayValue()}
-                    onChange={handleRoleInputChange}
-                    onFocus={() => setRoleDropdownOpen(true)}
-                    onBlur={() => setTimeout(() => { setRoleDropdownOpen(false); setIsSearchingRoles(false); setRoleSearch(''); }, 200)}
-                    className="form-input"
-                    autoComplete="off"
-                />
-                {roleDropdownOpen && (
-                    <div className="dropdown-options">
-                        {roleSearchLoading ? (
-                            <div className="dropdown-empty">Loading...</div>
-                        ) : (
-                            <>
-                                {availableRoles.map(role => {
-                                    const isCurrent = role.id === user?.rolesid;
-                                    const isSelected = role.id === selectedRole;
-                                    const optionClass = [
-                                        'dropdown-option',
-                                        isSelected ? 'dropdown-option--selected' : '',
-                                        isCurrent ? 'dropdown-option--disabled' : '',
-                                    ].filter(Boolean).join(' ');
-                                    return (
-                                        <div
-                                            key={role.id}
-                                            className={optionClass}
-                                            onMouseDown={e => { e.preventDefault(); if (!isCurrent) handleRoleSelect(role.id); }}
-                                        >
-                                            {role.name} {isCurrent && '(Current)'} {isSelected && '✓'}
-                                        </div>
-                                    );
-                                })}
-                                {availableRoles.length === 0 && (
-                                    <div className="dropdown-empty">No roles found</div>
-                                )}
-                            </>
-                        )}
-                    </div>
-                )}
-            </div>
+            <FormSearchSelect
+                label="Assign Role"
+                placeholder="Search and select a role..."
+                value={selectedRole}
+                options={roleOptions}
+                onChange={setSelectedRole}
+                    onSearch={loadRoleOptions}
+                    loading={roleSearchLoading}
+                error={errors.rolesid}
+                required
+                emptyMessage="No roles found"
+            />
 
             {/* === Reports To Dropdown === */}
-            <div className="form-field form-field--relative form-field--spaced">
-                <label className="form-label">Reports To</label>
-                <input
-                    type="text"
+            <div className="form-field--spaced">
+                <FormSearchSelect
+                    label="Reports To"
                     placeholder="Search for a manager..."
-                    value={getReportsToDisplayValue()}
-                    onChange={handleUserInputChange}
-                    onFocus={() => setUserDropdownOpen(true)}
-                    onBlur={() => setTimeout(() => { setUserDropdownOpen(false); setIsSearchingUsers(false); setUserSearch(''); }, 200)}
-                    className="form-input"
-                    autoComplete="off"
+                    value={reportsToUserId}
+                    options={reportsToOptions}
+                    onChange={setReportsToUserId}
+                    onSearch={loadUserOptions}
+                    loading={userSearchLoading}
+                    allowClear
+                    emptyMessage="No users found"
                 />
-                {reportsToUserId && (
-                    <button
-                        type="button"
-                        onClick={() => { setReportsToUserId(''); setUserSearch(''); }}
-                        className="dropdown-clear-btn"
-                        title="Clear"
-                    >
-                        ✕
-                    </button>
-                )}
-                {userDropdownOpen && (
-                    <div className="dropdown-options">
-                        {userSearchLoading ? (
-                            <div className="dropdown-empty">Loading...</div>
-                        ) : (
-                            <>
-                                {availableUsers.map(u => {
-                                    const isSelected = u.id === reportsToUserId;
-                                    const optionClass = [
-                                        'dropdown-option',
-                                        isSelected ? 'dropdown-option--selected' : '',
-                                    ].filter(Boolean).join(' ');
-                                    return (
-                                        <div
-                                            key={u.id}
-                                            className={optionClass}
-                                            onMouseDown={e => { e.preventDefault(); handleUserSelect(u.id); }}
-                                        >
-                                            {u.first_name || ''} {u.last_name} ({u.primary_email}) {isSelected && '✓'}
-                                        </div>
-                                    );
-                                })}
-                                {availableUsers.length === 0 && (
-                                    <div className="dropdown-empty">No users found</div>
-                                )}
-                            </>
-                        )}
-                    </div>
-                )}
             </div>
-
-            {/* Hidden submit button */}
-            <button
-                type="button"
-                id="user-form-submit"
-                className="visually-hidden"
-                onClick={handleSubmit}
-            />
         </div>
     );
-}
-
-/** Trigger submit from FormModal */
-export function submitUserForm() {
-    document.getElementById('user-form-submit')?.click();
-}
+});

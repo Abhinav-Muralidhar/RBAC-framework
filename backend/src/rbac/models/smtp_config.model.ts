@@ -19,5 +19,8 @@ export interface SmtpConfig {
   reply_to_email?: string | null;
 
   is_active: boolean;
+  created_at: Date;
+  created_by?: string | null;
   updated_at?: Date | null;
+  updated_by?: string | null;
 }

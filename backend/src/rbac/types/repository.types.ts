@@ -108,6 +108,7 @@ export interface UpdateUserInput {
     aggregation_format?: string | null;
     signature?: string | null;
     updated_at?: Date;
+    updated_by?: string | null;
     last_login_at?: Date | null;
     password_changed_at?: Date | null;
 }
@@ -135,6 +136,7 @@ export interface UpdateRoleInput {
     description?: string | null;
     parent_role_id?: string | null;
     is_active?: boolean;
+    updated_by?: string | null;
 }
 
 // ============================================================
@@ -210,6 +212,7 @@ export interface UpdateSharingRuleInput {
     version: number;
     rule_type?: 'public' | 'private';
     is_active?: boolean;
+    updated_by?: string | null;
 }
 
 // ============================================================
@@ -229,6 +232,7 @@ export interface CreateSmtpConfigInput {
     // Optional fields
     is_active?: boolean;
     reply_to_email?: string | null;
+    created_by?: string | null;
 }
 
 // ============================================================
@@ -249,6 +253,71 @@ export interface CreateAuditLogInput {
     role_id: string | null;
     old_values: Record<string, unknown> | null;
     new_values: Record<string, unknown> | null;
+}
+
+export interface EncryptedAuditLogRow {
+    id: string;
+    user_id: string | null;
+    role_id: string | null;
+    action: string;
+    module_id: string | null;
+    entity_type: string;
+    entity_id: string | null;
+    old_values: string | null;
+    new_values: string | null;
+    ip_address: string;
+    user_agent: string;
+    status: string;
+    created_at: string;
+    hmac_entity_type: string | null;
+    hmac_action: string | null;
+    hmac_user_id: string | null;
+}
+
+// Minimal encrypted row for list views (avoid decrypting unused columns)
+export interface EncryptedAuditLogListRow {
+    id: string;
+    user_id: string | null;
+    action: string;
+    entity_type: string;
+    entity_id: string | null;
+    status: string;
+    ip_address: string;
+    created_at: string;
+}
+
+export interface DecryptedAuditLogRow {
+    id: string;
+    user_id: string | null;
+    user_name: string | null;
+    user_email: string | null;
+    role_id: string | null;
+    role_name: string | null;
+    action: string;
+    module_id: string | null;
+    module_name: string | null;
+    module_code: string | null;
+    entity_type: string;
+    entity_id: string | null;
+    old_values: Record<string, unknown> | null;
+    new_values: Record<string, unknown> | null;
+    ip_address: string;
+    user_agent: string;
+    status: string;
+    created_at: Date;
+}
+
+export interface DecryptedAuditLogListRow {
+    id: string;
+    user_id: string | null;
+    user_name: string | null;
+    user_email: string | null;
+    action: string;
+    entity_type: string;
+    entity_id: string | null;
+    status: string;
+    ip_address: string;
+    created_at: Date;
 }
 
 export interface AuditLogFilters {
@@ -280,7 +349,7 @@ export interface CreateOtpTokenInput {
 
 export interface CreateOrganizationInput {
     company_name: string;
-    company_logo?: string | null;
+    company_logo_file_id?: string | null;
     address?: string | null;
     city?: string | null;
     state?: string | null;
@@ -297,4 +366,25 @@ export interface CreateOrganizationInput {
     gstin?: string | null;
     is_active?: boolean;
     created_by?: string | null;
+}
+
+export interface CreateFileInput {
+    storage_path: string;
+    original_name: string;
+    mime_type?: string | null;
+    size_bytes?: number | null;
+    created_by?: string | null;
+}
+
+export interface UploadedFileReference {
+    storedPath: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+}
+
+export interface OrganizationLogoCleanup {
+    previousLogoPath: string | null;
+    previousLogoFileId: string | null;
+    logoChanged: boolean;
 }

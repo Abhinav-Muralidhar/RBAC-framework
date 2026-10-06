@@ -2,16 +2,15 @@
  * RBAC Routes Index
  *
  * Main router for all RBAC-related routes.
- * All routes are prefixed with /rbac and require authentication.
+ * All routes are prefixed with /v1/rbac and require authentication unless
+ * mounted under the dedicated public auth router.
  */
 
 import { Router } from 'express';
 import { IDatabase } from 'pg-promise';
 import { createAuthenticateMiddleware } from '../middleware/authenticate.middleware';
 import { injectAuditContext } from '../middleware/injectAuditContext.middleware';
-import { AuthSessionService } from '../services/authSession.service';
-import { AuditService } from '../services/audit.service';
-import { EvaluationService } from '../services/evaluation.service';
+import { withTransaction, TransactionTask } from '../../utils/transaction.utils';
 import { AuthSessionsRepository } from '../repositories/auth_sessions.repository';
 import { AuditLogsRepository } from '../repositories/audit_logs.repository';
 import { PermissionsRepository } from '../repositories/permissions.repository';
@@ -22,6 +21,27 @@ import { ProfilePermissionsRepository } from '../repositories/profile_permission
 import { RoleProfilesRepository } from '../repositories/role_profiles.repository';
 import { RoleRepository } from '../repositories/roles.repository';
 import { UserRoleRepository } from '../repositories/user_roles.repository';
+import { GroupRepository } from '../repositories/groups.repository';
+import { GroupRoleRepository } from '../repositories/group_roles.repository';
+import { UserGroupsRepository } from '../repositories/user_groups.repository';
+import { OrganizationRepository } from '../repositories/organizations.repository';
+import { FilesRepository } from '../repositories/files.repository';
+import { SmtpConfigRepository } from '../repositories/smtp_config.repository';
+import { SharingRulesRepository } from '../repositories/sharing_rules.repository';
+import { OtpTokenRepository } from '../repositories/otp_token.repository';
+import { EvaluationService } from '../services/evaluation.service';
+import { AuditService } from '../services/audit.service';
+import { AuthSessionService } from '../services/authSession.service';
+import { UserService, VALID_LANDING_PAGES } from '../services/user.service';
+import { RoleService } from '../services/role.service';
+import { ProfileService } from '../services/profile.service';
+import { UnifiedGroupService } from '../services/group.service';
+import { OrganizationService } from '../services/organization.service';
+import { SmtpConfigService } from '../services/smtpConfig.service';
+import { PermissionService } from '../services/permission.service';
+import { ModuleService } from '../services/module.service';
+import { OtpService } from '../services/otp.service';
+import { SharingRuleService } from '../services/sharingRule.service';
 import { createUsersRouter } from './users.routes';
 import { createRolesRouter } from './roles.routes';
 import { createProfilesRouter } from './profiles.routes';
@@ -29,39 +49,21 @@ import { createGroupsRouter } from './groups.routes';
 import { createAuditLogsRouter } from './audit-logs.routes';
 import { createSessionsRouter } from './sessions.routes';
 import { createOrganizationsRouter } from './org.routes';
-import { UserService, VALID_LANDING_PAGES } from '../services/user.service';
-import { RoleService } from '../services/role.service';
-import { ProfileService } from '../services/profile.service';
-import { GroupRepository } from '../repositories/groups.repository';
-import { UnifiedGroupService } from '../services/group.service';
-import { GroupRoleRepository } from '../repositories/group_roles.repository';
-import { UserGroupsRepository } from '../repositories/user_groups.repository';
-import { OrganizationService } from '../services/organization.service';
-import { OrganizationRepository } from '../repositories/organizations.repository';
 import { createSmtpRouter } from './smtp.routes';
-import { SmtpConfigRepository } from '../repositories/smtp_config.repository';
-import { SmtpConfigService } from '../services/smtpConfig.service';
 import { createPermissionsRouter } from './permissions.routes';
-import { PermissionService } from '../services/permission.service';
-import { ModuleService } from '../services/module.service';
 import { createEmailRouter } from './email.routes';
+import { createOtpRouter } from './otp.routes';
+import { createSharingRulesRouter } from './sharingrules.routes';
 
+type RbacDependencies = ReturnType<typeof buildRbacDependencies>;
+type PublicAuthDependencies = ReturnType<typeof buildPublicAuthDependencies>;
 
-
-/**
- * Create the main RBAC router with all sub-routes
- */
-export function createRBACRouter(db: IDatabase<unknown>): Router {
-    const router = Router();
-
-    // ============================
-    // Repository initialization
-    // ============================
+function buildRbacDependencies(db: IDatabase<unknown>) {
     const authSessionsRepository = new AuthSessionsRepository(db);
     const auditLogsRepository = new AuditLogsRepository(db);
-    const moduleRepository = new ModuleRepository(db);
-    const usersRepo = new UsersRepository(db);
     const permissionsRepository = new PermissionsRepository(db);
+    const moduleRepository = new ModuleRepository(db);
+    const usersRepository = new UsersRepository(db);
     const profilesRepository = new ProfilesRepository(db);
     const profilePermissionsRepository = new ProfilePermissionsRepository(db);
     const roleProfilesRepository = new RoleProfilesRepository(db);
@@ -71,52 +73,131 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     const groupRoleRepository = new GroupRoleRepository(db);
     const userGroupsRepository = new UserGroupsRepository(db);
     const organizationRepository = new OrganizationRepository(db);
+    const filesRepository = new FilesRepository(db);
     const smtpConfigRepository = new SmtpConfigRepository(db);
     const sharingRuleRepository = new SharingRulesRepository(db);
-    // Services
-    // ============================
-    const evaluationService = new EvaluationService(new PermissionsRepository(db));
 
-    const auditService = new AuditService(auditLogsRepository, evaluationService, moduleRepository, usersRepo, roleRepository);
-    const groupService = new UnifiedGroupService(groupRepository, groupRoleRepository, auditService, userGroupsRepository);
-    const authSessionService = new AuthSessionService(authSessionsRepository, auditService, evaluationService);
-    const userService = new UserService(usersRepo, userRolesRepository, evaluationService, auditService);
-    const roleService = new RoleService(roleRepository, userRolesRepository, roleProfilesRepository, evaluationService, auditService, profilesRepository);
-    const profileService = new ProfileService(profilesRepository, profilePermissionsRepository, permissionsRepository, evaluationService, auditService);
-    const organizationService = new OrganizationService(organizationRepository, auditService);
-    const smtpConfigService = new SmtpConfigService(smtpConfigRepository, auditService);
-    const permissionService = new PermissionService(permissionsRepository, profilesRepository, profilePermissionsRepository, roleProfilesRepository, moduleRepository, roleRepository, evaluationService, auditService
+    const evaluationService = new EvaluationService(permissionsRepository);
+    const auditService = new AuditService(
+        auditLogsRepository,
+        evaluationService,
+        moduleRepository,
+        usersRepository,
+        roleRepository
     );
+    const authSessionService = new AuthSessionService(authSessionsRepository, usersRepository, auditService, evaluationService);
+    const userService = new UserService(usersRepository, userRolesRepository, evaluationService, auditService);
+    const roleService = new RoleService(
+        roleRepository,
+        userRolesRepository,
+        roleProfilesRepository,
+        evaluationService,
+        auditService,
+        profilesRepository
+    );
+    const profileService = new ProfileService(
+        profilesRepository,
+        profilePermissionsRepository,
+        permissionsRepository,
+        evaluationService,
+        auditService
+    );
+    const groupService = new UnifiedGroupService(groupRepository, groupRoleRepository, auditService, userGroupsRepository);
+    const organizationService = new OrganizationService(organizationRepository, auditService, filesRepository);
+    const smtpConfigService = new SmtpConfigService(smtpConfigRepository, auditService);
+    const permissionService = new PermissionService(
+        permissionsRepository,
+        profilesRepository,
+        profilePermissionsRepository,
+        roleProfilesRepository,
+        moduleRepository,
+        roleRepository,
+        evaluationService,
+        auditService
+    );
+    const moduleService = new ModuleService(moduleRepository, evaluationService, auditService);
     const sharingRuleService = new SharingRuleService(sharingRuleRepository, evaluationService, auditService);
 
-    const moduleService = new ModuleService(moduleRepository, evaluationService, auditService);
-    // ============================
-    // Middleware
-    // ============================
-    const authenticate = createAuthenticateMiddleware(authSessionService);
+    return {
+        evaluationService,
+        auditService,
+        usersRepository,
+        authSessionService,
+        userService,
+        roleService,
+        profileService,
+        groupService,
+        organizationService,
+        smtpConfigService,
+        permissionService,
+        moduleService,
+        sharingRuleService,
+    };
+}
 
-    // Apply authentication to ALL /rbac/* routes
+function buildPublicAuthDependencies(db: IDatabase<unknown>) {
+    const usersRepository = new UsersRepository(db);
+    const userRolesRepository = new UserRoleRepository(db);
+    const otpTokenRepository = new OtpTokenRepository(db);
+    const smtpConfigRepository = new SmtpConfigRepository(db);
+    const auditLogsRepository = new AuditLogsRepository(db);
+    const moduleRepository = new ModuleRepository(db);
+    const permissionsRepository = new PermissionsRepository(db);
+    const roleRepository = new RoleRepository(db);
+    const organizationRepository = new OrganizationRepository(db);
+    const filesRepository = new FilesRepository(db);
+
+    const evaluationService = new EvaluationService(permissionsRepository);
+    const auditService = new AuditService(
+        auditLogsRepository,
+        evaluationService,
+        moduleRepository,
+        usersRepository,
+        roleRepository
+    );
+    const userService = new UserService(usersRepository, userRolesRepository, evaluationService, auditService);
+    const otpService = new OtpService(otpTokenRepository);
+    const smtpConfigService = new SmtpConfigService(smtpConfigRepository, auditService);
+    const organizationService = new OrganizationService(organizationRepository, auditService, filesRepository);
+
+    return {
+        evaluationService,
+        auditService,
+        usersRepository,
+        userService,
+        otpService,
+        smtpConfigService,
+        organizationService,
+    };
+}
+
+function mountPrivateRoutes(router: Router, db: IDatabase<unknown>, deps: RbacDependencies): void {
+    router.use('/users', createUsersRouter(db, deps.evaluationService, deps.auditService, deps.userService));
+    router.use('/roles', createRolesRouter(db, deps.auditService, deps.evaluationService, deps.roleService));
+    router.use('/profiles', createProfilesRouter(db, deps.auditService, deps.evaluationService, deps.profileService));
+    router.use('/permissions', createPermissionsRouter(db, deps.permissionService, deps.moduleService, deps.evaluationService, deps.auditService));
+    router.use('/groups', createGroupsRouter(db, deps.evaluationService, deps.auditService, deps.groupService));
+    router.use('/audit-logs', createAuditLogsRouter(db, deps.auditService, deps.evaluationService));
+    router.use('/sessions', createSessionsRouter(db, deps.auditService, deps.evaluationService, deps.authSessionService));
+    router.use('/organizations', createOrganizationsRouter(db, deps.evaluationService, deps.auditService, deps.organizationService));
+    router.use('/smtpconfig', createSmtpRouter(db, deps.auditService, deps.evaluationService, deps.smtpConfigService));
+    router.use('/sharing-rules', createSharingRulesRouter(db, deps.auditService, deps.evaluationService, deps.sharingRuleService));
+    router.use('/email', createEmailRouter(db, deps.authSessionService, deps.smtpConfigService, deps.usersRepository, deps.evaluationService, deps.auditService));
+}
+
+export function createRBACRouter(db: IDatabase<unknown>): Router {
+    const router = Router();
+    const deps = buildRbacDependencies(db);
+    const authenticate = createAuthenticateMiddleware(deps.authSessionService);
+
+    router.options(/.*/, (_req, res) => {
+        res.sendStatus(204);
+    });
+
     router.use(authenticate);
-
-    // Inject audit context (IP, user-agent, request ID, etc.) for audit logging
     router.use(injectAuditContext());
+    mountPrivateRoutes(router, db, deps);
 
-    // ============================
-    // Routes
-    // ============================
-    router.use('/users', createUsersRouter(db, evaluationService, auditService, userService));
-    router.use('/roles', createRolesRouter(db, auditService, evaluationService, roleService));
-    router.use('/profiles', createProfilesRouter(db, auditService, evaluationService, profileService));
-    router.use('/permissions', createPermissionsRouter(permissionService, moduleService));
-    router.use('/groups', createGroupsRouter(db, evaluationService, auditService, groupService));
-    router.use('/audit-logs', createAuditLogsRouter(db, auditService, evaluationService));
-    router.use('/sessions', createSessionsRouter(db, auditService, evaluationService, authSessionService));
-    router.use('/organizations', createOrganizationsRouter(db, evaluationService, auditService, organizationService));
-    router.use('/smtpconfig', createSmtpRouter(db, auditService, evaluationService, smtpConfigService));
-    router.use('/sharing-rules', createSharingRulesRouter(db, auditService, evaluationService, sharingRuleService));
-    router.use('/email', createEmailRouter(authSessionService, smtpConfigService));
-
-    // Landing pages reference endpoint
     router.get('/landing-pages', (_req, res) => {
         res.json({ data: VALID_LANDING_PAGES, error: null });
     });
@@ -124,70 +205,26 @@ export function createRBACRouter(db: IDatabase<unknown>): Router {
     return router;
 }
 
-
-// ============================
-// PUBLIC ROUTES (NO AUTH)
-// ============================
-
-import { createOtpRouter } from './otp.routes';
-import { OtpService } from '../services/otp.service';
-import { OtpTokenRepository } from '../repositories/otp_token.repository';
-import { createSharingRulesRouter } from './sharingrules.routes';
-import { SharingRuleService } from '../services/sharingRule.service';
-import { SharingRulesRepository } from '../repositories/sharing_rules.repository';
-import { withTransaction } from '../utils/transaction.utils';
-import type { TransactionTask } from '../utils/transaction.utils';
-
 export function createPublicAuthRouter(db: IDatabase<unknown>): Router {
     const router = Router();
+    const deps = buildPublicAuthDependencies(db);
 
-    // repositories
-    const usersRepo = new UsersRepository(db);
-    const userRolesRepository = new UserRoleRepository(db);
-    const otpTokenRepository = new OtpTokenRepository(db);
-    const smtpConfigRepository = new SmtpConfigRepository(db);
-    const auditLogsRepository = new AuditLogsRepository(db);
-    const moduleRepository = new ModuleRepository(db);
-
-    // services
-    const evaluationService = new EvaluationService(new PermissionsRepository(db));
-    const roleRepository = new RoleRepository(db);
-    const auditService = new AuditService(auditLogsRepository, evaluationService, moduleRepository, usersRepo, roleRepository);
-
-    const userService = new UserService(
-        usersRepo,
-        userRolesRepository,
-        evaluationService,
-        auditService
-    );
-
-    const otpService = new OtpService(otpTokenRepository);
-    const smtpConfigService = new SmtpConfigService(smtpConfigRepository, auditService);
-    const organizationRepository = new OrganizationRepository(db);
-    const organizationService = new OrganizationService(organizationRepository, auditService);
-
-    // mount otp
     router.use(
         '/otp',
         createOtpRouter(
             db,
-            auditService,
-            evaluationService,
-            userService,
-            otpService,
-            smtpConfigService
+            deps.auditService,
+            deps.evaluationService,
+            deps.userService,
+            deps.otpService,
+            deps.smtpConfigService
         )
     );
 
-    /**
-     * GET /public/organization/branding
-     * Public endpoint — no auth required.
-     * Returns non-sensitive organization details for UI rendering.
-     */
     router.get('/organization/branding', async (req, res, next) => {
         try {
-            const result = await withTransaction(async (t: TransactionTask) => {
-                const orgs = await organizationService.getOrganizations(t, { is_active: true }, { page: 1, limit: 1 });
+            const result = await withTransaction(db, async (t: TransactionTask) => {
+                const orgs = await deps.organizationService.getOrganizations(t, { is_active: true }, { page: 1, limit: 1 });
                 if (!orgs.data.length) return null;
                 const org = orgs.data[0]!;
                 return {

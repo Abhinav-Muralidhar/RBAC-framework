@@ -2,12 +2,6 @@
  * User Types
  */
 
-interface Permission {
-    module: string;
-    action: string;
-    effect: 'allow' | 'deny';
-}
-
 export type UserStatus = 'active' | 'inactive' | 'deleted';
 export type SymbolPlacement = 'before' | 'after';
 export type TrailingZeroHandling = 'show' | 'hide';
@@ -70,6 +64,7 @@ export interface User {
     groups?: Array<{ id: string; name: string }>;
 
     updated_at?: Date | null;
+    updated_by?: string | null;
     last_login_at?: Date | null;
     password_changed_at?: Date | null;
 }
