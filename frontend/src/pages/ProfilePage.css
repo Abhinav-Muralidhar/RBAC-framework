@@ -19,28 +19,27 @@
     flex-wrap: wrap;
     margin-bottom: 1.5rem;
     padding: clamp(1.25rem, 2vw, 1.75rem);
-    border: 1px solid rgba(255, 255, 255, 0.72);
-    border-radius: 1.75rem;
-    background: var(--surface-glass);
-    box-shadow: var(--shadow-soft);
-    backdrop-filter: blur(18px);
+    border: 1px solid #e2e8f0;
+    border-radius: 1.25rem;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 .profile-avatar {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: clamp(68px, 11vw, 86px);
-    height: clamp(68px, 11vw, 86px);
-    background: var(--gradient-brand);
+    width: clamp(64px, 10vw, 80px);
+    height: clamp(64px, 10vw, 80px);
+    background: linear-gradient(135deg, #0284c7 0%, #4f46e5 100%);
     color: #fff;
-    border-radius: 1.6rem;
-    box-shadow: 0 22px 36px -24px rgba(14, 165, 233, 0.9);
+    border-radius: 1.25rem;
+    box-shadow: 0 10px 24px -8px rgba(2, 132, 199, 0.4);
 }
 
 .profile-title h1 {
     margin: 0 0 0.25rem;
-    font-size: clamp(1.45rem, 1.15rem + 0.8vw, 2rem);
+    font-size: clamp(1.45rem, 1.15rem + 0.8vw, 1.85rem);
     font-weight: 800;
     letter-spacing: -0.03em;
     color: #0f172a;
@@ -49,27 +48,28 @@
 .profile-title p {
     margin: 0;
     color: #64748b;
+    font-size: 0.9rem;
 }
 
 .profile-error,
 .profile-success {
-    padding: 1rem 1.1rem;
-    border-radius: 1rem;
+    padding: 0.85rem 1.1rem;
+    border-radius: 0.85rem;
     margin-bottom: 1rem;
-    border: 1px solid transparent;
-    backdrop-filter: blur(12px);
+    font-size: 0.875rem;
+    font-weight: 600;
 }
 
 .profile-error {
-    background: rgba(254, 242, 242, 0.9);
+    background: #fef2f2;
     color: #b91c1c;
-    border-color: rgba(248, 113, 113, 0.24);
+    border: 1px solid #fecaca;
 }
 
 .profile-success {
-    background: rgba(240, 253, 244, 0.92);
+    background: #f0fdf4;
     color: #15803d;
-    border-color: rgba(74, 222, 128, 0.25);
+    border: 1px solid #bbf7d0;
 }
 
 .profile-sections {
@@ -79,12 +79,11 @@
 }
 
 .profile-section {
-    background: var(--surface-glass);
-    border: 1px solid rgba(255, 255, 255, 0.72);
-    border-radius: 1.75rem;
-    padding: clamp(1.15rem, 2vw, 1.5rem);
-    box-shadow: var(--shadow-soft);
-    backdrop-filter: blur(18px);
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 1.25rem;
+    padding: clamp(1.25rem, 2vw, 1.75rem);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 .profile-section h2 {
@@ -223,8 +222,7 @@
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.45);
-    backdrop-filter: blur(10px);
+    background: rgba(15, 23, 42, 0.25);
     z-index: 2000;
     display: flex;
     align-items: center;

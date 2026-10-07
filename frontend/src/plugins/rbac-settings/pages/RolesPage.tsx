@@ -32,7 +32,7 @@ const RoleTreeNode = ({
     level: number;
     isTouchLayout: boolean;
     onEdit: (id: string, name?: string) => void;
-    onDelete: (id: string) => void;
+    onDelete: (id: string, name?: string) => void;
     onCreateChild: (id: string) => void;
 }) => {
     const isRoot = node.id === ORG_ROOT_ID;
@@ -65,7 +65,7 @@ const RoleTreeNode = ({
     const handleDeleteClick = (e: React.MouseEvent<HTMLButtonElement>) => {
         e.stopPropagation();
         setShowActions(false);
-        onDelete(node.id);
+        onDelete(node.id, node.name);
     };
 
 
@@ -299,13 +299,14 @@ export function RolesPage() {
         void openEdit({ id: nodeId, name: nodeName || '' } as Role);
     };
 
-    const handleDeleteNode = async (nodeId: string) => {
+    const handleDeleteNode = async (nodeId: string, nodeName?: string) => {
         if (nodeId === ORG_ROOT_ID) return; // Ignore root delete
         try {
             const role: Role = await rolesApi.getById(nodeId);
             openDelete(role);
-        } catch (err) {
-            console.error('Failed to fetch role for deletion', err);
+        } catch {
+            // Fallback so the delete confirmation always opens reliably
+            openDelete({ id: nodeId, name: nodeName || 'Selected Role' } as Role);
         }
     };
 

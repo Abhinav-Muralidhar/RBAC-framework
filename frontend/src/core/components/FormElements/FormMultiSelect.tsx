@@ -109,7 +109,7 @@ export function FormMultiSelect({
     };
 
     return (
-        <div className={`form-field ${error ? 'form-field--error' : ''} ${className || ''}`.trim()} ref={wrapperRef}>
+        <div className={`form-field ${isOpen ? 'form-field--dropdown-open' : ''} ${error ? 'form-field--error' : ''} ${className || ''}`.trim()} ref={wrapperRef}>
             <label htmlFor={selectId} className="form-label">
                 {label}
                 {required && <span className="form-required">*</span>}

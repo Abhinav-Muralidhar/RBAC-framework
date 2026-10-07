@@ -1,9 +1,8 @@
 .confirm-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.45);
-    backdrop-filter: blur(12px);
-    z-index: 300;
+    background: rgba(15, 23, 42, 0.25);
+    z-index: 1200;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -22,14 +21,13 @@
 }
 
 .confirm-modal {
-    background: var(--surface-glass);
-    border: 1px solid rgba(255, 255, 255, 0.76);
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 1.5rem;
     width: 100%;
-    max-width: 440px;
-    box-shadow: var(--shadow-strong);
-    animation: confirmSlideUp 0.15s ease-out;
-    backdrop-filter: blur(20px);
+    max-width: 460px;
+    box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(15, 23, 42, 0.05);
+    animation: confirmSlideUp 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes confirmSlideUp {

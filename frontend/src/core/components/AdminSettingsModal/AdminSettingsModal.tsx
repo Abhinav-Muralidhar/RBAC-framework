@@ -1,9 +1,8 @@
 /**
  * Admin Settings Modal
  *
- * Premium workspace modal for system administration & RBAC management.
- * Features glassmorphic styling, categorized sidebar navigation,
- * dynamic headers, smooth micro-interactions, and ESC hotkey.
+ * Minimal, classy workspace modal for system administration & RBAC management.
+ * Includes smooth transitions, clear categories, and ESC hotkey support.
  */
 
 import { useEffect, useCallback, Suspense, lazy, type ComponentType, type ReactNode } from 'react';
@@ -21,8 +20,6 @@ import {
     Share2,
     UsersRound,
     X,
-    Sliders,
-    Sparkles,
     ChevronRight,
 } from 'lucide-react';
 import './AdminSettingsModal.css';
@@ -50,7 +47,7 @@ function SectionFallback() {
     return (
         <div className="admin-settings-loading-state">
             <div className="admin-settings-spinner" />
-            <span>Loading section...</span>
+            <span>Loading...</span>
         </div>
     );
 }
@@ -59,7 +56,7 @@ const sections: SectionConfig[] = [
     {
         id: SETTINGS_SECTIONS.ORGANIZATIONS,
         label: 'Organizations',
-        description: 'Manage corporate entities, company branding, and contact details',
+        description: 'Organizations and branding',
         category: 'Access Control',
         icon: <Building2 size={18} />,
         component: OrganizationPage
@@ -67,7 +64,7 @@ const sections: SectionConfig[] = [
     {
         id: SETTINGS_SECTIONS.USERS,
         label: 'Users',
-        description: 'Manage system users, login credentials, and assigned roles',
+        description: 'User accounts and credentials',
         category: 'Access Control',
         icon: <Users size={18} />,
         component: UsersPage
@@ -75,7 +72,7 @@ const sections: SectionConfig[] = [
     {
         id: SETTINGS_SECTIONS.ROLES,
         label: 'Roles',
-        description: 'Configure hierarchical security roles and authorization scopes',
+        description: 'Security roles and hierarchy',
         category: 'Access Control',
         icon: <Shield size={18} />,
         component: RolesPage
@@ -83,7 +80,7 @@ const sections: SectionConfig[] = [
     {
         id: SETTINGS_SECTIONS.PROFILES,
         label: 'Profiles',
-        description: 'Define granular module permissions and action capabilities',
+        description: 'Module permissions and access profiles',
         category: 'Access Control',
         icon: <Key size={18} />,
         component: ProfilesPage
@@ -91,7 +88,7 @@ const sections: SectionConfig[] = [
     {
         id: SETTINGS_SECTIONS.GROUPS,
         label: 'Groups',
-        description: 'Organize users into functional groups for bulk access management',
+        description: 'User groups and shared roles',
         category: 'Access Control',
         icon: <UsersRound size={18} />,
         component: GroupsPage
@@ -99,7 +96,7 @@ const sections: SectionConfig[] = [
     {
         id: SETTINGS_SECTIONS.SHARING_RULES,
         label: 'Sharing Rules',
-        description: 'Set up cross-role data visibility policies and exception access',
+        description: 'Data visibility and sharing policies',
         category: 'Governance',
         icon: <Share2 size={18} />,
         component: SharingRulesPage
@@ -107,7 +104,7 @@ const sections: SectionConfig[] = [
     {
         id: SETTINGS_SECTIONS.SESSIONS,
         label: 'Active Sessions',
-        description: 'Monitor active user sessions, token lifecycles, and force logout',
+        description: 'Active sessions and device tracking',
         category: 'Governance',
         icon: <Clock size={18} />,
         component: SessionsPage
@@ -115,7 +112,7 @@ const sections: SectionConfig[] = [
     {
         id: SETTINGS_SECTIONS.AUDIT_LOGS,
         label: 'Audit Logs',
-        description: 'Cryptographically verified log trail of all administrative events',
+        description: 'System audit and security event history',
         category: 'Governance',
         icon: <FileText size={18} />,
         component: AuditLogsPage
@@ -123,7 +120,7 @@ const sections: SectionConfig[] = [
     {
         id: SETTINGS_SECTIONS.SMTP,
         label: 'SMTP Config',
-        description: 'Configure outgoing email servers, ports, and TLS credentials',
+        description: 'Outbound email delivery settings',
         category: 'System',
         icon: <Mail size={18} />,
         component: SmtpPage
@@ -180,31 +177,24 @@ export function AdminSettingsModal() {
                 {/* Modal Topbar */}
                 <div className="admin-settings-header">
                     <div className="admin-settings-header-left">
-                        <div className="admin-settings-badge">
-                            <Sliders size={18} />
-                        </div>
+
                         <div className="admin-settings-title-group">
                             <div className="admin-settings-title-row">
                                 <h2 id="admin-settings-title">Admin Settings</h2>
-                                <span className="admin-settings-tag">
-                                    <Sparkles size={12} />
-                                    <span>Control Center</span>
-                                </span>
                             </div>
                             <p className="admin-settings-subtitle">
-                                {currentSection.description}
+                                Complete configuration and management of your application.
                             </p>
                         </div>
                     </div>
 
                     <div className="admin-settings-header-right">
-                        <kbd className="admin-settings-kbd" title="Press Escape to close">ESC</kbd>
                         <button
                             className="admin-settings-close-btn"
                             onClick={closeSettings}
                             aria-label="Close admin settings"
                         >
-                            <X size={20} />
+                            <X size={18} />
                         </button>
                     </div>
                 </div>
@@ -245,14 +235,6 @@ export function AdminSettingsModal() {
                                     </div>
                                 );
                             })}
-                        </div>
-
-                        {/* Sidebar Footer Info */}
-                        <div className="admin-settings-sidebar-footer">
-                            <div className="admin-settings-status-pill">
-                                <span className="admin-settings-status-dot" />
-                                <span>RBAC Engine v2.0 Active</span>
-                            </div>
                         </div>
                     </aside>
 

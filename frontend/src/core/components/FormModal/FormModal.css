@@ -1,14 +1,14 @@
 .form-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.6);
-    z-index: 300;
+    background: rgba(15, 23, 42, 0.25);
+    z-index: 1100;
     display: flex;
     align-items: flex-start;
     justify-content: center;
     padding: 2rem 1rem;
     overflow-y: auto;
-    animation: formModalFadeIn 0.2s ease-out;
+    animation: formModalFadeIn 0.15s ease-out;
 }
 
 @keyframes formModalFadeIn {
@@ -124,8 +124,7 @@
     justify-content: center;
     padding: 1.25rem;
     border-radius: 1.5rem;
-    background: rgba(255, 255, 255, 0.78);
-    backdrop-filter: blur(2px);
+    background: rgba(255, 255, 255, 0.88);
 }
 
 .form-modal__loading-card {

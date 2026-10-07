@@ -139,8 +139,23 @@ export class PermissionsRepository implements IPermissionsRepository {
             `
         SELECT DISTINCT pp.effect
         FROM users u
-        JOIN user_roles ur ON ur.user_id = u.id
-        JOIN roles r ON r.id = ur.role_id
+        JOIN (
+            -- Direct user roles
+            SELECT ur.user_id, ur.role_id
+            FROM user_roles ur
+            WHERE ur.user_id = $1
+            
+            UNION
+            
+            -- Indirect roles inherited via active groups
+            SELECT ug.user_id, gr.role_id
+            FROM user_groups ug
+            JOIN groups g ON g.id = ug.group_id
+            JOIN group_roles gr ON gr.group_id = g.id
+            WHERE ug.user_id = $1
+              AND g.is_active = true
+        ) user_effective_roles ON user_effective_roles.user_id = u.id
+        JOIN roles r ON r.id = user_effective_roles.role_id
         JOIN role_profiles rp ON rp.role_id = r.id
         JOIN profiles po ON po.id = rp.profile_id
         JOIN profile_permissions pp ON pp.profile_id = po.id

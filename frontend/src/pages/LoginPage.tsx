@@ -21,13 +21,13 @@ type ForgotStep = 'email' | 'otp' | 'reset';
 const VIEW_CONTENT: Record<AuthView, { eyebrow: string; title: string; description: string }> = {
     login: {
         eyebrow: '',
-        title: 'Welcome back',
-        description: 'Sign in to continue',
+        title: 'Sign In',
+        description: 'Enter your credentials to access your account',
     },
     forgot: {
         eyebrow: 'Password Reset',
-        title: 'Recover access',
-        description: 'Handle email verification and password update from one focused recovery flow.',
+        title: 'Recover Account',
+        description: 'Enter your email to receive a verification code',
     },
 };
 
@@ -60,9 +60,17 @@ export function LoginPage() {
     const logoUrl = branding?.company_logo
         ? `${ASSET_BASE_URL}/${branding.company_logo}`
         : null;
-    const currentView = VIEW_CONTENT[view];
+    if (authLoading) {
+        return (
+            <div className="login-page">
+                <div className="login-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px' }}>
+                    <div className="spinner" />
+                </div>
+            </div>
+        );
+    }
 
-    if (authLoading || isAuthenticated) return null;
+    if (isAuthenticated) return null;
 
     const resetMessages = () => {
         setError('');
@@ -195,6 +203,8 @@ export function LoginPage() {
         }
     };
 
+    const currentView = VIEW_CONTENT[view];
+
     return (
         <div className="login-page">
             <div className={`login-shell${loginShake ? ' login-shake' : ''}`}>
@@ -209,12 +219,10 @@ export function LoginPage() {
                                     alt={`${branding?.company_name || 'Logo'} logo`}
                                     className="login-logo-large"
                                     onError={(e) => {
-                                        // Fallback if image fails to load
                                         (e.target as HTMLImageElement).style.display = 'none';
                                         const parent = (e.target as HTMLElement).parentElement;
                                         if (parent) {
                                             parent.classList.add('fallback-icon-active');
-                                            // Add Shield icon fallback via CSS or innerHTML if needed, though simple hide is fine here.
                                         }
                                     }}
                                 />
@@ -224,7 +232,9 @@ export function LoginPage() {
                                 </div>
                             )}
                         </div>
-                        <span className="login-eyebrow">{currentView.eyebrow}</span>
+                        {currentView.eyebrow && (
+                            <span className="login-eyebrow">{currentView.eyebrow}</span>
+                        )}
                         <h2>{currentView.title}</h2>
                         <p>{currentView.description}</p>
                     </div>
@@ -392,9 +402,7 @@ export function LoginPage() {
                         </div>
                     )}
 
-                    <div className="login-footer">
-                        <p className="login-version">Version 3</p>
-                    </div>
+                    {/* End login section */}
                 </section>
             </div>
         </div>

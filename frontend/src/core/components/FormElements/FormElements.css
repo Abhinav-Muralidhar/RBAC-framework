@@ -4,7 +4,7 @@
 
 .form-field--dropdown-open {
     position: relative;
-    z-index: 380;
+    z-index: 1150;
 }
 
 .form-field:last-child {
@@ -225,7 +225,6 @@
     position: relative;
     display: flex;
     align-items: center;
-    isolation: isolate;
 }
 
 .form-multi-select__icon,
@@ -247,7 +246,7 @@
     top: calc(100% + 6px);
     left: 0;
     right: 0;
-    z-index: 360;
+    z-index: 1150;
     background-color: #ffffff;
     border: 1px solid rgba(148, 163, 184, 0.18);
     border-radius: 1rem;

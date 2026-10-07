@@ -118,7 +118,7 @@ export function SessionsPage() {
                                     <th>IP Address</th>
                                     <th>User Agent</th>
                                     <th>Login Time</th>
-                                    <th>Logout/Expires</th>
+                                    <th>Logout/ Expires</th>
                                     <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
